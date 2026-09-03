@@ -19,7 +19,7 @@ cargo-dist configuration, install exactly version 0.32.0 and run:
 ```sh
 dist generate --mode=ci
 dist generate --mode=ci --check
-dist plan --tag=v0.1.2
+dist plan --tag=v0.1.3
 ```
 
 The generated native assets are named `gravlax-TARGET.tar.gz` (or `.zip` on
@@ -110,16 +110,18 @@ published on PyPI.
 
 The 0.1.1 workflow exposed Windows and static-musl portability defects and
 stopped before any registry publication or GitHub release was created. Its
-public annotated tag remains unchanged as an audit record. Version 0.1.2 is the
-first complete native, source, and Python distribution. Work from a clean,
-up-to-date `main`. The preparation
+public annotated tag remains unchanged as an audit record. The 0.1.2 workflow
+also stopped before registry publication or GitHub release creation because
+its publisher jobs did not select the supported Python runtime. Its annotated
+tag also remains unchanged. Version 0.1.3 is the first complete native, source,
+and Python distribution. Work from a clean, up-to-date `main`. The preparation
 command validates version consistency, the publishable dependency graph,
 package contents, release notes, the public source policy, tests, and
 documentation. It creates only a local annotated tag:
 
 ```sh
-./scripts/bump-and-publish 0.1.2 --dry-run --check-history
-./scripts/bump-and-publish 0.1.2 --prepare
+./scripts/bump-and-publish 0.1.3 --dry-run --check-history
+./scripts/bump-and-publish 0.1.3 --prepare
 ```
 
 The history check examines the tracked tree and `HEAD` ancestry for the
@@ -130,7 +132,7 @@ The five crates already have crates.io Trusted Publishers. Atomically push
 `main` and the tag:
 
 ```sh
-./scripts/bump-and-publish 0.1.2 --push
+./scripts/bump-and-publish 0.1.3 --push
 ```
 
 Do not push a release tag directly. The helper verifies the canonical remote,
@@ -138,13 +140,13 @@ clean history, protected release settings, branch ancestry, and annotated tag
 before it sends `main` and the tag together. CI independently rejects a
 lightweight tag or a tag whose commit differs from the workflow commit.
 
-The tag workflow publishes version 0.1.2 to crates.io and creates the immutable
+The tag workflow publishes version 0.1.3 to crates.io and creates the immutable
 GitHub release only after validation and artifact assembly succeed. After the
 entire tag workflow succeeds, dispatch the top-level Python workflow and
 approve its `pypi` environment deployment:
 
 ```sh
-./scripts/bump-and-publish 0.1.2 --dispatch-python
+./scripts/bump-and-publish 0.1.3 --dispatch-python
 ```
 
 It accepts only a stable, non-draft, non-prerelease, immutable release whose tag,
@@ -198,8 +200,8 @@ computed from those exact bytes:
 
 ```sh
 python packaging/bioconda/render_recipe.py \
-  --version 0.1.2 \
-  --source-archive dist/gravlax-0.1.2-source.tar.gz \
+  --version 0.1.3 \
+  --source-archive dist/gravlax-0.1.3-source.tar.gz \
   --output /tmp/bioconda-recipes/recipes/gravlax/meta.yaml
 conda render -c conda-forge -c bioconda /tmp/bioconda-recipes/recipes/gravlax
 bioconda-utils lint --packages gravlax /tmp/bioconda-recipes

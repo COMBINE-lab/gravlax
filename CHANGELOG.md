@@ -2,14 +2,16 @@
 
 This file records user-visible changes in each Gravlax release.
 
-## [0.1.2] - 2026-09-03
+## [0.1.3] - 2026-09-03
 
 This is the first complete Gravlax distribution. Version 0.1.0 established the
 Rust packages on crates.io, but its immutable GitHub release contains only the
 distribution manifest: native archives, installers, the vendored source
 archive, and Python packages were not published for that version. The 0.1.1
 release attempt stopped before publication when the native builds exposed two
-platform-specific defects. Install version 0.1.2 when using a packaged release.
+platform-specific defects. The 0.1.2 attempt also stopped before publication
+when its publisher jobs did not select the supported Python runtime. Install
+version 0.1.3 when using a packaged release.
 
 ### Distribution changes
 
@@ -29,9 +31,19 @@ platform-specific defects. Install version 0.1.2 when using a packaged release.
   system-call interface needed by fully static musl builds.
 - Build and smoke-test the Windows and musl targets on ordinary changes, before
   a release tag is created.
+- Select the supported Python runtime explicitly in the registry publisher
+  jobs.
 
 There are no archive-format, result-format, or command-interface changes from
 version 0.1.0.
+
+## [0.1.2] - 2026-09-03
+
+The annotated 0.1.2 tag was retained after its release workflow found that the
+registry publisher jobs did not select the supported Python runtime. The
+workflow stopped before registry publication or GitHub release creation: no
+0.1.2 Rust crates, Python package, native archives, or installers were
+published. The corrected distribution is version 0.1.3.
 
 ## [0.1.1] - 2026-09-03
 
@@ -39,7 +51,7 @@ The annotated 0.1.1 tag was retained after its release workflow found Windows
 and static-musl portability defects. Validation stopped before registry
 publication or GitHub release creation: no 0.1.1 Rust crates, Python package,
 native archives, or installers were published. The corrected distribution is
-version 0.1.2.
+version 0.1.3.
 
 ## [0.1.0] - 2026-09-03
 
@@ -70,7 +82,7 @@ annotation be changed or compared without realigning the source reads.
   dependency-light `gravlax-client` source package.
 - Install the `aie` executable from crates.io. Native archives, installers,
   the vendored source archive, and the PyPI package first become available in
-  version 0.1.2.
+  version 0.1.3.
 
 ### Compatibility notes
 
@@ -85,6 +97,7 @@ annotation be changed or compared without realigning the source reads.
 - Gravlax 0.1 is an initial public interface. Result and archive formats are
   versioned so readers can reject incompatible future changes explicitly.
 
-[0.1.2]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.2
+[0.1.3]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.3
+[0.1.2]: https://github.com/COMBINE-lab/gravlax/tree/v0.1.2
 [0.1.1]: https://github.com/COMBINE-lab/gravlax/tree/v0.1.1
 [0.1.0]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.0

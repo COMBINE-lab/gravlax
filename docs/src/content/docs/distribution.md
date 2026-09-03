@@ -13,9 +13,11 @@ Version 0.1.0 established the Rust crates on crates.io, but its immutable
 GitHub release contains only a distribution manifest. It does not contain
 native archives, installers, a source archive, or Python packages, and
 `gravlax-client` 0.1.0 was not published to PyPI. The 0.1.1 workflow stopped
-before publication after finding platform-specific build defects. Version
-0.1.2 is the first complete distribution and is the recommended minimum
-version for packaged installations.
+before publication after finding platform-specific build defects. The 0.1.2
+workflow also stopped before publication because its publisher jobs did not
+select the supported Python runtime. Version 0.1.3 is the first complete
+distribution and is the recommended minimum version for packaged
+installations.
 
 ## Install the `aie` command
 

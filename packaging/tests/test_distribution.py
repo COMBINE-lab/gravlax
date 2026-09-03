@@ -207,6 +207,16 @@ class DistributionTests(unittest.TestCase):
         python_publish = (ROOT / ".github/workflows/publish-python.yml").read_text(
             encoding="utf-8"
         )
+        pinned_python = (
+            "actions/setup-python@"
+            "ece7cb06caefa5fff74198d8649806c4678c61a1"
+        )
+        for workflow_text in (crates, python_publish):
+            self.assertEqual(workflow_text.count(pinned_python), 1)
+            setup = workflow_text.index(pinned_python)
+            release_version = workflow_text.index("packaging/release_version.py")
+            self.assertIn("python-version: '3.13'", workflow_text[setup:release_version])
+            self.assertLess(setup, release_version)
         self.assertIn("workflow_dispatch:", python_publish)
         self.assertNotIn("workflow_call:", python_publish)
         self.assertIn(

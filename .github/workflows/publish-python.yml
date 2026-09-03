@@ -37,6 +37,11 @@ jobs:
           persist-credentials: false
           ref: refs/tags/${{ inputs.tag }}
 
+      - name: Install Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
       - name: Bind the immutable release, tag, commit, and package version
         id: release
         env:

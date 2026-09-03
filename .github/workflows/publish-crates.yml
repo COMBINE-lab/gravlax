@@ -28,6 +28,11 @@ jobs:
           toolchain: 1.98.0
           rustflags: ''
 
+      - name: Install Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
       - name: Validate the tagged version and inspect registry state
         id: registry
         env:
