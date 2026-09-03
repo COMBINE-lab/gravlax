@@ -4,9 +4,17 @@ description: Install native releases or the Python client, verify downloads, and
 ---
 
 Gravlax releases use one version for the Rust crates, the `aie` executable,
-the `gravlax-client` Python distribution, and the documentation. A release is
-available only after it appears on the relevant service; before the first
-release is published, use the [source installation](/gravlax/installation/).
+the `gravlax-client` Python distribution, and the documentation. A version is
+available through a given installation method after it appears on the
+corresponding service. A [source installation](/gravlax/installation/) is also
+available from the tagged source tree.
+
+Version 0.1.0 established the Rust crates on crates.io, but its immutable
+GitHub release contains only a distribution manifest. It does not contain
+native archives, installers, a source archive, or Python packages, and
+`gravlax-client` 0.1.0 was not published to PyPI. Version 0.1.1 is the first
+complete distribution and is the recommended minimum version for packaged
+installations.
 
 ## Install the `aie` command
 
@@ -33,15 +41,17 @@ On Windows PowerShell:
 powershell -ExecutionPolicy ByPass -c "irm https://github.com/COMBINE-lab/gravlax/releases/latest/download/gravlax-installer.ps1 | iex"
 ```
 
-The installers select from these native targets:
+The installers select from these native targets. The code-generation model is
+set explicitly for reproducible, portable artifacts; release builds never use
+the CPU features of the particular build runner through `target-cpu=native`.
 
-| Target | Platform |
-|---|---|
-| `x86_64-unknown-linux-musl` | 64-bit Linux, statically linked C runtime; preferred portable Linux build |
-| `x86_64-unknown-linux-gnu` | 64-bit Linux compatible with the Ubuntu 22.04 build environment |
-| `x86_64-apple-darwin` | Intel macOS |
-| `aarch64-apple-darwin` | Apple Silicon macOS |
-| `x86_64-pc-windows-msvc` | 64-bit Windows |
+| Target | Platform | Rust CPU model | Minimum OS |
+|---|---|---|---|
+| `x86_64-unknown-linux-musl` | 64-bit Linux, statically linked C runtime; preferred portable Linux build | `x86-64` | — |
+| `x86_64-unknown-linux-gnu` | 64-bit Linux compatible with the Ubuntu 22.04 build environment | `x86-64` | — |
+| `x86_64-apple-darwin` | Intel macOS | `penryn` | macOS 10.12 |
+| `aarch64-apple-darwin` | Apple Silicon macOS | `apple-m1` | macOS 11.0 |
+| `x86_64-pc-windows-msvc` | 64-bit Windows | `x86-64` | — |
 
 Each native archive contains `aie` (or `aie.exe`) and its release metadata.
 Generate Bash, Zsh, or Fish completions from the installed binary with
@@ -116,67 +126,57 @@ The repository uses cargo-dist for native archives and installers. The
 `scripts/bump-and-publish` command keeps the Rust, Python, documentation, and
 local Conda versions synchronized and creates the annotated release tag. The
 release manager needs Rust 1.98, Python 3.11 or newer, Node.js 22.19 or newer,
-GitHub CLI, and the normal Cargo and npm tooling.
+GitHub CLI, and the normal Cargo and npm tooling. In the examples below,
+replace `0.2.0` with the version being released.
 
 1. Add dated release notes to `CHANGELOG.md`, commit all release changes, and
    work from a clean `main` branch.
 2. Preview the release without changing files or tags:
 
    ```sh
-   ./scripts/bump-and-publish 0.1.0 --dry-run --check-history
+   ./scripts/bump-and-publish 0.2.0 --dry-run --check-history
    ```
 
 3. Update coordinated versions when needed, run the package and test suite,
    and create the local annotated tag:
 
    ```sh
-   ./scripts/bump-and-publish 0.1.0 --prepare
+   ./scripts/bump-and-publish 0.2.0 --prepare
    ```
-
-   For the initial `v0.1.0` tag, where the repository already declares
-   version `0.1.0`, add `--allow-current`.
-4. For the first crates.io publication only, publish the dependency-ordered
-   crate set with a crates.io token, then configure crates.io Trusted
-   Publishing for later tagged releases:
-
-   ```sh
-   CARGO_REGISTRY_TOKEN=<token> \
-     ./scripts/bump-and-publish 0.1.0 --publish-crates \
-       --confirm-publish v0.1.0
-   ```
-
-5. Revoke the initial crates.io token. Configure each crate's Trusted Publisher
-   for top-level workflow `release.yml` and environment `crates-io`. Configure
-   the pending PyPI Trusted Publisher for `gravlax-client`, top-level workflow
+4. Confirm that each crate's Trusted Publisher names top-level workflow
+   `release.yml` and environment `crates-io`. Confirm that the PyPI Trusted
+   Publisher for `gravlax-client` names top-level workflow
    `publish-python.yml`, and environment `pypi`.
-6. Enable immutable GitHub Releases; add an active `refs/tags/v*` ruleset that
-   prevents tag updates and deletion; and configure the protected GitHub
-   environments `release`, `crates-io`, and `pypi` before pushing the first
-   tag. Restrict `release` and `crates-io` to selected tags matching `v*`, and
+5. Keep immutable GitHub Releases enabled; keep an active `refs/tags/v*`
+   ruleset that prevents tag updates and deletion; and configure the protected GitHub
+   environments `release`, `crates-io`, and `pypi`. Restrict `release` and
+   `crates-io` to selected tags matching `v*`, and
    restrict `pypi` to the selected branch `main`; do not allow every ref.
    Limit creation or bypass of protected release tags to the designated release
    maintainers.
-7. Push `main` and its prepared tag atomically:
+6. Push `main` and its prepared tag atomically:
 
    ```sh
-   ./scripts/bump-and-publish 0.1.0 --push
+   ./scripts/bump-and-publish 0.2.0 --push
    ```
 
    Do not push release tags directly; the helper checks the repository,
    protected release settings, ancestry, and annotated tag before sending the
    branch and tag together.
 
-8. After the complete tag workflow succeeds, dispatch the protected Python
+7. After the complete tag workflow succeeds, dispatch the protected Python
    publication and approve its `pypi` environment deployment:
 
    ```sh
-   ./scripts/bump-and-publish 0.1.0 --dispatch-python
+   ./scripts/bump-and-publish 0.2.0 --dispatch-python
    ```
 
 The tag starts the generated cargo-dist workflow. It builds the five native
 targets and installers, builds the Python wheel/source distribution, vendored
-source archive, checksums, and SBOM, publishes the Rust crates, and then creates
-one immutable GitHub release containing the complete artifact set and changelog.
+source archive, checksums, and SBOM, publishes the Rust crates, and creates the
+immutable GitHub release only after validation and artifact assembly succeed.
+The release therefore contains the complete artifact set and changelog when it
+first becomes visible.
 The separate `--dispatch-python` step verifies that immutable release and
 publishes its exact wheel and source distribution through PyPI Trusted
 Publishing. Safe retries skip an already-complete matching version or upload

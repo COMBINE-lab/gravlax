@@ -19,7 +19,7 @@ cargo-dist configuration, install exactly version 0.32.0 and run:
 ```sh
 dist generate --mode=ci
 dist generate --mode=ci --check
-dist plan --tag=v0.1.0
+dist plan --tag=v0.1.1
 ```
 
 The generated native assets are named `gravlax-TARGET.tar.gz` (or `.zip` on
@@ -27,16 +27,32 @@ Windows), with per-file SHA-256 checksums and shell and PowerShell installers.
 Linux releases include both an Ubuntu 22.04 GNU build and a portable
 `x86_64-unknown-linux-musl` build; users on older enterprise or HPC systems
 should select the musl archive.
+
+Release builds pin portable CPU models rather than using the build runner's
+native features:
+
+| Target | Rust CPU model | Additional build setting |
+|---|---|---|
+| `x86_64-unknown-linux-gnu` | `x86-64` | Ubuntu 22.04 build environment |
+| `x86_64-unknown-linux-musl` | `x86-64` | statically linked C runtime |
+| `x86_64-pc-windows-msvc` | `x86-64` | — |
+| `x86_64-apple-darwin` | `penryn` | `MACOSX_DEPLOYMENT_TARGET=10.12` |
+| `aarch64-apple-darwin` | `apple-m1` | `MACOSX_DEPLOYMENT_TARGET=11.0` |
+
+The same mapping appears in `.cargo/config.toml` for direct target builds and
+in `.github/workflows/cargo-dist/release-build-setup.yml` for cargo-dist. The
+workflow setup is necessary because cargo-dist passes `RUSTFLAGS` directly to
+Cargo. Keep both files synchronized when a supported target changes.
+
 The separately built, vendored source asset deliberately retains the stable
 `gravlax-VERSION-source.tar.gz` name consumed by the Bioconda recipe. The custom
 source, Python, checksum, and SBOM files join cargo-dist's artifact set before
 the GitHub release is created, so the release becomes immutable with its full
 asset set already attached.
 
-## One-time service setup
+## Service configuration
 
-Enable release immutability in the repository's GitHub settings before creating
-v0.1.0; the setting applies only to releases created afterward.
+Keep release immutability enabled in the repository's GitHub settings.
 
 Create an active repository ruleset for `refs/tags/v*` that prevents tag
 updates and deletion. Permit only the designated release maintainers to create
@@ -59,66 +75,48 @@ Do not leave these environments open to every branch or tag. Registry Trusted
 Publishing identifies a workflow and environment, so the environment's own
 deployment restrictions are part of the publication boundary.
 
-On PyPI, create a pending Trusted Publisher for project `gravlax-client`, owner
-`COMBINE-lab`, repository `gravlax`, top-level workflow `publish-python.yml`, and
-environment `pypi`. PyPI does not authorize reusable workflows as Trusted
+The PyPI Trusted Publisher for project `gravlax-client` names owner
+`COMBINE-lab`, repository `gravlax`, top-level workflow `publish-python.yml`,
+and environment `pypi`. PyPI does not authorize reusable workflows as Trusted
 Publishers, so this workflow is a separate manual dispatch that consumes the
-immutable GitHub release. PyPI can create a new project through a pending
-publisher, so no PyPI API token is needed for the first release.
+immutable GitHub release.
 
-crates.io cannot configure a Trusted Publisher until a crate has been published
-once. For v0.1.0 only, create a narrowly scoped `publish-new` token and publish
-the five crates locally in dependency order using the command below. Revoke the
-token immediately. Then configure a Trusted Publisher for each of
+The crates.io Trusted Publishers for
 `gravlax-evidence-io`, `gravlax-output`, `gravlax-anno`, `gravlax-ingest`, and
-`gravlax`, all bound to repository `COMBINE-lab/gravlax`, workflow
+`gravlax` are bound to repository `COMBINE-lab/gravlax`, workflow
 `release.yml`, and environment `crates-io`. The crates.io OIDC check identifies
 the top-level caller through GitHub's `workflow_ref` claim even though the
-publishing steps live in reusable `publish-crates.yml`. Future releases use
+publishing steps live in reusable `publish-crates.yml`. Releases use
 temporary OIDC credentials and need no stored crates.io token.
 
-Crate-name availability is first-come, first-served. Recheck all five names
-immediately before the bootstrap publish.
+## Version 0.1 releases
 
-## First release
+Version 0.1.0 established the five Rust crates on crates.io. Its tag workflow
+stopped before assembling the native, source, and Python artifacts, while the
+immutable GitHub release was created with only `dist-manifest.json` attached.
+The `v0.1.0` tag and release remain unchanged, and `gravlax-client` 0.1.0 is not
+published on PyPI.
 
-Work from a clean, up-to-date `main`. The preparation command validates version
-consistency, the publishable dependency graph, package contents, release notes,
-the public source policy, tests, and documentation. It creates only a local
-annotated tag:
+Version 0.1.1 follows immediately as the first complete native, source, and
+Python distribution. Work from a clean, up-to-date `main`. The preparation
+command validates version consistency, the publishable dependency graph,
+package contents, release notes, the public source policy, tests, and
+documentation. It creates only a local annotated tag:
 
 ```sh
-./scripts/bump-and-publish 0.1.0 --dry-run --check-history
-./scripts/bump-and-publish 0.1.0 --prepare --allow-current
+./scripts/bump-and-publish 0.1.1 --dry-run --check-history
+./scripts/bump-and-publish 0.1.1 --prepare
 ```
 
-The history check must pass before the repository is made public. It examines
-the current tracked tree and every commit in `HEAD` ancestry for the former
-private-project marker. Rewriting published Git history is a separate,
-reviewable operation; the release script will not do it implicitly.
+The history check examines the tracked tree and `HEAD` ancestry for the
+repository's public-source policy. Published tags and releases must never be
+moved or rewritten.
 
-Before changing repository visibility, fetch every GitHub branch and tag and
-audit every commit returned by `git rev-list --remotes=origin --tags`, not just
-the release checkout. The current history requires rewriting the ancestry of
-`main` and rewriting or deleting the remote `uniform-io` branch. Review all
-other GitHub refs after the rewrite as well. The release script intentionally
-does not scan unrelated local refs and never automates a force-push.
-
-Bootstrap crates.io with the temporary token, then remove the token from the
-shell and revoke it on crates.io:
+The five crates already have crates.io Trusted Publishers. Atomically push
+`main` and the tag:
 
 ```sh
-CARGO_REGISTRY_TOKEN=... \
-  ./scripts/bump-and-publish 0.1.0 \
-  --publish-crates --confirm-publish v0.1.0
-unset CARGO_REGISTRY_TOKEN
-```
-
-After adding the five crates.io Trusted Publishers, atomically push `main` and
-the tag:
-
-```sh
-./scripts/bump-and-publish 0.1.0 --push
+./scripts/bump-and-publish 0.1.1 --push
 ```
 
 Do not push a release tag directly. The helper verifies the canonical remote,
@@ -126,13 +124,13 @@ clean history, protected release settings, branch ancestry, and annotated tag
 before it sends `main` and the tag together. CI independently rejects a
 lightweight tag or a tag whose commit differs from the workflow commit.
 
-The tag workflow publishes the immutable GitHub release. Its crates.io job sees
-the already-published v0.1.0 crates and performs no upload. After the entire tag
-workflow succeeds, dispatch the top-level Python workflow and approve its
-`pypi` environment deployment:
+The tag workflow publishes version 0.1.1 to crates.io and creates the immutable
+GitHub release only after validation and artifact assembly succeed. After the
+entire tag workflow succeeds, dispatch the top-level Python workflow and
+approve its `pypi` environment deployment:
 
 ```sh
-./scripts/bump-and-publish 0.1.0 --dispatch-python
+./scripts/bump-and-publish 0.1.1 --dispatch-python
 ```
 
 It accepts only a stable, non-draft, non-prerelease, immutable release whose tag,
@@ -172,8 +170,8 @@ conda build -c conda-forge packaging/conda/local
 ```
 
 `GRAVLAX_VERSION` may be set when validating a future version. The recipe
-defaults to the workspace's current `0.1.0` version; the distribution tests
-fail when those versions diverge.
+defaults to the workspace version; the distribution tests fail when package
+versions diverge.
 
 ## Bioconda submission template
 
@@ -186,8 +184,8 @@ computed from those exact bytes:
 
 ```sh
 python packaging/bioconda/render_recipe.py \
-  --version 0.1.0 \
-  --source-archive dist/gravlax-0.1.0-source.tar.gz \
+  --version 0.1.1 \
+  --source-archive dist/gravlax-0.1.1-source.tar.gz \
   --output /tmp/bioconda-recipes/recipes/gravlax/meta.yaml
 conda render -c conda-forge -c bioconda /tmp/bioconda-recipes/recipes/gravlax
 bioconda-utils lint --packages gravlax /tmp/bioconda-recipes

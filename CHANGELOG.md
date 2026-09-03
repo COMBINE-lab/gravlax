@@ -2,6 +2,32 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## [0.1.1] - 2026-09-03
+
+This is the first complete Gravlax distribution. Version 0.1.0 established the
+Rust packages on crates.io, but its immutable GitHub release contains only the
+distribution manifest: native archives, installers, the vendored source
+archive, and Python packages were not published for that version. Install
+version 0.1.1 when using a packaged release.
+
+### Distribution changes
+
+- Publish native archives and installers for 64-bit GNU and musl Linux, Intel
+  and Apple Silicon macOS, and 64-bit Windows, together with checksums, build
+  attestations, an SPDX dependency inventory, and a vendored source archive.
+- Publish the `gravlax-client` wheel and source distribution to PyPI from the
+  exact files attached to the immutable GitHub release.
+- Pin portable release code generation explicitly: `x86-64` for 64-bit Linux
+  and Windows, `penryn` for Intel macOS, and `apple-m1` for Apple Silicon.
+  Intel macOS artifacts target macOS 10.12 or newer; Apple Silicon artifacts
+  target macOS 11.0 or newer.
+- Require successful validation and artifact assembly before creating the
+  GitHub release, and keep Python 3.10 packaging validation compatible with
+  the client's supported Python versions.
+
+There are no archive-format, result-format, or command-interface changes from
+version 0.1.0.
+
 ## [0.1.0] - 2026-09-03
 
 This is the first public release of Gravlax. It introduces compact,
@@ -28,11 +54,10 @@ annotation be changed or compared without realigning the source reads.
   changing their established default output; operation reports and directory
   bundles use the same schema and provenance model.
 - Control the `aie` executable and validate typed results from Python with the
-  dependency-light `gravlax-client` package.
-- Install the `aie` executable from crates.io or cargo-dist archives for Linux,
-  Intel or Apple Silicon macOS, and 64-bit Windows. Release artifacts include
-  checksums, build attestations, an SPDX dependency inventory, and a vendored
-  source archive for offline builds.
+  dependency-light `gravlax-client` source package.
+- Install the `aie` executable from crates.io. Native archives, installers,
+  the vendored source archive, and the PyPI package first become available in
+  version 0.1.1.
 
 ### Compatibility notes
 
@@ -47,4 +72,5 @@ annotation be changed or compared without realigning the source reads.
 - Gravlax 0.1 is an initial public interface. Result and archive formats are
   versioned so readers can reject incompatible future changes explicitly.
 
+[0.1.1]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.1
 [0.1.0]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.0

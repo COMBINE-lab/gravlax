@@ -77,6 +77,12 @@ class DistributionTests(unittest.TestCase):
             dist["publish-jobs"],
             ["./publish-crates"],
         )
+        self.assertEqual(dist["local-artifacts-jobs"], ["./release-checks"])
+        self.assertNotIn("plan-jobs", dist)
+        self.assertEqual(
+            dist["github-build-setup"],
+            "cargo-dist/release-build-setup.yml",
+        )
         self.assertEqual(dist["github-release"], "announce")
         self.assertEqual(
             tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))[
@@ -104,6 +110,55 @@ class DistributionTests(unittest.TestCase):
             "publish-crates.yml",
         ):
             self.assertIn(reusable, workflow)
+        self.assertEqual(
+            workflow.count("uses: ./.github/workflows/release-checks.yml"),
+            1,
+        )
+        custom_release_checks = workflow[
+            workflow.index("  custom-release-checks:") : workflow.index(
+                "  build-global-artifacts:"
+            )
+        ]
+        self.assertIn("- plan", custom_release_checks)
+        # Cargo-dist permits skipped artifact jobs in its generic host condition,
+        # but this predicate guarantees that the checks run for every publication.
+        # An actual check failure therefore still blocks hosting.
+        self.assertIn(
+            "needs.plan.outputs.publishing == 'true'",
+            custom_release_checks,
+        )
+        for job_start, job_end in (
+            ("  build-global-artifacts:", "  custom-build-release-extras:"),
+            ("  custom-build-release-extras:", "  # Determines if we should publish"),
+        ):
+            dependent_job = workflow[
+                workflow.index(job_start) : workflow.index(job_end)
+            ]
+            self.assertIn("- custom-release-checks", dependent_job)
+        host = workflow[
+            workflow.index("  host:") : workflow.index("  custom-publish-crates:")
+        ]
+        self.assertIn("- custom-release-checks", host)
+        self.assertIn(
+            "(needs.custom-release-checks.result == 'skipped' || "
+            "needs.custom-release-checks.result == 'success')",
+            host,
+        )
+        local_build = workflow[
+            workflow.index("  build-local-artifacts:") : workflow.index(
+                "  custom-release-checks:"
+            )
+        ]
+        self.assertEqual(
+            local_build.count('name: "Configure the portable release target"'),
+            1,
+        )
+        self.assertLess(
+            local_build.index('name: "Configure the portable release target"'),
+            local_build.index("name: Install dist"),
+        )
+        for cpu in ("x86-64", "penryn", "apple-m1"):
+            self.assertIn(f"target-cpu={cpu}", local_build)
         self.assertNotIn("custom-publish-pypi", workflow)
         self.assertLess(workflow.index("custom-publish-crates:"), workflow.index("announce:"))
         self.assertIn(
@@ -167,9 +222,15 @@ class DistributionTests(unittest.TestCase):
         self.assertIn('git cat-file -t "refs/tags/${RELEASE_TAG}"', release_checks)
         self.assertIn('refs/tags/${RELEASE_TAG}^{commit}', release_checks)
         self.assertIn('= "${GITHUB_SHA}"', release_checks)
+        self.assertIn(
+            "pip install --disable-pip-version-check -e './python[test]'",
+            release_checks,
+        )
         extras = (ROOT / ".github/workflows/build-release-extras.yml").read_text(
             encoding="utf-8"
         )
+        for rust_workflow in (release_checks, crates, extras):
+            self.assertIn("rustflags: ''", rust_workflow)
         self.assertIn(
             "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
             extras,
@@ -186,6 +247,45 @@ class DistributionTests(unittest.TestCase):
         self.assertIn("top-level workflow `publish-python.yml`", maintenance)
         self.assertIn("workflow\n`release.yml`", maintenance)
         self.assertNotIn("workflow `publish-crates.yml`", maintenance)
+
+    def test_release_cpu_policy_matches_cargo_dist_setup(self):
+        expected = {
+            "x86_64-unknown-linux-gnu": "x86-64",
+            "x86_64-unknown-linux-musl": "x86-64",
+            "x86_64-pc-windows-msvc": "x86-64",
+            "x86_64-apple-darwin": "penryn",
+            "aarch64-apple-darwin": "apple-m1",
+        }
+        cargo_config = tomllib.loads(
+            (ROOT / ".cargo/config.toml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(set(cargo_config["target"]), set(expected))
+        for target, cpu in expected.items():
+            self.assertEqual(
+                cargo_config["target"][target]["rustflags"],
+                ["-C", f"target-cpu={cpu}"],
+            )
+
+        setup = (
+            ROOT / ".github/workflows/cargo-dist/release-build-setup.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("unsupported or combined release target", setup)
+        setup_arms = {
+            (
+                "x86_64-unknown-linux-gnu|x86_64-unknown-linux-musl|"
+                "x86_64-pc-windows-msvc"
+            ): "x86-64",
+            "x86_64-apple-darwin": "penryn",
+            "aarch64-apple-darwin": "apple-m1",
+        }
+        for arm, cpu in setup_arms.items():
+            self.assertRegex(
+                setup,
+                rf"(?m)^\s*{re.escape(arm)}\)\s*$\n"
+                rf"^\s*release_rustflags='-Ctarget-cpu={re.escape(cpu)}'\s*$",
+            )
+        self.assertIn("MACOSX_DEPLOYMENT_TARGET=10.12", setup)
+        self.assertIn("MACOSX_DEPLOYMENT_TARGET=11.0", setup)
 
     def test_public_crates_ship_local_readmes_and_license_text(self):
         packages = (

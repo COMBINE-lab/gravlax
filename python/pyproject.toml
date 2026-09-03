@@ -30,7 +30,7 @@ pandas = ["pandas>=1.5"]
 arrow = ["pyarrow>=12"]
 anndata = ["anndata>=0.9", "pandas>=1.5", "scipy>=1.9"]
 all = ["anndata>=0.9", "pandas>=1.5", "pyarrow>=12", "scipy>=1.9"]
-test = []
+test = ["tomli==2.2.1; python_version < '3.11'"]
 
 [project.urls]
 Documentation = "https://combine-lab.github.io/gravlax/"

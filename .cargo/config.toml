@@ -1,0 +1,18 @@
+# Release builds name Rust 1.98's portable CPU model for every distributed
+# target. Keep this map synchronized with the cargo-dist build setup fragment.
+# Do not use `target-cpu=native` in distributable builds.
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=x86-64"]
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-cpu=x86-64"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-cpu=x86-64"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-cpu=penryn"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "target-cpu=apple-m1"]

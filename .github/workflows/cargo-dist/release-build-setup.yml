@@ -1,0 +1,25 @@
+- name: Configure the portable release target
+  shell: bash
+  env:
+    GRAVLAX_RELEASE_TARGET: ${{ join(matrix.targets, ',') }}
+  run: |
+    set -euo pipefail
+    case "${GRAVLAX_RELEASE_TARGET}" in
+      x86_64-unknown-linux-gnu|x86_64-unknown-linux-musl|x86_64-pc-windows-msvc)
+        release_rustflags='-Ctarget-cpu=x86-64'
+        ;;
+      x86_64-apple-darwin)
+        release_rustflags='-Ctarget-cpu=penryn'
+        echo 'MACOSX_DEPLOYMENT_TARGET=10.12' >> "${GITHUB_ENV}"
+        ;;
+      aarch64-apple-darwin)
+        release_rustflags='-Ctarget-cpu=apple-m1'
+        echo 'MACOSX_DEPLOYMENT_TARGET=11.0' >> "${GITHUB_ENV}"
+        ;;
+      *)
+        echo "unsupported or combined release target: ${GRAVLAX_RELEASE_TARGET}" >&2
+        exit 1
+        ;;
+    esac
+    echo "RUSTFLAGS=${release_rustflags}" >> "${GITHUB_ENV}"
+    echo "${GRAVLAX_RELEASE_TARGET}: RUSTFLAGS=${release_rustflags}"

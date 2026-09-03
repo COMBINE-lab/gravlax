@@ -87,17 +87,12 @@ jobs:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
 
-  custom-release-checks:
-    uses: ./.github/workflows/release-checks.yml
-    secrets: inherit
-
   # Build and packages all the platform-specific things
   build-local-artifacts:
     name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
     # Let the initial task tell us to not run (currently very blunt)
     needs:
       - plan
-      - custom-release-checks
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
     strategy:
       fail-fast: false
@@ -136,6 +131,31 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
+      - name: "Configure the portable release target"
+        run: |
+          set -euo pipefail
+          case "${GRAVLAX_RELEASE_TARGET}" in
+            x86_64-unknown-linux-gnu|x86_64-unknown-linux-musl|x86_64-pc-windows-msvc)
+              release_rustflags='-Ctarget-cpu=x86-64'
+              ;;
+            x86_64-apple-darwin)
+              release_rustflags='-Ctarget-cpu=penryn'
+              echo 'MACOSX_DEPLOYMENT_TARGET=10.12' >> "${GITHUB_ENV}"
+              ;;
+            aarch64-apple-darwin)
+              release_rustflags='-Ctarget-cpu=apple-m1'
+              echo 'MACOSX_DEPLOYMENT_TARGET=11.0' >> "${GITHUB_ENV}"
+              ;;
+            *)
+              echo "unsupported or combined release target: ${GRAVLAX_RELEASE_TARGET}" >&2
+              exit 1
+              ;;
+          esac
+          echo "RUSTFLAGS=${release_rustflags}" >> "${GITHUB_ENV}"
+          echo "${GRAVLAX_RELEASE_TARGET}: RUSTFLAGS=${release_rustflags}"
+        shell: "bash"
+        env:
+          "GRAVLAX_RELEASE_TARGET": "${{ join(matrix.targets, ',') }}"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
@@ -178,11 +198,21 @@ jobs:
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
 
+  custom-release-checks:
+    needs:
+      - plan
+    if: ${{ needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload' }}
+    uses: ./.github/workflows/release-checks.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
     needs:
       - plan
       - build-local-artifacts
+      - custom-release-checks
     runs-on: "ubuntu-22.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -229,6 +259,7 @@ jobs:
     needs:
       - plan
       - build-local-artifacts
+      - custom-release-checks
     uses: ./.github/workflows/build-release-extras.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
@@ -242,10 +273,11 @@ jobs:
     needs:
       - plan
       - build-local-artifacts
+      - custom-release-checks
       - build-global-artifacts
       - custom-build-release-extras
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.custom-build-release-extras.result == 'skipped' || needs.custom-build-release-extras.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.custom-build-release-extras.result == 'skipped' || needs.custom-build-release-extras.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') && (needs.custom-release-checks.result == 'skipped' || needs.custom-release-checks.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"

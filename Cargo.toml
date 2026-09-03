@@ -72,9 +72,10 @@ pr-run-mode = "plan"
 github-attestations = true
 github-release = "announce"
 min-glibc-version = { "x86_64-unknown-linux-gnu" = "2.35" }
-plan-jobs = ["./release-checks"]
+local-artifacts-jobs = ["./release-checks"]
 global-artifacts-jobs = ["./build-release-extras"]
 publish-jobs = ["./publish-crates"]
+github-build-setup = "cargo-dist/release-build-setup.yml"
 github-custom-job-permissions = { build-release-extras = { attestations = "write", contents = "read", id-token = "write" }, publish-crates = { contents = "read", id-token = "write" } }
 
 [workspace.metadata.dist.github-action-commits]
