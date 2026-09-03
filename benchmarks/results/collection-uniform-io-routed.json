@@ -1,0 +1,211 @@
+{
+  "binary": {
+    "bytes": 129276128,
+    "path": "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+    "sha256": "02315de3da008036aaff0a6b0b95108aca1e46454a48472a006a3011f50290ec"
+  },
+  "collection": {
+    "bytes": 39286118,
+    "path": "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+    "sha256": "df9e3778f4b6507a9957db87e1d6733139ab700c1a65b61be35117925aec6403"
+  },
+  "environment": {
+    "cwd": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax",
+    "platform": "Linux-4.18.0-553.156.1.el8_10.x86_64-x86_64-with-glibc2.28",
+    "python": "3.13.13"
+  },
+  "harness": {
+    "bytes": 9172,
+    "path": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/collection_uniform_io.py",
+    "sha256": "c62c1786ca6487fa9fc2baa40142d74d1dfba4a85123934f41d65f05ed46fd28"
+  },
+  "invocation": [
+    "benchmarks/collection_uniform_io.py",
+    "--binary",
+    "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+    "--collection",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+    "--kind",
+    "junction",
+    "--locus",
+    "chr9:129925157-129927194",
+    "--warmups",
+    "2",
+    "--iterations",
+    "8",
+    "--out",
+    "benchmarks/results/collection-uniform-io-routed.json"
+  ],
+  "iterations": 8,
+  "kind": "junction",
+  "locus": "chr9:129925157-129927194",
+  "min_support": 0,
+  "output_case": {
+    "commands": {
+      "legacy": [
+        "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+        "collection",
+        "junction",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+        "chr9:129925157-129927194",
+        "--top",
+        "0",
+        "--min-support",
+        "0",
+        "--json"
+      ],
+      "uniform": [
+        "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+        "collection",
+        "junction",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+        "chr9:129925157-129927194",
+        "--top",
+        "0",
+        "--min-support",
+        "0",
+        "--format",
+        "json"
+      ]
+    },
+    "legacy_mad_seconds": 0.000648434623144567,
+    "legacy_median_seconds": 0.04655414761509746,
+    "legacy_peak_rss_kib": 69444,
+    "legacy_rss_kib": [
+      68560,
+      68172,
+      69396,
+      69312,
+      69444,
+      66640,
+      69192,
+      69004
+    ],
+    "legacy_seconds": [
+      0.04934563022106886,
+      0.04613807215355337,
+      0.04489348502829671,
+      0.04759199498221278,
+      0.04697022307664156,
+      0.045894498005509377,
+      0.045916927978396416,
+      0.04700677306391299
+    ],
+    "rss_allowance_kib": 4096,
+    "rss_gate_pass": true,
+    "time_gate": 1.1,
+    "time_gate_pass": true,
+    "top": 0,
+    "uniform_mad_seconds": 0.0005374170141294599,
+    "uniform_median_seconds": 0.04636781197041273,
+    "uniform_over_legacy": 0.9959974426720187,
+    "uniform_peak_rss_kib": 69568,
+    "uniform_rss_kib": [
+      68044,
+      68484,
+      68336,
+      68464,
+      69212,
+      69568,
+      68104,
+      68956
+    ],
+    "uniform_seconds": [
+      0.048185919877141714,
+      0.0480667061638087,
+      0.04676078585907817,
+      0.04593895887956023,
+      0.045974838081747293,
+      0.0448242099955678,
+      0.04701024782843888,
+      0.04593541380017996
+    ]
+  },
+  "output_top": 0,
+  "pass": true,
+  "scan_case": {
+    "commands": {
+      "legacy": [
+        "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+        "collection",
+        "junction",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+        "chr9:129925157-129927194",
+        "--top",
+        "5",
+        "--min-support",
+        "0",
+        "--json"
+      ],
+      "uniform": [
+        "$GRAVLAX_BENCHMARK_ROOT/env/target-uniform-io-pilot/release/aie",
+        "collection",
+        "junction",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/jshape-routing-gate-b-r3/collections/canonical/route-root.aicollection",
+        "chr9:129925157-129927194",
+        "--top",
+        "5",
+        "--min-support",
+        "0",
+        "--format",
+        "json"
+      ]
+    },
+    "legacy_mad_seconds": 0.001147318514995277,
+    "legacy_median_seconds": 0.04696714354213327,
+    "legacy_peak_rss_kib": 69648,
+    "legacy_rss_kib": [
+      68680,
+      67996,
+      68112,
+      67232,
+      69140,
+      69648,
+      68088,
+      69608
+    ],
+    "legacy_seconds": [
+      0.046922357054427266,
+      0.04586881189607084,
+      0.044818962924182415,
+      0.04483158001676202,
+      0.04701193002983928,
+      0.048255295027047396,
+      0.04816344892606139,
+      0.04806065792217851
+    ],
+    "rss_allowance_kib": 4096,
+    "rss_gate_pass": true,
+    "time_gate": 1.03,
+    "time_gate_pass": true,
+    "top": 5,
+    "uniform_mad_seconds": 6.980111356824636e-05,
+    "uniform_median_seconds": 0.04592439346015453,
+    "uniform_over_legacy": 0.9777983074264819,
+    "uniform_peak_rss_kib": 69936,
+    "uniform_rss_kib": [
+      68784,
+      68404,
+      68496,
+      69204,
+      68208,
+      69936,
+      68728,
+      69020
+    ],
+    "uniform_seconds": [
+      0.04482079506851733,
+      0.04585600481368601,
+      0.04612885904498398,
+      0.046026519034057856,
+      0.04592313687317073,
+      0.045995607040822506,
+      0.04589300602674484,
+      0.04592565004713833
+    ]
+  },
+  "scan_top": 5,
+  "schema": "gravlax.benchmark.collection-uniform-io.v2",
+  "scientific_parity": true,
+  "warmups": 2
+}

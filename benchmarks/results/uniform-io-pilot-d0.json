@@ -1,0 +1,871 @@
+{
+  "archive": {
+    "declared_identity": "aie-v1-unrooted:$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+    "kind": "file",
+    "path": "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+    "sha256": "d7c11d4258f7b78b5c3a20ebc5349e3a1f1f52a0279425701d14acbf79948842",
+    "size_bytes": 111087381
+  },
+  "baseline": {
+    "kind": "file",
+    "path": "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-baseline-target/release/aie",
+    "sha256": "1ec0dacbcc4a6c09698f278992241b045cccbe2845521abea665d01d68e36482",
+    "size_bytes": 122747448
+  },
+  "bounded_output_memory": [
+    {
+      "comparison": "junction-large-vs-small-json",
+      "emitted_row_ratio": 225.55,
+      "gate": true,
+      "limit": 1.1,
+      "rss_ratio": 1.0015998494259364
+    },
+    {
+      "comparison": "region-large-vs-small-json",
+      "emitted_row_ratio": 336.05,
+      "gate": true,
+      "limit": 1.1,
+      "rss_ratio": 1.0177870090634442
+    }
+  ],
+  "candidate": {
+    "kind": "file",
+    "path_at_measurement": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/target/release/aie",
+    "path_semantics": "Historical path at measurement time; size_bytes and sha256 are authoritative.",
+    "sha256": "0811cda8fd6ea463223fe005ddfc95c391acedf858ac9f8549dafd990e4fb9a9",
+    "size_bytes": 124373944
+  },
+  "cases": [
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-cell-small-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 1108.0,
+          "max": 131084.0,
+          "median": 128920.0,
+          "min": 125004.0
+        },
+        "baseline_seconds": {
+          "mad": 0.0004791170358657837,
+          "max": 0.07551964605227113,
+          "median": 0.07440367504023015,
+          "min": 0.0736243708524853
+        },
+        "candidate_rss_kib": {
+          "mad": 940.0,
+          "max": 130532.0,
+          "median": 126084.0,
+          "min": 123928.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0003234639298170805,
+          "max": 0.07578880502842367,
+          "median": 0.07521441206336021,
+          "min": 0.07406870601698756
+        },
+        "gate": true,
+        "rss_ratio": 0.9780018616196091,
+        "stdout_exact": true,
+        "time_ratio": 1.0108964647605336
+      },
+      "legacy_rss_kib": {
+        "mad": 608.0,
+        "max": 130132.0,
+        "median": 127352.0,
+        "min": 126332.0
+      },
+      "legacy_seconds": {
+        "mad": 0.0004662701394408941,
+        "max": 0.07641611900180578,
+        "median": 0.07548642391338944,
+        "min": 0.07423996506258845
+      },
+      "legacy_stdout_bytes": 1669,
+      "output_class": "scan",
+      "rows": 20,
+      "rss_ratio": 1.001256360324141,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 0.9932074818689005,
+      "uniform_rss_kib": {
+        "mad": 1444.0,
+        "max": 130592.0,
+        "median": 127512.0,
+        "min": 123400.0
+      },
+      "uniform_seconds": {
+        "mad": 0.00034159794449806213,
+        "max": 0.0767111040186137,
+        "median": 0.07497368101030588,
+        "min": 0.0740605890750885
+      },
+      "uniform_stdout_bytes": 2389
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-cell-large-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 2036.0,
+          "max": 135572.0,
+          "median": 133536.0,
+          "min": 130356.0
+        },
+        "baseline_seconds": {
+          "mad": 0.0004301199223846197,
+          "max": 0.07751646498218179,
+          "median": 0.07671275292523205,
+          "min": 0.07517629489302635
+        },
+        "candidate_rss_kib": {
+          "mad": 1804.0,
+          "max": 139772.0,
+          "median": 134904.0,
+          "min": 129272.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0002526058815419674,
+          "max": 0.07779673114418983,
+          "median": 0.07730373414233327,
+          "min": 0.07618315704166889
+        },
+        "gate": true,
+        "rss_ratio": 1.0102444284687275,
+        "stdout_exact": true,
+        "time_ratio": 1.007703819698365
+      },
+      "legacy_rss_kib": {
+        "mad": 476.0,
+        "max": 134688.0,
+        "median": 133424.0,
+        "min": 130608.0
+      },
+      "legacy_seconds": {
+        "mad": 0.0007092629093676805,
+        "max": 0.07880228012800217,
+        "median": 0.07684824895113707,
+        "min": 0.07586729410104454
+      },
+      "legacy_stdout_bytes": 299162,
+      "output_class": "output",
+      "rows": 4511,
+      "rss_ratio": 0.9572190910181076,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.1,
+      "time_ratio": 0.9760682516364656,
+      "uniform_rss_kib": {
+        "mad": 1068.0,
+        "max": 130344.0,
+        "median": 127716.0,
+        "min": 124824.0
+      },
+      "uniform_seconds": {
+        "mad": 0.00038935383781790733,
+        "max": 0.07719178008846939,
+        "median": 0.0750091359950602,
+        "min": 0.0740971639752388
+      },
+      "uniform_stdout_bytes": 183117
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-cell-large-tsv",
+      "format": "tsv",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 1312.0,
+          "max": 129568.0,
+          "median": 127992.0,
+          "min": 125696.0
+        },
+        "baseline_seconds": {
+          "mad": 0.0004565760027617216,
+          "max": 0.07809058297425508,
+          "median": 0.07684028800576925,
+          "min": 0.07500708312727511
+        },
+        "candidate_rss_kib": {
+          "mad": 1912.0,
+          "max": 131720.0,
+          "median": 128320.0,
+          "min": 124944.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0007355702109634876,
+          "max": 0.07945477496832609,
+          "median": 0.077806883957237,
+          "min": 0.07547974097542465
+        },
+        "gate": true,
+        "rss_ratio": 1.0025626601662605,
+        "stdout_exact": true,
+        "time_ratio": 1.012579285900063
+      },
+      "legacy_rss_kib": {
+        "mad": 1820.0,
+        "max": 130820.0,
+        "median": 128484.0,
+        "min": 125680.0
+      },
+      "legacy_seconds": {
+        "mad": 0.0005537697579711676,
+        "max": 0.07974732690490782,
+        "median": 0.07810096791945398,
+        "min": 0.07667398010380566
+      },
+      "legacy_stdout_bytes": 86848,
+      "output_class": "output",
+      "rows": 4511,
+      "rss_ratio": 0.9984433859468883,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.1,
+      "time_ratio": 0.9712180918985351,
+      "uniform_rss_kib": {
+        "mad": 872.0,
+        "max": 131232.0,
+        "median": 128284.0,
+        "min": 125396.0
+      },
+      "uniform_seconds": {
+        "mad": 0.0007977047935128212,
+        "max": 0.07743401289917529,
+        "median": 0.0758530730381608,
+        "min": 0.07461500493809581
+      },
+      "uniform_stdout_bytes": 137721
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-scoped-cell-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 856.0,
+          "max": 131652.0,
+          "median": 128032.0,
+          "min": 124632.0
+        },
+        "baseline_seconds": {
+          "mad": 0.0005475820507854223,
+          "max": 0.0754525838419795,
+          "median": 0.07411148399114609,
+          "min": 0.07353163789957762
+        },
+        "candidate_rss_kib": {
+          "mad": 1712.0,
+          "max": 132108.0,
+          "median": 128012.0,
+          "min": 124000.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0006027158815413713,
+          "max": 0.07682753005065024,
+          "median": 0.07524288585409522,
+          "min": 0.07423517294228077
+        },
+        "gate": true,
+        "rss_ratio": 0.9998437890527369,
+        "stdout_exact": true,
+        "time_ratio": 1.0152662151939138
+      },
+      "legacy_rss_kib": {
+        "mad": 1120.0,
+        "max": 128812.0,
+        "median": 127444.0,
+        "min": 124748.0
+      },
+      "legacy_seconds": {
+        "mad": 0.00034966995008289814,
+        "max": 0.07651273906230927,
+        "median": 0.07534809107892215,
+        "min": 0.07407723693177104
+      },
+      "legacy_stdout_bytes": 2576,
+      "output_class": "scan",
+      "rows": 32,
+      "rss_ratio": 1.0032327924421707,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 0.9965057894087814,
+      "uniform_rss_kib": {
+        "mad": 620.0,
+        "max": 129440.0,
+        "median": 127856.0,
+        "min": 126440.0
+      },
+      "uniform_seconds": {
+        "mad": 0.000744630815461278,
+        "max": 0.07777195703238249,
+        "median": 0.07508480898104608,
+        "min": 0.07413498591631651
+      },
+      "uniform_stdout_bytes": 3214
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-group-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 1052.0,
+          "max": 132296.0,
+          "median": 129660.0,
+          "min": 124016.0
+        },
+        "baseline_seconds": {
+          "mad": 0.00031640403904020786,
+          "max": 0.07569610909558833,
+          "median": 0.07523900107480586,
+          "min": 0.07405588799156249
+        },
+        "candidate_rss_kib": {
+          "mad": 732.0,
+          "max": 130276.0,
+          "median": 128080.0,
+          "min": 126080.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0003628579434007406,
+          "max": 0.07664713310077786,
+          "median": 0.07611387106589973,
+          "min": 0.07473148498684168
+        },
+        "gate": true,
+        "rss_ratio": 0.9878142835107203,
+        "stdout_exact": true,
+        "time_ratio": 1.0116278788739372
+      },
+      "legacy_rss_kib": {
+        "mad": 1380.0,
+        "max": 132536.0,
+        "median": 130348.0,
+        "min": 126320.0
+      },
+      "legacy_seconds": {
+        "mad": 0.00040957191959023476,
+        "max": 0.07677610008977354,
+        "median": 0.07579210004769266,
+        "min": 0.07519082515500486
+      },
+      "legacy_stdout_bytes": 1138,
+      "output_class": "scan",
+      "rows": 4,
+      "rss_ratio": 0.972688495412281,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 1.0084601043243457,
+      "uniform_rss_kib": {
+        "mad": 920.0,
+        "max": 130616.0,
+        "median": 126788.0,
+        "min": 124932.0
+      },
+      "uniform_seconds": {
+        "mad": 0.000331284012645483,
+        "max": 0.07836993597447872,
+        "median": 0.07643330912105739,
+        "min": 0.07541594421491027
+      },
+      "uniform_stdout_bytes": 2137
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "junction-bulk-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 764.0,
+          "max": 132692.0,
+          "median": 127656.0,
+          "min": 125636.0
+        },
+        "baseline_seconds": {
+          "mad": 0.00018137902952730656,
+          "max": 0.07528193295001984,
+          "median": 0.07440565200522542,
+          "min": 0.07408240810036659
+        },
+        "candidate_rss_kib": {
+          "mad": 936.0,
+          "max": 131804.0,
+          "median": 126808.0,
+          "min": 124940.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0003462829627096653,
+          "max": 0.07702356111258268,
+          "median": 0.07496670004911721,
+          "min": 0.07421720400452614
+        },
+        "gate": true,
+        "rss_ratio": 0.9933571473334587,
+        "stdout_exact": true,
+        "time_ratio": 1.0075403955045295
+      },
+      "legacy_rss_kib": {
+        "mad": 1748.0,
+        "max": 132308.0,
+        "median": 128508.0,
+        "min": 123480.0
+      },
+      "legacy_seconds": {
+        "mad": 0.00043090106919407845,
+        "max": 0.07595265307463706,
+        "median": 0.07464244309812784,
+        "min": 0.07415216998197138
+      },
+      "legacy_stdout_bytes": 406,
+      "output_class": "scan",
+      "rows": 1,
+      "rss_ratio": 0.9962336975129953,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 1.0017713078264356,
+      "uniform_rss_kib": {
+        "mad": 692.0,
+        "max": 128808.0,
+        "median": 128024.0,
+        "min": 124596.0
+      },
+      "uniform_seconds": {
+        "mad": 0.0005236517172306776,
+        "max": 0.07697479310445487,
+        "median": 0.07477465784177184,
+        "min": 0.0736280910205096
+      },
+      "uniform_stdout_bytes": 1520
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "region-cell-small-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 2004.0,
+          "max": 111700.0,
+          "median": 107456.0,
+          "min": 105192.0
+        },
+        "baseline_seconds": {
+          "mad": 0.00028346898034214973,
+          "max": 0.04234922188334167,
+          "median": 0.04123489395715296,
+          "min": 0.04041629214771092
+        },
+        "candidate_rss_kib": {
+          "mad": 564.0,
+          "max": 111436.0,
+          "median": 106604.0,
+          "min": 103936.0
+        },
+        "candidate_seconds": {
+          "mad": 0.00028921710327267647,
+          "max": 0.04270422807894647,
+          "median": 0.042024376103654504,
+          "min": 0.04070533812046051
+        },
+        "gate": true,
+        "rss_ratio": 0.9920711733174509,
+        "stdout_exact": true,
+        "time_ratio": 1.0191459725183698
+      },
+      "legacy_rss_kib": {
+        "mad": 1544.0,
+        "max": 108900.0,
+        "median": 105128.0,
+        "min": 102888.0
+      },
+      "legacy_seconds": {
+        "mad": 0.0004053148441016674,
+        "max": 0.04269407503306866,
+        "median": 0.04216113407164812,
+        "min": 0.0407875410746783
+      },
+      "legacy_stdout_bytes": 1754,
+      "output_class": "scan",
+      "rows": 20,
+      "rss_ratio": 1.0075336732364355,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 0.9936422929066341,
+      "uniform_rss_kib": {
+        "mad": 1412.0,
+        "max": 110656.0,
+        "median": 105920.0,
+        "min": 103464.0
+      },
+      "uniform_seconds": {
+        "mad": 0.00026648491621017456,
+        "max": 0.043706141877919436,
+        "median": 0.041893085930496454,
+        "min": 0.04110068012960255
+      },
+      "uniform_stdout_bytes": 2337
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "region-cell-large-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 1596.0,
+          "max": 121304.0,
+          "median": 117812.0,
+          "min": 115676.0
+        },
+        "baseline_seconds": {
+          "mad": 0.0003639289643615484,
+          "max": 0.04637696291320026,
+          "median": 0.0456660189665854,
+          "min": 0.04496863204985857
+        },
+        "candidate_rss_kib": {
+          "mad": 1956.0,
+          "max": 121440.0,
+          "median": 118472.0,
+          "min": 115120.0
+        },
+        "candidate_seconds": {
+          "mad": 0.0003883319441229105,
+          "max": 0.04693368682637811,
+          "median": 0.04623458907008171,
+          "min": 0.04525321302935481
+        },
+        "gate": true,
+        "rss_ratio": 1.0056021457916002,
+        "stdout_exact": true,
+        "time_ratio": 1.0124506168123029
+      },
+      "legacy_rss_kib": {
+        "mad": 1232.0,
+        "max": 123196.0,
+        "median": 116144.0,
+        "min": 114208.0
+      },
+      "legacy_seconds": {
+        "mad": 0.0005611898377537727,
+        "max": 0.04663871298544109,
+        "median": 0.04606680804863572,
+        "min": 0.04478978691622615
+      },
+      "legacy_stdout_bytes": 445256,
+      "output_class": "output",
+      "rows": 6721,
+      "rss_ratio": 0.9281925885108142,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.1,
+      "time_ratio": 0.9193372823917487,
+      "uniform_rss_kib": {
+        "mad": 924.0,
+        "max": 111792.0,
+        "median": 107804.0,
+        "min": 103404.0
+      },
+      "uniform_seconds": {
+        "mad": 0.00011976389214396477,
+        "max": 0.043282861122861505,
+        "median": 0.0423509341198951,
+        "min": 0.04193312209099531
+      },
+      "uniform_stdout_bytes": 271622
+    },
+    {
+      "bounded_memory_gate": true,
+      "case": "region-bulk-json",
+      "format": "json",
+      "gate": true,
+      "legacy_compatibility": {
+        "baseline_rss_kib": {
+          "mad": 1508.0,
+          "max": 110272.0,
+          "median": 106040.0,
+          "min": 101760.0
+        },
+        "baseline_seconds": {
+          "mad": 0.00046406593173742294,
+          "max": 0.04229712998494506,
+          "median": 0.041362778982147574,
+          "min": 0.0402910599950701
+        },
+        "candidate_rss_kib": {
+          "mad": 1632.0,
+          "max": 110212.0,
+          "median": 105920.0,
+          "min": 104100.0
+        },
+        "candidate_seconds": {
+          "mad": 0.00027856207452714443,
+          "max": 0.04227728280238807,
+          "median": 0.04148786119185388,
+          "min": 0.040957012912258506
+        },
+        "gate": true,
+        "rss_ratio": 0.998868351565447,
+        "stdout_exact": true,
+        "time_ratio": 1.0030240281911496
+      },
+      "legacy_rss_kib": {
+        "mad": 1404.0,
+        "max": 115440.0,
+        "median": 106264.0,
+        "min": 103668.0
+      },
+      "legacy_seconds": {
+        "mad": 0.00030127307400107384,
+        "max": 0.0422117228154093,
+        "median": 0.04135067202150822,
+        "min": 0.040767512982711196
+      },
+      "legacy_stdout_bytes": 396,
+      "output_class": "scan",
+      "rows": 1,
+      "rss_ratio": 1.009335240533012,
+      "semantic_equivalence": true,
+      "time_gate": true,
+      "time_limit": 1.03,
+      "time_ratio": 1.0091810134183496,
+      "uniform_rss_kib": {
+        "mad": 1580.0,
+        "max": 109964.0,
+        "median": 107256.0,
+        "min": 104392.0
+      },
+      "uniform_seconds": {
+        "mad": 0.00022948486730456352,
+        "max": 0.0424804009962827,
+        "median": 0.04173031309619546,
+        "min": 0.04095732304267585
+      },
+      "uniform_stdout_bytes": 1468
+    }
+  ],
+  "environment": {
+    "cpu_affinity": "0-255",
+    "logical_cpus_visible": 256,
+    "rayon_num_threads": null
+  },
+  "file_publication": {
+    "case": "junction-cell-large-json",
+    "gate": true,
+    "legacy_redirect_seconds": {
+      "mad": 0.0004999761004000902,
+      "max": 0.07819434604607522,
+      "median": 0.07731927698478103,
+      "min": 0.07634600182063878
+    },
+    "limit": 1.1,
+    "time_ratio": 0.9726486057737613,
+    "uniform_atomic_flush_seconds": {
+      "mad": 0.00025845388881862164,
+      "max": 0.07711939211003482,
+      "median": 0.07520448695868254,
+      "min": 0.07476979121565819
+    }
+  },
+  "fixtures": {
+    "cases": [
+      {
+        "arguments": [
+          "--top",
+          "20"
+        ],
+        "format": "json",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-cell-small-json",
+        "output_class": "scan"
+      },
+      {
+        "arguments": [
+          "--top",
+          "0"
+        ],
+        "format": "json",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-cell-large-json",
+        "output_class": "output"
+      },
+      {
+        "arguments": [
+          "--top",
+          "0"
+        ],
+        "format": "tsv",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-cell-large-tsv",
+        "output_class": "output"
+      },
+      {
+        "arguments": [
+          "--cells",
+          "<generated-cells-fixture>",
+          "--agg",
+          "cell",
+          "--top",
+          "0"
+        ],
+        "format": "json",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-scoped-cell-json",
+        "output_class": "scan"
+      },
+      {
+        "arguments": [
+          "--groups",
+          "<generated-groups-fixture>",
+          "--agg",
+          "group",
+          "--top",
+          "0"
+        ],
+        "format": "json",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-group-json",
+        "output_class": "scan"
+      },
+      {
+        "arguments": [
+          "--agg",
+          "bulk",
+          "--top",
+          "0"
+        ],
+        "format": "json",
+        "kind": "junction",
+        "locus": "chr16:89562391-89562883",
+        "name": "junction-bulk-json",
+        "output_class": "scan"
+      },
+      {
+        "arguments": [
+          "--top",
+          "20"
+        ],
+        "format": "json",
+        "kind": "region",
+        "locus": "chr16:89550000-89575000",
+        "name": "region-cell-small-json",
+        "output_class": "scan"
+      },
+      {
+        "arguments": [
+          "--top",
+          "999999999"
+        ],
+        "format": "json",
+        "kind": "region",
+        "locus": "chr16:89550000-89575000",
+        "name": "region-cell-large-json",
+        "output_class": "output"
+      },
+      {
+        "arguments": [
+          "--agg",
+          "bulk",
+          "--top",
+          "0"
+        ],
+        "format": "json",
+        "kind": "region",
+        "locus": "chr16:89550000-89575000",
+        "name": "region-bulk-json",
+        "output_class": "scan"
+      }
+    ],
+    "cells": {
+      "argument_token": "<generated-cells-fixture>",
+      "construction": "first 32 rows from the full legacy junction result",
+      "kind": "generated-file",
+      "sha256": "f423c703f280252ceb4c1cb4e51f4f31317154fcb463820e5cb39f64d8dc9a87",
+      "size_bytes": 544
+    },
+    "groups": {
+      "argument_token": "<generated-groups-fixture>",
+      "construction": "all full legacy junction rows assigned round-robin to group-0..3",
+      "kind": "generated-file",
+      "sha256": "d9c396c792e0dd80b2b5fe73c8e995b232599e4f10edc2c04070ed83ac1edd7f",
+      "size_bytes": 112775
+    },
+    "junction_locus": "chr16:89562391-89562883",
+    "region_locus": "chr16:89550000-89575000"
+  },
+  "harness": {
+    "kind": "file",
+    "path_at_measurement": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/uniform_io_pilot.py",
+    "path_semantics": "Historical path at measurement time; size_bytes and sha256 are authoritative.",
+    "sha256": "67897da53598a8793a0cfa8dd3a0cce4822951ac7f1a3ed4026287935196fa5a",
+    "size_bytes": 26697
+  },
+  "iterations": 15,
+  "legacy_stdout_sha256": {
+    "junction-bulk-json": "981693ba3c6a3339e25cf8259c704675792ab64da8260bea44a1ba57f59759da",
+    "junction-cell-large-json": "0fc9a204a6262a2648d857eb0ea426cc7a91c213b37849bedf4ac0fdd4c0ae98",
+    "junction-cell-large-tsv": "5e9e2e5df22a635a9419021d671d6d8994e67e6d95ec1e3fdaa0b1cece276eac",
+    "junction-cell-small-json": "10281eaebb1efff02ce67ffd790bc652eaf85f0124aca7224fb39bf073c00d49",
+    "junction-group-json": "7ca4f6cd0034d3ea1feb35ef919cb796ecff36a81cc9dfac5e09a20a3d9c0cdd",
+    "junction-scoped-cell-json": "a9f4a2a1ad2fabab74059639a0ef512db7add7744a15fd5222b2e8bfd3303b57",
+    "region-bulk-json": "2c0a47a20e7f8b4278803080a26d83e14fab4554e577855135431dc1df43b10b",
+    "region-cell-large-json": "e2874913eef28698be6d63bc90680b4601e7ba42f3fc9119baac98f8f27e5d37",
+    "region-cell-small-json": "dace4d986a691104ab1db78ef99f7f43a93861d17ee5cf7a4dc0919f2ec024ca"
+  },
+  "normalized_invocation": [
+    "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/uniform_io_pilot.py",
+    "--aie",
+    "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/target/release/aie",
+    "--baseline-aie",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-baseline-target/release/aie",
+    "--archive",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+    "--region",
+    "chr16:89550000-89575000",
+    "--junction",
+    "chr16:89562391-89562883",
+    "--iterations",
+    "15",
+    "--warmups",
+    "3",
+    "--rss-runs",
+    "9",
+    "--scratch-root",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-pilot-formal",
+    "--report",
+    "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/results/uniform-io-pilot-d0.json"
+  ],
+  "notes": [
+    "scan cases use a <=3% end-to-end median-time gate",
+    "large-output cases use a <=10% end-to-end proxy for the output-only gate; this conservatively includes archive work",
+    "uniform RSS must be <=10% above paired legacy RSS, and large-row RSS is also compared with small-row RSS",
+    "RSS gates use alternating repeated runs and median/MAD because individual peak-RSS readings are noisy",
+    "atomic publication uses Flush durability and is timed separately from stdout to /dev/null",
+    "legacy compatibility requires byte-exact stdout, <=3% median time, and <=10% RSS when --baseline-aie is supplied"
+  ],
+  "passed": true,
+  "rss_runs": 9,
+  "schedule": "paired alternating AB/BA",
+  "schema": "gravlax.benchmark.uniform-io-pilot.v4",
+  "scratch_root": "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-pilot-formal",
+  "warmups": 3
+}

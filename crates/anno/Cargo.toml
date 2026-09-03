@@ -1,0 +1,26 @@
+[package]
+name = "gravlax-anno"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+description = "Annotation parsing and assignment for Gravlax"
+publish = ["crates-io"]
+
+[lib]
+name = "anno"
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+anyhow.workspace = true
+evidence-io.workspace = true
+hashbrown.workspace = true
+rayon.workspace = true
+blake3.workspace = true
+serde.workspace = true

@@ -1,0 +1,10 @@
+# aie project manifest; paths are relative to this file
+schema_version: 1
+name: gravlax-demo
+resources:
+  demo-annotation:
+    kind: annotation
+    path: data/demo.gtf
+    annotation_identity:
+      assembly: demo-assembly
+      annotation: demo-release-1

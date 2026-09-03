@@ -1,0 +1,4 @@
+id	kind	locus
+region	region	chr16:89550000-89575000
+junction	junction	chr16:89562391-89562883
+absent	junction	chr16:1-2

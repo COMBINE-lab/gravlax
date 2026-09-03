@@ -1,0 +1,121 @@
+---
+title: align once and query forever
+description: Align once and query forever — a compact molecular-evidence index for annotation replay in single-cell RNA-seq.
+template: splash
+hero:
+  image:
+    file: ../../assets/icon.svg
+    alt: Gravlax
+  tagline: Align once and query forever — a compact molecular-evidence index for annotation replay in single-cell RNA-seq.
+  actions:
+    - text: Quick start
+      link: /gravlax/quickstart/
+      icon: right-arrow
+    - text: Workflow and interfaces
+      link: /gravlax/workflow/
+      icon: right-arrow
+      variant: minimal
+    - text: View on GitHub
+      link: https://github.com/COMBINE-lab/gravlax
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What is Gravlax?
+
+Gravlax builds a compact, molecule-resolved evidence index (`.aie`) from raw 10x
+reads and a genome — **no annotation touches the build**. A compatible GTF
+supplied *at query time* drives Gene, GeneFull, and Velocyto-style replay from
+fixed genome alignments and barcode correction fixed at ingest. Archive-sourced and
+BAM-sourced Gravlax replay are byte-identical; against a fresh
+annotation-aware STARsolo run, the deployed archive differs by 0.22–0.45% of
+UMI mass across four datasets. It occupies 11–18 bits per input read and opens
+in ~10 ms. Against a function-matched CRAM holding the same post-correction
+molecule placements and UMI graph, it is 2.10–2.55× smaller and
+6.64–13.69× faster to quantify.
+
+The count matrix is one reading of the data under a transient editorial
+artifact — the gene annotation — and every annotation release silently
+invalidates it. Gravlax stores the evidence rather than the interpretation, so
+reanalysis stops being a pipeline and becomes a query.
+
+<CardGrid stagger>
+  <Card title="Fast replay" icon="rocket">
+    Quantify compatible annotations, past or future, in seconds — no FASTQ,
+    no realignment. End-to-end deviation from fresh STARsolo is 0.22–0.45% of
+    UMI mass across four evaluated datasets.
+  </Card>
+  <Card title="Indexed queries" icon="magnifier">
+    Region, junction, splice-event, molecular-path, and 3′-site queries at
+    cell or group resolution, straight from the index.
+  </Card>
+  <Card title="Compare annotations" icon="approve-check">
+    Replay two releases independently on fixed evidence and report exact
+    signed count changes, changed-class states, non-exclusive causes, and
+    bounded witnesses within the retained archive quotient.
+  </Card>
+  <Card title="Projects and plans" icon="puzzle">
+    Name resources once, check assembly and biological intent before a run,
+    preserve a content-addressed resolved plan, and resume only after exact
+    identities are verified.
+  </Card>
+  <Card title="Discover → replay" icon="approve-check">
+    Find unannotated loci from the index alone, emit them as a GTF, and
+    re-quantify them with the full replay machinery. Bounded residual sites
+    raise complete-denominator recall from 44.7% to 72.5%.
+  </Card>
+  <Card title="EM multimapper recovery" icon="random">
+    Packed, cell-sharded cross-cell EM over the stored paralog evidence
+    recovers the multi-gene molecules per-cell quantifiers discard.
+  </Card>
+  <Card title="Federation" icon="puzzle">
+    One query across N indexes — the atlas access pattern at molecule
+    resolution, with per-sample, per-cell answers.
+  </Card>
+  <Card title="Small and fast" icon="seti:db">
+    11–18 bits per input read. The current files are 32–49× smaller than FASTQ
+    and 9–13× smaller than information-richer, tag-preserving CRAM 3.1. They
+    remain 2.10–2.55× smaller than function-matched post-correction CRAM.
+    Open cost is ~10 ms.
+  </Card>
+</CardGrid>
+
+## The workflow at a glance
+
+```sh
+# Check the installation, then align annotation-free
+# (STAR two-pass, no GTF, secondaries kept) → BAM:
+aie doctor
+aie ingest recipe --chemistry 10x-3p-v3
+aie ingest check align.bam --whitelist 3M-february-2018.txt --chemistry 10x-3p-v3
+
+# Build and compile once:
+aie ingest-archive align.bam --whitelist 3M-february-2018.txt --out sample.aie
+aie compile-annotation gencode.v49.gtf --out gencode.v49.aic
+
+# Query and reinterpret forever:
+aie replay-rows sample.aie --gtf gencode.v49.aic --barcodes barcodes.tsv --out-dir counts/
+aie resolve gencode.v49.aic TP53 --assembly GRCh38.p14 --annotation "GENCODE 49"
+aie query sample.aie region chr1:1000000-2000000 --format json
+aie query sample.aie junction chr2:1234567-1250000 --format json
+aie compare-annotations sample.aie --annotation-a gencode.v44.gtf \
+  --annotation-b gencode.v49.aic --assembly GRCh38.p14 \
+  --annotation-a-label "GENCODE 44" --annotation-b-label "GENCODE 49"
+aie query sample.aie junctions chr2:1200000-1300000 --with-cells --format tsv
+aie federate a.aie b.aie c.aie chr1:155234452-155235327 --format json
+aie dev em sample.aie --gtf gencode.v49.gtf
+```
+
+See the [quick start](/gravlax/quickstart/) for the full walkthrough, and the
+[capabilities guide](/gravlax/capabilities/) for what the index can do that a
+count matrix cannot. For repeatable analyses, the [workflow and interfaces
+guide](/gravlax/workflow/) connects projects, plans, safe identifier
+resolution, Explorer, typed Python results, and the uniform-output contract.
+
+## Citation
+
+Manuscript in preparation. The
+[GitHub repository](https://github.com/COMBINE-lab/gravlax) is the reference
+implementation.

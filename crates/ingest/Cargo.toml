@@ -1,0 +1,26 @@
+[package]
+name = "gravlax-ingest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+description = "Alignment ingestion for Gravlax molecular-evidence archives"
+publish = ["crates-io"]
+
+[lib]
+name = "ingest"
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+anyhow.workspace = true
+evidence-io.workspace = true
+noodles-bam.workspace = true
+noodles-sam.workspace = true
+rustc-hash.workspace = true
+rayon.workspace = true

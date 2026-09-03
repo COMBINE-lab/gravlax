@@ -1,0 +1,205 @@
+{
+  "artifact_parity": {
+    "extended_gtf_bytes_identical": true,
+    "legacy_report_bytes_identical": true
+  },
+  "environment": {
+    "cpu_count": 256,
+    "platform": "Linux-4.18.0-553.156.1.el8_10.x86_64-x86_64-with-glibc2.28",
+    "python": "3.13.13"
+  },
+  "fixture": {
+    "archive": {
+      "bytes": 111087381,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+      "sha256": "d7c11d4258f7b78b5c3a20ebc5349e3a1f1f52a0279425701d14acbf79948842"
+    },
+    "baseline_binary": {
+      "bytes": 122747448,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-baseline-target/release/aie",
+      "sha256": "1ec0dacbcc4a6c09698f278992241b045cccbe2845521abea665d01d68e36482"
+    },
+    "candidate_binary": {
+      "bytes": 130478536,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/target-extend-release2/release/aie",
+      "sha256": "6cab4a5a4f833b327f59682c70c91f523b7ece1d67635d8dc8c3104178ba802c"
+    },
+    "gtf": {
+      "bytes": 3323462848,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/annotations/gencode.v49.annotation.gtf",
+      "sha256": "ff32fd55c6799b3b94fe10aa17b2b5d4da952fa1de12fe44afadf32e949ec914"
+    }
+  },
+  "gates": {
+    "candidate_legacy_elapsed": true,
+    "candidate_legacy_rss": true,
+    "extended_gtf_bytes_identical": true,
+    "legacy_report_bytes_identical": true,
+    "uniform_elapsed": true,
+    "uniform_rss": true
+  },
+  "harness": {
+    "bytes": 9440,
+    "path": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/extend_uniform_io.py",
+    "sha256": "f457d2d346d11a29945af96ffe78a6f2c49417419bf6961f96680129bf8fa445"
+  },
+  "invocation": [
+    "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/extend_uniform_io.py",
+    "--candidate",
+    "target-extend-release2/release/aie",
+    "--baseline",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/tmp/uniform-io-baseline-target/release/aie",
+    "--archive",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+    "--gtf",
+    "$GRAVLAX_BENCHMARK_ROOT/annotations/gencode.v49.annotation.gtf",
+    "--output",
+    "benchmarks/results/extend-uniform-io-d0.json",
+    "--work-dir",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/tmp",
+    "--repetitions",
+    "3"
+  ],
+  "limits": {
+    "candidate_legacy_vs_baseline_elapsed_ratio_max": 1.03,
+    "rss_ratio_max": 1.1,
+    "uniform_vs_candidate_legacy_elapsed_ratio_max": 1.1
+  },
+  "medians": {
+    "baseline": {
+      "elapsed_seconds": 8.7,
+      "max_rss_kib": 3974680.0
+    },
+    "candidate_legacy": {
+      "elapsed_seconds": 8.83,
+      "max_rss_kib": 3975780.0
+    },
+    "uniform": {
+      "elapsed_seconds": 8.67,
+      "max_rss_kib": 3969912.0
+    }
+  },
+  "method": {
+    "artifact_parity": "SHA-256 and byte length for extended GTF and legacy TSV",
+    "command_parameters": "extend defaults, legacy per-gene --report in every mode",
+    "order": "alternating baseline,candidate-legacy,uniform / reverse",
+    "repetitions": 3,
+    "rss": "/usr/bin/time maximum resident set size",
+    "timing": "/usr/bin/time elapsed wall seconds"
+  },
+  "passed": true,
+  "ratios": {
+    "candidate_legacy_vs_baseline_elapsed": 1.0149425287356322,
+    "candidate_legacy_vs_baseline_rss": 1.0002767518391418,
+    "uniform_vs_candidate_legacy_elapsed": 0.9818799546998868,
+    "uniform_vs_candidate_legacy_rss": 0.9985240632026923
+  },
+  "records": [
+    {
+      "elapsed_seconds": 9.23,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3975968,
+      "mode": "baseline",
+      "repetition": 0,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 9.24,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3976572,
+      "mode": "candidate_legacy",
+      "repetition": 0,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 8.69,
+      "genes_extended": 8818,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3969828,
+      "mode": "uniform",
+      "repetition": 0,
+      "stderr_bytes": 227,
+      "uniform_report_bytes": 807841
+    },
+    {
+      "elapsed_seconds": 8.67,
+      "genes_extended": 8818,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3970008,
+      "mode": "uniform",
+      "repetition": 1,
+      "stderr_bytes": 227,
+      "uniform_report_bytes": 807841
+    },
+    {
+      "elapsed_seconds": 8.83,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3974468,
+      "mode": "candidate_legacy",
+      "repetition": 1,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 8.66,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3973868,
+      "mode": "baseline",
+      "repetition": 1,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 8.7,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3974680,
+      "mode": "baseline",
+      "repetition": 2,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 8.79,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3975780,
+      "mode": "candidate_legacy",
+      "repetition": 2,
+      "stderr_bytes": 44
+    },
+    {
+      "elapsed_seconds": 8.56,
+      "genes_extended": 8818,
+      "gtf_bytes": 3323462845,
+      "gtf_sha256": "217845282546648684694b34e45d32961e72852a8dde4ef09126d68cf69f1151",
+      "legacy_report_bytes": 647125,
+      "legacy_report_sha256": "bb1959208ac9b082559da106dc4bfa728f110e6ca238a91ec9c555a4ce316082",
+      "max_rss_kib": 3969912,
+      "mode": "uniform",
+      "repetition": 2,
+      "stderr_bytes": 227,
+      "uniform_report_bytes": 807841
+    }
+  ],
+  "schema": "gravlax.benchmark.extend-uniform-io.v2"
+}

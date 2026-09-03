@@ -1,0 +1,47 @@
+[package]
+name = "gravlax"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+description = "Annotation-independent molecular-evidence archives for single-cell RNA-seq"
+keywords = ["bioinformatics", "single-cell", "rna-seq", "annotation"]
+categories = ["command-line-utilities", "science"]
+publish = ["crates-io"]
+
+[[bin]]
+name = "aie"
+path = "src/main.rs"
+
+[package.metadata.dist]
+dist = true
+display-name = "Gravlax"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+rustc-hash.workspace = true
+hashbrown.workspace = true
+smallvec.workspace = true
+zstd.workspace = true
+evidence-io.workspace = true
+ingest.workspace = true
+noodles-bam.workspace = true
+noodles-sam.workspace = true
+noodles-bgzf.workspace = true
+noodles-core.workspace = true
+anno.workspace = true
+gravlax-output.workspace = true
+rayon.workspace = true
+libc.workspace = true
+resvg.workspace = true
+flate2.workspace = true
+blake3.workspace = true

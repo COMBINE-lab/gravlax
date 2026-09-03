@@ -1,0 +1,850 @@
+#!/usr/bin/env python3
+"""Prepare, validate, and publish a coordinated Gravlax release."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+import urllib.error
+import urllib.request
+
+
+ROOT = Path(__file__).resolve().parents[1]
+STABLE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)")
+TAG_PREFIX = "v"
+GITHUB_REPOSITORY = "COMBINE-lab/gravlax"
+REGISTRY_PROPAGATION_TIMEOUT_SECONDS = 300
+REGISTRY_POLL_INTERVAL_SECONDS = 5
+PUBLIC_CRATES = (
+    "gravlax-evidence-io",
+    "gravlax-output",
+    "gravlax-anno",
+    "gravlax-ingest",
+    "gravlax",
+)
+VERSION_PATHS = (
+    Path("Cargo.toml"),
+    Path("Cargo.lock"),
+    Path("python/pyproject.toml"),
+    Path("python/src/gravlax/__init__.py"),
+    Path("docs/package.json"),
+    Path("docs/package-lock.json"),
+    Path("packaging/conda/local/meta.yaml"),
+)
+# Keep the unpublished project name out of every tracked byte, including this
+# check. Joining fragments also makes accidental weakening easy to spot.
+FORBIDDEN_PUBLIC_MARKER = b"re" + b"comb"
+
+
+class ReleaseError(RuntimeError):
+    """A release precondition was not met."""
+
+
+def _run(
+    command: list[str],
+    *,
+    capture: bool = False,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    shown = " ".join(command)
+    print(f"+ {shown}", flush=True)
+    return subprocess.run(
+        command,
+        cwd=ROOT if cwd is None else cwd,
+        check=True,
+        text=True,
+        capture_output=capture,
+        env=env,
+    )
+
+
+def _git(*arguments: str, capture: bool = True) -> str:
+    completed = subprocess.run(
+        ["git", *arguments],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=capture,
+    )
+    return completed.stdout.strip() if capture else ""
+
+
+def _stable_version(value: str) -> str:
+    if not STABLE_VERSION.fullmatch(value):
+        raise argparse.ArgumentTypeError("version must have stable major.minor.patch form")
+    return value
+
+
+def _version_tuple(version: str) -> tuple[int, int, int]:
+    if not STABLE_VERSION.fullmatch(version):
+        raise ReleaseError(f"repository version is not stable major.minor.patch: {version}")
+    major, minor, patch = version.split(".")
+    return int(major), int(minor), int(patch)
+
+
+def _require_newer_version(old_version: str, new_version: str) -> None:
+    if _version_tuple(new_version) <= _version_tuple(old_version):
+        raise ReleaseError(
+            f"target version {new_version} must be greater than current version {old_version}"
+        )
+
+
+def _toml(path: Path) -> dict:
+    return tomllib.loads((ROOT / path).read_text(encoding="utf-8"))
+
+
+def current_versions() -> dict[str, str]:
+    cargo = _toml(Path("Cargo.toml"))
+    python = _toml(Path("python/pyproject.toml"))
+    python_init = (ROOT / "python/src/gravlax/__init__.py").read_text(encoding="utf-8")
+    python_init_match = re.search(r'^__version__\s*=\s*"([^"\n]+)"\s*$', python_init, re.MULTILINE)
+    if python_init_match is None:
+        raise ReleaseError("could not find the Python runtime version")
+    docs = json.loads((ROOT / "docs/package.json").read_text(encoding="utf-8"))
+    docs_lock = json.loads((ROOT / "docs/package-lock.json").read_text(encoding="utf-8"))
+    try:
+        docs_lock_root_version = docs_lock["packages"][""]["version"]
+    except (KeyError, TypeError) as error:
+        raise ReleaseError("could not find the documentation package lock root version") from error
+    local_recipe = (ROOT / "packaging/conda/local/meta.yaml").read_text(encoding="utf-8")
+    recipe_match = re.search(
+        r'environ[.]get[(]"GRAVLAX_VERSION", "([^"\n]+)"[)]', local_recipe
+    )
+    if recipe_match is None:
+        raise ReleaseError("could not find the local conda fallback version")
+    return {
+        "Rust workspace": cargo["workspace"]["package"]["version"],
+        "Python package": python["project"]["version"],
+        "Python runtime": python_init_match.group(1),
+        "documentation package": docs["version"],
+        "documentation lockfile": docs_lock["version"],
+        "documentation lockfile root": docs_lock_root_version,
+        "local conda recipe": recipe_match.group(1),
+    }
+
+
+def _replace_once(text: str, pattern: str, replacement: str, label: str) -> str:
+    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+    if count != 1:
+        raise ReleaseError(f"expected exactly one {label}, found {count}")
+    return updated
+
+
+def update_versions(old_version: str, new_version: str) -> None:
+    versions = current_versions()
+    if set(versions.values()) != {old_version}:
+        raise ReleaseError(
+            f"release versions disagree before bump: {versions}; expected {old_version}"
+        )
+
+    # Construct and validate every replacement before writing anything. A malformed
+    # late release surface therefore cannot leave an incomplete version bump behind.
+    updates: dict[Path, str] = {}
+    cargo_path = ROOT / "Cargo.toml"
+    cargo = cargo_path.read_text(encoding="utf-8")
+    cargo = _replace_once(
+        cargo,
+        r'(^\[workspace\.package\][\s\S]*?^version\s*=\s*")[^"]+("\s*$)',
+        rf"\g<1>{new_version}\g<2>",
+        "workspace package version",
+    )
+    for dependency in ("evidence-io", "anno", "ingest", "gravlax-output"):
+        cargo = _replace_once(
+            cargo,
+            rf'(^{re.escape(dependency)}\s*=\s*{{[^\n]*version\s*=\s*")={re.escape(old_version)}("[^\n]*$)',
+            rf"\g<1>={new_version}\g<2>",
+            f"exact {dependency} dependency version",
+        )
+    updates[cargo_path] = cargo
+
+    python_path = ROOT / "python/pyproject.toml"
+    python = _replace_once(
+        python_path.read_text(encoding="utf-8"),
+        r'(^\[project\][\s\S]*?^version\s*=\s*")[^"]+("\s*$)',
+        rf"\g<1>{new_version}\g<2>",
+        "Python project version",
+    )
+    updates[python_path] = python
+
+    python_init_path = ROOT / "python/src/gravlax/__init__.py"
+    python_init = _replace_once(
+        python_init_path.read_text(encoding="utf-8"),
+        rf'(^__version__\s*=\s*"){re.escape(old_version)}("\s*$)',
+        rf"\g<1>{new_version}\g<2>",
+        "Python runtime version",
+    )
+    updates[python_init_path] = python_init
+
+    docs_path = ROOT / "docs/package.json"
+    docs = json.loads(docs_path.read_text(encoding="utf-8"))
+    if docs.get("version") != old_version:
+        raise ReleaseError("documentation package version changed during version update")
+    docs["version"] = new_version
+    updates[docs_path] = json.dumps(docs, indent=2) + "\n"
+
+    docs_lock_path = ROOT / "docs/package-lock.json"
+    docs_lock_source = docs_lock_path.read_text(encoding="utf-8")
+    docs_lock = json.loads(docs_lock_source)
+    if (
+        docs_lock.get("version") != old_version
+        or docs_lock.get("packages", {}).get("", {}).get("version") != old_version
+    ):
+        raise ReleaseError("documentation lockfile versions changed during version update")
+    docs_lock_source = _replace_once(
+        docs_lock_source,
+        rf'(^  "version": "){re.escape(old_version)}(",\s*^  "lockfileVersion")',
+        rf"\g<1>{new_version}\g<2>",
+        "documentation lockfile version",
+    )
+    docs_lock_source = _replace_once(
+        docs_lock_source,
+        rf'(^    "": \{{\s*^      "name": "[^"]+",\s*^      "version": "){re.escape(old_version)}(")',
+        rf"\g<1>{new_version}\g<2>",
+        "documentation lockfile root version",
+    )
+    updates[docs_lock_path] = docs_lock_source
+
+    recipe_path = ROOT / "packaging/conda/local/meta.yaml"
+    recipe = _replace_once(
+        recipe_path.read_text(encoding="utf-8"),
+        rf'(environ[.]get[(]"GRAVLAX_VERSION", "){re.escape(old_version)}("[)])',
+        rf"\g<1>{new_version}\g<2>",
+        "local conda fallback version",
+    )
+    updates[recipe_path] = recipe
+
+    for path, contents in updates.items():
+        path.write_text(contents, encoding="utf-8", newline="\n")
+
+
+def _require_clean_tree() -> None:
+    if _git("status", "--porcelain", "--untracked-files=all"):
+        raise ReleaseError("working tree is not clean; commit or stash all changes first")
+
+
+def _require_release_notes(version: str) -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    escaped = re.escape(version)
+    heading = re.compile(
+        rf"^## (?:\[{escaped}\]|{escaped})\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}$",
+        re.MULTILINE,
+    )
+    if heading.search(changelog) is None:
+        raise ReleaseError(
+            f"CHANGELOG.md needs a dated level-two heading for version {version}"
+        )
+
+
+def _tracked_paths() -> list[Path]:
+    raw = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    return [ROOT / os.fsdecode(name) for name in raw.split(b"\0") if name]
+
+
+def forbidden_tracked_references() -> list[str]:
+    matches: list[str] = []
+    marker = FORBIDDEN_PUBLIC_MARKER.lower()
+    for path in _tracked_paths():
+        if path.is_file() and marker in path.read_bytes().lower():
+            matches.append(path.relative_to(ROOT).as_posix())
+    return matches
+
+
+def forbidden_history_references() -> list[str]:
+    marker = FORBIDDEN_PUBLIC_MARKER.decode("ascii")
+    # Release safety is defined by the ancestry being tagged. Stale local or
+    # remote-tracking refs must not make an otherwise clean checkout unreleasable.
+    commits = _git("rev-list", "HEAD").splitlines()
+    matches: list[str] = []
+    for commit in commits:
+        result = subprocess.run(
+            ["git", "grep", "-I", "-i", "-l", marker, commit, "--"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode not in (0, 1):
+            raise ReleaseError(result.stderr.strip() or f"git grep failed for {commit}")
+        for match in result.stdout.splitlines():
+            matches.append(match)
+            if len(matches) == 20:
+                return matches
+    return matches
+
+
+def _validate_package_graph(version: str) -> None:
+    metadata = json.loads(
+        _run(
+            ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
+            capture=True,
+        ).stdout
+    )
+    packages = {package["name"]: package for package in metadata["packages"]}
+    if tuple(name for name in PUBLIC_CRATES if name not in packages):
+        missing = [name for name in PUBLIC_CRATES if name not in packages]
+        raise ReleaseError(f"publishable crate graph is incomplete: {missing}")
+    for name in PUBLIC_CRATES:
+        package = packages[name]
+        if package["version"] != version:
+            raise ReleaseError(f"{name} has version {package['version']}, expected {version}")
+        if package["publish"] != ["crates-io"]:
+            raise ReleaseError(f"{name} is not restricted to crates.io publication")
+        for field in ("license", "description", "repository", "homepage", "readme"):
+            if not package.get(field):
+                raise ReleaseError(f"{name} is missing package metadata field {field}")
+
+    expected_internal = {
+        "gravlax-anno": {"gravlax-evidence-io"},
+        "gravlax-ingest": {"gravlax-evidence-io"},
+        "gravlax": {
+            "gravlax-evidence-io",
+            "gravlax-output",
+            "gravlax-anno",
+            "gravlax-ingest",
+        },
+    }
+    for package_name, dependency_names in expected_internal.items():
+        dependencies = {dependency["name"]: dependency for dependency in packages[package_name]["dependencies"]}
+        for dependency_name in dependency_names:
+            dependency = dependencies.get(dependency_name)
+            if dependency is None or dependency["req"] != f"={version}" or not dependency.get("path"):
+                raise ReleaseError(
+                    f"{package_name} must use path plus exact ={version} for {dependency_name}"
+                )
+    for private in ("eval", "replay"):
+        if packages[private]["publish"]:
+            raise ReleaseError(f"internal package {private} must remain unpublished")
+
+
+def validate_repository(version: str, *, check_history: bool) -> None:
+    versions = current_versions()
+    if set(versions.values()) != {version}:
+        raise ReleaseError(f"release versions disagree: {versions}; expected {version}")
+    _require_release_notes(version)
+    tracked_matches = forbidden_tracked_references()
+    if tracked_matches:
+        raise ReleaseError(
+            "tracked source contains the pre-publication marker: " + ", ".join(tracked_matches)
+        )
+    if check_history:
+        history_matches = forbidden_history_references()
+        if history_matches:
+            raise ReleaseError(
+                "HEAD history contains the pre-publication marker; rewrite it before "
+                "making the repository public: " + ", ".join(history_matches)
+            )
+    _validate_package_graph(version)
+
+
+def package_dry_runs() -> None:
+    versions = current_versions()
+    version = next(iter(set(versions.values())))
+    internal_dependencies = {
+        "gravlax-evidence-io": (),
+        "gravlax-output": (),
+        "gravlax-anno": ("gravlax-evidence-io",),
+        "gravlax-ingest": ("gravlax-evidence-io",),
+        "gravlax": (
+            "gravlax-evidence-io",
+            "gravlax-output",
+            "gravlax-anno",
+            "gravlax-ingest",
+        ),
+    }
+    registry_state: dict[str, bool] = {}
+    for package in PUBLIC_CRATES:
+        dependencies = internal_dependencies[package]
+        for dependency in dependencies:
+            if dependency not in registry_state:
+                registry_state[dependency] = _crate_version_exists(dependency, version)
+        if all(registry_state[dependency] for dependency in dependencies):
+            _run(
+                [
+                    "cargo",
+                    "publish",
+                    "--dry-run",
+                    "--locked",
+                    "--allow-dirty",
+                    "--package",
+                    package,
+                ]
+            )
+        else:
+            missing = [dependency for dependency in dependencies if not registry_state[dependency]]
+            print(
+                f"Registry prerequisites for {package} are not published yet ({', '.join(missing)}); "
+                "checking the exact package file set for the first-release bootstrap."
+            )
+            _run(["cargo", "package", "--list", "--allow-dirty", "--package", package])
+
+
+def local_tests() -> None:
+    _run(["cargo", "test", "--workspace", "--all-targets", "--locked"])
+    python_env = dict(os.environ)
+    python_env["PYTHONPATH"] = str(ROOT / "python/src")
+    _run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "python/tests", "-p", "test_*.py"],
+        env=python_env,
+    )
+    _run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "packaging/tests", "-p", "test_*.py"]
+    )
+    _run(["npm", "ci"], env=os.environ, cwd=ROOT / "docs")
+    _run(["npm", "run", "build"], env=os.environ, cwd=ROOT / "docs")
+
+
+def _tag_for(version: str) -> str:
+    return f"{TAG_PREFIX}{version}"
+
+
+def _tag_exists(tag: str) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def _changed_paths_against_head() -> set[Path]:
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "-z", "HEAD", "--"],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    return {Path(os.fsdecode(path)) for path in result.stdout.split(b"\0") if path}
+
+
+def _require_only_version_changes() -> None:
+    changed = _changed_paths_against_head()
+    expected = set(VERSION_PATHS)
+    if changed != expected:
+        raise ReleaseError(
+            "version preparation changed an unexpected file set; "
+            f"expected={sorted(map(str, expected))}, actual={sorted(map(str, changed))}"
+        )
+    untracked = _git("ls-files", "--others", "--exclude-standard")
+    if untracked:
+        raise ReleaseError(f"version preparation created untracked files: {untracked}")
+
+
+def prepare(version: str, *, allow_current: bool, check_history: bool) -> None:
+    _require_clean_tree()
+    tag = _tag_for(version)
+    if _tag_exists(tag):
+        raise ReleaseError(f"tag {tag} already exists")
+    versions = current_versions()
+    if len(set(versions.values())) != 1:
+        raise ReleaseError(f"release versions disagree before bump: {versions}")
+    old_version = next(iter(versions.values()))
+    if old_version == version and not allow_current:
+        raise ReleaseError(
+            f"repository is already at {version}; pass --allow-current to prepare its first tag"
+        )
+    if old_version != version:
+        _require_newer_version(old_version, version)
+    _require_release_notes(version)
+    if old_version != version:
+        update_versions(old_version, version)
+        _run(["cargo", "check", "--workspace"])
+    validate_repository(version, check_history=check_history)
+    package_dry_runs()
+    local_tests()
+    if old_version != version:
+        validate_repository(version, check_history=check_history)
+        _require_only_version_changes()
+        _run(["git", "add", *(str(path) for path in VERSION_PATHS)])
+        _run(["git", "commit", "-m", f"Prepare Gravlax v{version}"])
+    _require_clean_tree()
+    validate_repository(version, check_history=check_history)
+    _run(["git", "tag", "--annotate", tag, "--message", f"Gravlax {version}"])
+    print(f"Prepared local release tag {tag}; nothing was pushed or published.")
+
+
+def _crates_io_metadata(path: str) -> dict | None:
+    request = urllib.request.Request(
+        f"https://crates.io/api/v1/crates/{path}",
+        headers={"User-Agent": "gravlax-release-script/1.0 (+https://github.com/COMBINE-lab/gravlax)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            if response.status != 200:
+                raise ReleaseError(f"unexpected crates.io status for {path}: {response.status}")
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        raise ReleaseError(f"unexpected crates.io status for {path}: {error.code}") from error
+
+
+def _crate_version_metadata(crate: str, version: str) -> dict | None:
+    response = _crates_io_metadata(f"{crate}/{version}")
+    return None if response is None else response["version"]
+
+
+def _crate_version_exists(crate: str, version: str) -> bool:
+    return _crate_version_metadata(crate, version) is not None
+
+
+def _crate_name_exists(crate: str) -> bool:
+    return _crates_io_metadata(crate) is not None
+
+
+def _local_crate_checksum(crate: str, version: str) -> str:
+    _run(["cargo", "package", "--locked", "--package", crate])
+    crate_path = ROOT / "target/package" / f"{crate}-{version}.crate"
+    if not crate_path.is_file():
+        raise ReleaseError(f"cargo package did not create {crate_path}")
+    return hashlib.sha256(crate_path.read_bytes()).hexdigest()
+
+
+def _require_published_crate_identity(
+    crate: str, version: str, expected_checksum: str
+) -> None:
+    metadata = _crate_version_metadata(crate, version)
+    if metadata is None:
+        raise ReleaseError(f"crates.io does not expose {crate} {version}")
+    if metadata.get("checksum") != expected_checksum:
+        raise ReleaseError(
+            f"crates.io {crate} {version} checksum does not match the local package: "
+            f"expected {expected_checksum}, found {metadata.get('checksum')}"
+        )
+
+
+def _wait_for_crate_version(
+    crate: str,
+    version: str,
+    *,
+    timeout: float = REGISTRY_PROPAGATION_TIMEOUT_SECONDS,
+    poll_interval: float = REGISTRY_POLL_INTERVAL_SECONDS,
+) -> None:
+    deadline = time.monotonic() + timeout
+    delay = max(0.0, poll_interval)
+    while not _crate_version_exists(crate, version):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ReleaseError(
+                f"timed out waiting for crates.io to expose {crate} {version}"
+            )
+        print(f"Waiting for crates.io to expose {crate} {version}...", flush=True)
+        time.sleep(min(delay, remaining))
+        if delay > 0:
+            delay = min(delay * 2, 30.0)
+
+
+def _require_tagged_head(version: str) -> None:
+    tag = _tag_for(version)
+    if not _tag_exists(tag):
+        raise ReleaseError(f"local annotated tag {tag} does not exist; run --prepare first")
+    if _git("rev-list", "-n", "1", tag) != _git("rev-parse", "HEAD"):
+        raise ReleaseError(f"tag {tag} does not point to HEAD")
+    tag_type = _git("cat-file", "-t", f"refs/tags/{tag}")
+    if tag_type != "tag":
+        raise ReleaseError(f"tag {tag} is not annotated")
+
+
+def _require_main_branch() -> None:
+    branch = _git("branch", "--show-current")
+    if branch != "main":
+        raise ReleaseError(
+            f"release operations require main, not {branch or 'detached HEAD'}"
+        )
+
+
+def publish_crates(version: str, confirmation: str | None) -> None:
+    _require_clean_tree()
+    _require_tagged_head(version)
+    validate_repository(version, check_history=True)
+    _require_main_branch()
+    _require_github_origin()
+    tag = _tag_for(version)
+    if confirmation != tag:
+        raise ReleaseError(f"publishing is permanent; pass --confirm-publish {tag}")
+    version_state = {
+        package: _crate_version_metadata(package, version) for package in PUBLIC_CRATES
+    }
+    for package, metadata in version_state.items():
+        if metadata is None and _crate_name_exists(package):
+            raise ReleaseError(
+                f"crate name {package} is already registered without version {version}; "
+                "the one-time new-crate bootstrap cannot establish its ownership"
+            )
+    if any(metadata is None for metadata in version_state.values()) and not os.environ.get(
+        "CARGO_REGISTRY_TOKEN"
+    ):
+        raise ReleaseError("CARGO_REGISTRY_TOKEN is required for the one-time crates.io bootstrap")
+    for package in PUBLIC_CRATES:
+        expected_checksum = _local_crate_checksum(package, version)
+        if version_state[package] is not None or _crate_version_exists(package, version):
+            _require_published_crate_identity(package, version, expected_checksum)
+            print(f"{package} {version} already has the exact local package; skipping")
+            continue
+        _run(["cargo", "publish", "--locked", "--package", package])
+        _wait_for_crate_version(package, version)
+        _require_published_crate_identity(package, version, expected_checksum)
+    print("Crates.io publication complete. Configure Trusted Publishing before pushing the tag.")
+
+
+def _require_immutable_releases() -> None:
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            "--header",
+            "Accept: application/vnd.github+json",
+            "--header",
+            "X-GitHub-Api-Version: 2026-03-10",
+            f"repos/{GITHUB_REPOSITORY}/immutable-releases",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise ReleaseError(
+            "cannot confirm GitHub release immutability; enable it in repository settings "
+            "and authenticate gh with repository administration read access"
+        )
+    try:
+        enabled = json.loads(result.stdout)["enabled"]
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ReleaseError("GitHub returned an invalid immutable-release response") from error
+    if enabled is not True:
+        raise ReleaseError("GitHub release immutability must be enabled before pushing a tag")
+
+
+def _require_github_origin() -> None:
+    origin = _git("remote", "get-url", "origin")
+    accepted = (
+        r"https://github[.]com/COMBINE-lab/gravlax(?:[.]git)?/?",
+        r"git@github[.]com:COMBINE-lab/gravlax(?:[.]git)?",
+        r"ssh://git@github[.]com/COMBINE-lab/gravlax(?:[.]git)?/?",
+    )
+    if not any(re.fullmatch(pattern, origin, flags=re.IGNORECASE) for pattern in accepted):
+        raise ReleaseError(
+            "origin must be the GitHub repository COMBINE-lab/gravlax over HTTPS or SSH; "
+            f"found {origin!r}"
+        )
+
+
+def push_release(version: str) -> None:
+    _require_clean_tree()
+    _require_tagged_head(version)
+    validate_repository(version, check_history=True)
+    _require_main_branch()
+    _require_github_origin()
+    _require_immutable_releases()
+    _run(["git", "fetch", "origin", "main", "--tags"])
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"], cwd=ROOT
+    )
+    if ancestor.returncode != 0:
+        raise ReleaseError("HEAD does not contain origin/main; update main before releasing")
+    tag = _tag_for(version)
+    _run(
+        [
+            "git",
+            "push",
+            "--atomic",
+            "origin",
+            "HEAD:refs/heads/main",
+            f"refs/tags/{tag}:refs/tags/{tag}",
+        ]
+    )
+    print(f"Pushed {tag}; cargo-dist now owns the hosted release lifecycle.")
+
+
+def dispatch_python(version: str) -> None:
+    _require_clean_tree()
+    _require_tagged_head(version)
+    validate_repository(version, check_history=True)
+    _require_main_branch()
+    _require_github_origin()
+    _require_immutable_releases()
+    tag = _tag_for(version)
+    release = json.loads(
+        _run(
+            [
+                "gh",
+                "release",
+                "view",
+                tag,
+                "--repo",
+                GITHUB_REPOSITORY,
+                "--json",
+                "tagName,isDraft,isPrerelease,isImmutable,targetCommitish",
+            ],
+            capture=True,
+        ).stdout
+    )
+    expected_commit = _git("rev-parse", "HEAD")
+    expected = {
+        "tagName": tag,
+        "isDraft": False,
+        "isPrerelease": False,
+        "isImmutable": True,
+        "targetCommitish": expected_commit,
+    }
+    if release != expected:
+        raise ReleaseError(
+            f"GitHub release does not match the protected Python input: {release}; "
+            f"expected {expected}"
+        )
+    _run(["gh", "release", "verify", tag, "--repo", GITHUB_REPOSITORY])
+    _run(
+        [
+            "gh",
+            "workflow",
+            "run",
+            "publish-python.yml",
+            "--repo",
+            GITHUB_REPOSITORY,
+            "--ref",
+            "main",
+            "--field",
+            f"tag={tag}",
+        ]
+    )
+    print("Python publication dispatched; approve the protected pypi environment deployment.")
+
+
+def _simulate_version_bump(
+    old_version: str, new_version: str, *, check_history: bool
+) -> None:
+    global ROOT
+    original_root = ROOT
+    with tempfile.TemporaryDirectory(prefix="gravlax-release-dry-run-") as temporary:
+        checkout = Path(temporary) / "checkout"
+        added = False
+        try:
+            _run(
+                ["git", "worktree", "add", "--detach", str(checkout), "HEAD"],
+                cwd=original_root,
+            )
+            added = True
+            ROOT = checkout
+            update_versions(old_version, new_version)
+            check_env = dict(os.environ)
+            check_env["CARGO_TARGET_DIR"] = str(original_root / "target")
+            _run(["cargo", "check", "--workspace"], env=check_env)
+            _require_only_version_changes()
+            validate_repository(new_version, check_history=check_history)
+            package_dry_runs()
+        finally:
+            ROOT = original_root
+            if added:
+                _run(
+                    ["git", "worktree", "remove", "--force", str(checkout)],
+                    cwd=original_root,
+                )
+
+
+def dry_run(version: str, *, check_history: bool) -> None:
+    versions = current_versions()
+    if len(set(versions.values())) != 1:
+        raise ReleaseError(f"release versions disagree: {versions}")
+    current = next(iter(versions.values()))
+    _require_release_notes(version)
+    if current == version:
+        _require_clean_tree()
+        validate_repository(current, check_history=check_history)
+        package_dry_runs()
+    else:
+        _require_newer_version(current, version)
+        _require_clean_tree()
+        _simulate_version_bump(current, version, check_history=check_history)
+    print(f"Dry run validated release preparation: {current} -> {version}")
+    print(f"Would create annotated tag {_tag_for(version)}; no files, tags, registries, or remotes changed.")
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("version", nargs="?", type=_stable_version)
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--check-only", action="store_true", help="validate the current release tree")
+    actions.add_argument("--prepare", action="store_true", help="bump, test, commit, and tag locally")
+    actions.add_argument(
+        "--publish-crates",
+        action="store_true",
+        help="bootstrap crates.io before the first OIDC-backed release",
+    )
+    actions.add_argument("--push", action="store_true", help="atomically push main and its prepared tag")
+    actions.add_argument(
+        "--dispatch-python",
+        action="store_true",
+        help="dispatch protected PyPI publication from an immutable GitHub release",
+    )
+    actions.add_argument("--dry-run", action="store_true", help="preview and package without mutations")
+    parser.add_argument(
+        "--allow-current",
+        action="store_true",
+        help="allow --prepare to tag the already-declared version",
+    )
+    parser.add_argument(
+        "--confirm-publish",
+        metavar="TAG",
+        help="exact tag confirmation required by --publish-crates",
+    )
+    parser.add_argument(
+        "--check-history",
+        action="store_true",
+        help="also reject the pre-publication marker anywhere in HEAD ancestry",
+    )
+    args = parser.parse_args(argv)
+    if args.allow_current and not args.prepare:
+        parser.error("--allow-current is only valid with --prepare")
+    if args.confirm_publish and not args.publish_crates:
+        parser.error("--confirm-publish is only valid with --publish-crates")
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    os.chdir(ROOT)
+    if args.version is None:
+        versions = current_versions()
+        if len(set(versions.values())) != 1:
+            raise ReleaseError(f"release versions disagree: {versions}")
+        version = next(iter(versions.values()))
+    else:
+        version = args.version
+
+    if args.check_only:
+        validate_repository(version, check_history=args.check_history)
+        package_dry_runs()
+        print(f"Release tree {version} is internally consistent.")
+    elif args.prepare:
+        prepare(version, allow_current=args.allow_current, check_history=True)
+    elif args.publish_crates:
+        publish_crates(version, args.confirm_publish)
+    elif args.push:
+        push_release(version)
+    elif args.dispatch_python:
+        dispatch_python(version)
+    else:
+        dry_run(version, check_history=args.check_history)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (ReleaseError, subprocess.CalledProcessError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(1)

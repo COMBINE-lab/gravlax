@@ -1,0 +1,161 @@
+name: Publish Python package
+run-name: Publish gravlax-client from ${{ inputs.tag }}
+
+# PyPI cannot authorize a reusable workflow as a Trusted Publisher. Dispatch
+# this top-level workflow only after cargo-dist has completed the immutable
+# GitHub release for the requested tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable Gravlax release tag (for example, v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-python-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish gravlax-client to PyPI
+    runs-on: ubuntu-22.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/gravlax-client/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Bind the immutable release, tag, commit, and package version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          version="$(python3 packaging/release_version.py --tag "${RELEASE_TAG}")"
+          test "$(git cat-file -t "refs/tags/${RELEASE_TAG}")" = tag
+          commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          release="$(gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json tagName,isDraft,isPrerelease,isImmutable,targetCommitish)"
+          jq -e \
+            --arg tag "${RELEASE_TAG}" \
+            --arg commit "${commit}" \
+            '.tagName == $tag and .targetCommitish == $commit and
+             (.isDraft | not) and (.isPrerelease | not) and .isImmutable' \
+            <<<"${release}"
+          gh release verify "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download and verify the exact Python release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          wheel="gravlax_client-${VERSION}-py3-none-any.whl"
+          sdist="gravlax_client-${VERSION}.tar.gz"
+          mkdir release-download pypi-dist
+          gh release download "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir release-download \
+            --pattern "${wheel}" \
+            --pattern "${sdist}" \
+            --pattern SHA256SUMS
+          gh release verify-asset "${RELEASE_TAG}" "release-download/${wheel}" \
+            --repo "${GITHUB_REPOSITORY}"
+          gh release verify-asset "${RELEASE_TAG}" "release-download/${sdist}" \
+            --repo "${GITHUB_REPOSITORY}"
+          awk -v wheel="${wheel}" -v sdist="${sdist}" \
+            '$2 == wheel || $2 == sdist { print }' \
+            release-download/SHA256SUMS > release-download/PYTHON_SHA256SUMS
+          test "$(wc -l < release-download/PYTHON_SHA256SUMS)" -eq 2
+          (cd release-download && sha256sum --check PYTHON_SHA256SUMS)
+          cp "release-download/${wheel}" "release-download/${sdist}" pypi-dist/
+          python3 packaging/verify_python_dist.py pypi-dist --version "${VERSION}"
+
+      - name: Check whether these exact files are already on PyPI
+        id: pypi
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mkdir pypi-upload
+          status="$(curl --silent --show-error --location \
+            --output pypi-release.json \
+            --write-out '%{http_code}' \
+            --header 'Accept: application/json' \
+            --user-agent 'gravlax-release-workflow/1.0 (+https://github.com/COMBINE-lab/gravlax)' \
+            "https://pypi.org/pypi/gravlax-client/${VERSION}/json")"
+          case "${status}" in
+            404)
+              cp pypi-dist/* pypi-upload/
+              echo "publish=true" >> "${GITHUB_OUTPUT}"
+              ;;
+            200)
+              if python3 - "${VERSION}" pypi-dist pypi-upload pypi-release.json <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import shutil
+          import sys
+
+          version, directory, upload_directory, response = sys.argv[1:]
+          paths = sorted(Path(directory).iterdir())
+          expected = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in paths
+              if path.is_file()
+          }
+          published = {
+              item["filename"]: item["digests"]["sha256"]
+              for item in json.loads(Path(response).read_text(encoding="utf-8"))["urls"]
+          }
+          if not published.items() <= expected.items():
+              raise SystemExit(
+                  f"PyPI gravlax-client {version} contains bytes or files that do not match "
+                  f"the immutable release: "
+                  f"expected={expected}, published={published}"
+              )
+          if published == expected:
+              print(f"PyPI gravlax-client {version} already has the exact release files")
+          else:
+              missing = sorted(expected.keys() - published.keys())
+              for filename in missing:
+                  shutil.copy2(Path(directory) / filename, Path(upload_directory) / filename)
+              print(
+                  f"PyPI gravlax-client {version} has an exact partial upload; "
+                  f"publishing only: {', '.join(missing)}"
+              )
+              raise SystemExit(3)
+          PY
+              then
+                echo "publish=false" >> "${GITHUB_OUTPUT}"
+              else
+                code="$?"
+                test "${code}" -eq 3
+                echo "publish=true" >> "${GITHUB_OUTPUT}"
+              fi
+              ;;
+            *)
+              echo "Unexpected PyPI response: HTTP ${status}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Publish with PyPI Trusted Publishing
+        if: steps.pypi.outputs.publish == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: pypi-upload
+          verbose: true

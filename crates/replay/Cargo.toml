@@ -1,0 +1,16 @@
+[package]
+name = "replay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+description = "Internal replay library for Gravlax"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+evidence-io.workspace = true

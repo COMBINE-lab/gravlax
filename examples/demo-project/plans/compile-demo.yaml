@@ -1,0 +1,7 @@
+schema_version: 1
+name: compile-demo-annotation
+steps:
+  - id: compile-demo
+    kind: compile-annotation
+    annotation: demo-annotation
+    output: results/demo.aic

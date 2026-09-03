@@ -1,0 +1,4 @@
+chrDemo	Gravlax	exon	101	180	.	+	.	gene_id "DEMO0001"; transcript_id "DEMO0001-T1"; exon_id "DEMO0001-E1"; gene_name "River";
+chrDemo	Gravlax	exon	251	340	.	+	.	gene_id "DEMO0001"; transcript_id "DEMO0001-T1"; exon_id "DEMO0001-E2"; gene_name "River";
+chrDemo	Gravlax	exon	101	180	.	+	.	gene_id "DEMO0001"; transcript_id "DEMO0001-T2"; exon_id "DEMO0001-E1"; gene_name "River";
+chrDemo	Gravlax	exon	301	420	.	+	.	gene_id "DEMO0001"; transcript_id "DEMO0001-T2"; exon_id "DEMO0001-E3"; gene_name "River";

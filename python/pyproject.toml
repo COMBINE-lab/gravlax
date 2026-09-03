@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gravlax-client"
+version = "0.1.0"
+description = "Dependency-light Python client for the Gravlax aie command-line interface"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Gravlax contributors" }]
+keywords = ["bioinformatics", "single-cell", "RNA-seq", "annotation", "reproducibility"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pandas = ["pandas>=1.5"]
+arrow = ["pyarrow>=12"]
+anndata = ["anndata>=0.9", "pandas>=1.5", "scipy>=1.9"]
+all = ["anndata>=0.9", "pandas>=1.5", "pyarrow>=12", "scipy>=1.9"]
+test = []
+
+[project.urls]
+Documentation = "https://combine-lab.github.io/gravlax/"
+Repository = "https://github.com/COMBINE-lab/gravlax"
+Issues = "https://github.com/COMBINE-lab/gravlax/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gravlax = ["py.typed"]

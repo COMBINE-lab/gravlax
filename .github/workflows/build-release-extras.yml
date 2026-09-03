@@ -1,0 +1,112 @@
+name: Build release extras
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build Python, source, and SBOM artifacts
+    runs-on: ubuntu-22.04
+    environment: release
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust 1.98
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Install Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Download native archives for Linux smoke tests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: artifacts-build-local-*
+          path: dist/native
+          merge-multiple: true
+
+      - name: Smoke-test GNU and musl Linux archives
+        run: |
+          set -euo pipefail
+          for target in x86_64-unknown-linux-gnu x86_64-unknown-linux-musl; do
+            archive="dist/native/gravlax-${target}.tar.gz"
+            destination="dist/smoke/${target}"
+            test -f "${archive}"
+            mkdir -p "${destination}"
+            tar --extract --gzip --file "${archive}" --directory "${destination}"
+            binary="$(find "${destination}" -type f -name aie -print -quit)"
+            test -n "${binary}"
+            "${binary}" --version
+          done
+          musl_binary="$(find dist/smoke/x86_64-unknown-linux-musl -type f -name aie -print -quit)"
+          if readelf --program-headers "${musl_binary}" | grep --quiet 'Requesting program interpreter'; then
+            echo "The musl release binary is dynamically linked" >&2
+            exit 1
+          fi
+
+      - name: Resolve and validate the tagged version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="$(python packaging/release_version.py --tag "${RELEASE_TAG}")"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "${GITHUB_ENV}"
+
+      - name: Build and verify the Python distributions
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: '1'
+        run: |
+          python -m pip install build==1.3.0
+          python -m build --sdist --wheel --outdir dist/release python
+          python packaging/verify_python_dist.py dist/release --version "${{ steps.version.outputs.version }}"
+
+      - name: Build the offline source archive
+        run: >-
+          python packaging/stage_source.py
+          --repository .
+          --revision "${{ github.sha }}"
+          --version "${{ steps.version.outputs.version }}"
+          --output-dir dist/release
+
+      - name: Generate an SPDX dependency inventory
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/release/gravlax-${{ steps.version.outputs.version }}.spdx.json
+          upload-artifact: false
+
+      - name: Verify and checksum the extra release assets
+        run: >-
+          python packaging/verify_release_set.py dist/release
+          --version "${{ steps.version.outputs.version }}"
+
+      - name: Attest the exact extra release assets
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/release/*
+
+      - name: Add the exact extras to cargo-dist's release artifact set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: artifacts-build-release-extras
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 7

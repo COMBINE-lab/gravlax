@@ -1,0 +1,232 @@
+{
+  "$schema": "gravlax.benchmark.archive-uniform-io.v2",
+  "configuration": {
+    "replay_repetitions": 3,
+    "scan_repetitions": 15,
+    "scratch_root": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/.tmp-uniform",
+    "warmups": 1
+  },
+  "environment": {
+    "cwd": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax",
+    "platform": "Linux-4.18.0-553.156.1.el8_10.x86_64-x86_64-with-glibc2.28",
+    "python": "3.13.13"
+  },
+  "gates": {
+    "inspect_rss": true,
+    "inspect_time": true,
+    "replay_bytes": true,
+    "replay_metadata_schema": true,
+    "replay_rss": true,
+    "replay_time": true
+  },
+  "harness": {
+    "bytes": 11039,
+    "path": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/benchmarks/archive_uniform_io.py",
+    "sha256": "aa3a3ce26a37a2845e9350e5721f6036f6cd362cfb86cce4b6cc3c3f85532650"
+  },
+  "inputs": {
+    "annotation": {
+      "bytes": 46913792,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/fnbp1-normal-brain-confirmation-r1/gencode.v49.aic",
+      "sha256": "85f38ac6f3ce1a49e2b850cbe1f98550b7143f4807249cd861dd6ab878b49797"
+    },
+    "archive": {
+      "bytes": 111087381,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+      "sha256": "d7c11d4258f7b78b5c3a20ebc5349e3a1f1f52a0279425701d14acbf79948842"
+    },
+    "barcodes": {
+      "bytes": 115512960,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/runs/opt/base-d0-replay/barcodes.tsv",
+      "sha256": "843a6f7038db8cb3c06f3dc21cc69d04139ffa10689780518d7a9e42dc2e819b"
+    },
+    "binary": {
+      "bytes": 128426600,
+      "path": "$GRAVLAX_BENCHMARK_ROOT/work/gravlax/target-uniform/release/aie",
+      "sha256": "c3ef15e804a9392eef001295ec8a3f7b405277c7d66561440b4b80c5116af6eb"
+    }
+  },
+  "inspect": {
+    "commands": {
+      "legacy": [
+        "target-uniform/release/aie",
+        "inspect-archive",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie"
+      ],
+      "uniform": [
+        "target-uniform/release/aie",
+        "inspect-archive",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+        "--format",
+        "json"
+      ]
+    },
+    "legacy_mad_seconds": 0.0013851989060640335,
+    "legacy_median_peak_rss_kib": 11816,
+    "legacy_median_seconds": 0.039791058050468564,
+    "legacy_peak_rss_kib": [
+      11936,
+      11660,
+      11808,
+      11716,
+      11724,
+      12040,
+      11816,
+      12256,
+      12048,
+      11904,
+      11672,
+      12052,
+      11844,
+      11612,
+      11808
+    ],
+    "legacy_seconds": [
+      0.04268567590042949,
+      0.041879431111738086,
+      0.03987668501213193,
+      0.039791058050468564,
+      0.04382132412865758,
+      0.04165591485798359,
+      0.038469986990094185,
+      0.03840585914440453,
+      0.03834139998070896,
+      0.03946915618143976,
+      0.04055861011147499,
+      0.04082134016789496,
+      0.03837768011726439,
+      0.037363409996032715,
+      0.03957173693925142
+    ],
+    "rss_ratio": 1.0098171970209886,
+    "time_ratio": 0.9929825165219786,
+    "uniform_mad_seconds": 0.0010908758267760277,
+    "uniform_median_peak_rss_kib": 11932,
+    "uniform_median_seconds": 0.03951182495802641,
+    "uniform_peak_rss_kib": [
+      11932,
+      11664,
+      12120,
+      11932,
+      11664,
+      11844,
+      11760,
+      12100,
+      11784,
+      12020,
+      11696,
+      11932,
+      11980,
+      12240,
+      11792
+    ],
+    "uniform_seconds": [
+      0.037376716965809464,
+      0.04061744106002152,
+      0.039843699894845486,
+      0.040052525931969285,
+      0.03951182495802641,
+      0.03949628281407058,
+      0.03836672496981919,
+      0.038462796015664935,
+      0.03841033508069813,
+      0.0397605758626014,
+      0.039548774948343635,
+      0.03842094913125038,
+      0.04162944806739688,
+      0.03731542290188372,
+      0.04161898419260979
+    ]
+  },
+  "invocation": [
+    "benchmarks/archive_uniform_io.py",
+    "--binary",
+    "target-uniform/release/aie",
+    "--archive",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+    "--annotation",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/fnbp1-normal-brain-confirmation-r1/gencode.v49.aic",
+    "--barcodes",
+    "$GRAVLAX_BENCHMARK_ROOT/runs/opt/base-d0-replay/barcodes.tsv",
+    "--scan-repetitions",
+    "15",
+    "--replay-repetitions",
+    "3",
+    "--warmups",
+    "1",
+    "--scratch-root",
+    ".tmp-uniform",
+    "--out",
+    "benchmarks/results/archive-uniform-io-d0.json"
+  ],
+  "limits": {
+    "inspect_time_ratio": 1.03,
+    "replay_time_ratio": 1.1,
+    "rss_ratio": 1.1
+  },
+  "pass": true,
+  "replay": {
+    "command_template": {
+      "legacy": [
+        "target-uniform/release/aie",
+        "replay-rows",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+        "--gtf",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/fnbp1-normal-brain-confirmation-r1/gencode.v49.aic",
+        "--barcodes",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/opt/base-d0-replay/barcodes.tsv",
+        "--out-dir",
+        "<fresh-output-directory>"
+      ],
+      "uniform": [
+        "target-uniform/release/aie",
+        "replay-rows",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/archive/d0.aie",
+        "--gtf",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/post-v1/fnbp1-normal-brain-confirmation-r1/gencode.v49.aic",
+        "--barcodes",
+        "$GRAVLAX_BENCHMARK_ROOT/runs/opt/base-d0-replay/barcodes.tsv",
+        "--out-dir",
+        "<fresh-output-directory>",
+        "--report-format",
+        "json",
+        "--report-output",
+        "<fresh-report.json>"
+      ]
+    },
+    "legacy_mad_seconds": 0.03150739008560777,
+    "legacy_median_peak_rss_kib": 1290996,
+    "legacy_median_seconds": 2.483388247899711,
+    "legacy_peak_rss_kib": [
+      1290996,
+      1352292,
+      1288684
+    ],
+    "legacy_seconds": [
+      2.514895637985319,
+      2.35877101495862,
+      2.483388247899711
+    ],
+    "metadata_schema": "gravlax.replay.mex-artifact.v1",
+    "rss_ratio": 1.0855990258683992,
+    "scientific_artifact_byte_parity": {
+      "barcodes.tsv": true,
+      "features.tsv": true,
+      "matrix.mtx": true
+    },
+    "time_ratio": 1.028651108939314,
+    "uniform_mad_seconds": 0.008501346223056316,
+    "uniform_median_peak_rss_kib": 1401504,
+    "uniform_median_seconds": 2.554540075128898,
+    "uniform_peak_rss_kib": [
+      1401504,
+      1385432,
+      1408764
+    ],
+    "uniform_seconds": [
+      2.59887135704048,
+      2.5460387289058417,
+      2.554540075128898
+    ]
+  }
+}

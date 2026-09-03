@@ -1,0 +1,26 @@
+[package]
+name = "gravlax-evidence-io"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+description = "Archive format and codecs for Gravlax molecular evidence"
+publish = ["crates-io"]
+
+[lib]
+name = "evidence_io"
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+rustc-hash.workspace = true
+zstd.workspace = true
+blake3.workspace = true
+flate2.workspace = true
