@@ -158,4 +158,4 @@ __all__ = [
     "read_mex",
 ]
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
