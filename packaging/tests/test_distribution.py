@@ -584,11 +584,13 @@ class DistributionTests(unittest.TestCase):
                 (directory / f"{name}.sha256").write_text(
                     f"{digest} *{name}\n", encoding="ascii"
                 )
+            cargo_dist_checksums = "".join(
+                f"{hashlib.sha256((directory / name).read_bytes()).hexdigest()} *{name}\n"
+                for name in sorted(archives)
+            ) + "\n"
+            self.assertTrue(cargo_dist_checksums.endswith("\n\n"))
             (directory / "sha256.sum").write_text(
-                "".join(
-                    f"{hashlib.sha256((directory / name).read_bytes()).hexdigest()} *{name}\n"
-                    for name in sorted(archives)
-                ),
+                cargo_dist_checksums,
                 encoding="ascii",
             )
             extras = {
@@ -627,6 +629,18 @@ class DistributionTests(unittest.TestCase):
                 version,
             ]
             subprocess.run(command, check=True, capture_output=True)
+
+            (directory / "sha256.sum").write_text(
+                cargo_dist_checksums.replace("\n", "\n\n", 1),
+                encoding="ascii",
+            )
+            interior_blank = subprocess.run(command, capture_output=True)
+            self.assertNotEqual(interior_blank.returncode, 0)
+            self.assertIn(b"invalid checksum line", interior_blank.stderr)
+            (directory / "sha256.sum").write_text(
+                cargo_dist_checksums,
+                encoding="ascii",
+            )
 
             missing = directory / "gravlax-installer.sh"
             missing.unlink()

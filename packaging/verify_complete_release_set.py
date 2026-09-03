@@ -30,7 +30,10 @@ def _sha256(path: Path) -> str:
 
 def _read_checksum_manifest(path: Path) -> dict[str, str]:
     entries: dict[str, str] = {}
-    for line in path.read_text(encoding="ascii").splitlines():
+    lines = path.read_text(encoding="ascii").splitlines()
+    while lines and lines[-1] == "":
+        lines.pop()
+    for line in lines:
         match = CHECKSUM_LINE.fullmatch(line)
         if match is None:
             raise ValueError(f"invalid checksum line in {path.name}: {line!r}")
