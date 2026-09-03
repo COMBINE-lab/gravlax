@@ -289,6 +289,7 @@ class DistributionTests(unittest.TestCase):
         )
         self.assertIn("--target ${{ matrix.target }}", portability)
         self.assertGreaterEqual(portability.count('"${binary}" --version'), 2)
+        self.assertEqual(portability.count('"${binary}" completions bash'), 2)
         self.assertIn("readelf --program-headers", portability)
         self.assertIn("Requesting program interpreter", portability)
 

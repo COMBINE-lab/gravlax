@@ -61,8 +61,8 @@ jobs:
           set -euo pipefail
           binary='target/x86_64-pc-windows-msvc/dist/aie.exe'
           "${binary}" --version
-          "${binary}" completions powershell > aie.ps1
-          test -s aie.ps1
+          "${binary}" completions bash > aie.bash
+          test -s aie.bash
 
       - name: Smoke-test the static musl executable
         if: matrix.target == 'x86_64-unknown-linux-musl'
