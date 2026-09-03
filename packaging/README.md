@@ -49,6 +49,9 @@ The separately built, vendored source asset deliberately retains the stable
 source, Python, checksum, and SBOM files join cargo-dist's artifact set before
 the GitHub release is created, so the release becomes immutable with its full
 asset set already attached.
+The source archive preserves the target-specific settings from
+`.cargo/config.toml` and adds the vendored dependency source plus offline Cargo
+configuration to that same file.
 
 ## Service configuration
 

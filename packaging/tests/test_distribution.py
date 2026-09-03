@@ -194,6 +194,12 @@ class DistributionTests(unittest.TestCase):
         )
         self.assertIn("environment: crates-io", crates)
         self.assertIn("cargo package --locked", crates)
+        self.assertIn("Verify the complete immutable release set", crates)
+        self.assertIn("packaging/verify_complete_release_set.py", crates)
+        self.assertLess(
+            crates.index("Verify the complete immutable release set"),
+            crates.index("Obtain a short-lived crates.io credential"),
+        )
         self.assertIn(".version.checksum", crates)
         self.assertIn("wait_until_visible", crates)
         self.assertNotIn("secrets.CARGO_REGISTRY_TOKEN", crates)
@@ -508,6 +514,118 @@ class DistributionTests(unittest.TestCase):
             )
             manifest = (directory / "SHA256SUMS").read_text(encoding="ascii")
             self.assertIn(f"gravlax-{version}-source.tar.gz", manifest)
+
+    def test_complete_release_set_is_exact_and_content_verified(self):
+        version = "0.1.1"
+        targets = {
+            "aarch64-apple-darwin": ".tar.gz",
+            "x86_64-apple-darwin": ".tar.gz",
+            "x86_64-pc-windows-msvc": ".zip",
+            "x86_64-unknown-linux-gnu": ".tar.gz",
+            "x86_64-unknown-linux-musl": ".tar.gz",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            archives = {
+                f"gravlax-{target}{suffix}" for target, suffix in targets.items()
+            }
+            for name in archives:
+                (directory / name).write_bytes(name.encode("ascii"))
+                digest = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+                (directory / f"{name}.sha256").write_text(
+                    f"{digest} *{name}\n", encoding="ascii"
+                )
+            (directory / "sha256.sum").write_text(
+                "".join(
+                    f"{hashlib.sha256((directory / name).read_bytes()).hexdigest()} *{name}\n"
+                    for name in sorted(archives)
+                ),
+                encoding="ascii",
+            )
+            extras = {
+                f"gravlax-{version}-source.tar.gz",
+                f"gravlax-{version}.spdx.json",
+                f"gravlax_client-{version}-py3-none-any.whl",
+                f"gravlax_client-{version}.tar.gz",
+            }
+            for name in extras:
+                (directory / name).write_bytes(name.encode("ascii"))
+            (directory / "SHA256SUMS").write_text(
+                "".join(
+                    f"{hashlib.sha256((directory / name).read_bytes()).hexdigest()}  {name}\n"
+                    for name in sorted(extras)
+                ),
+                encoding="ascii",
+            )
+            for name in ("gravlax-installer.ps1", "gravlax-installer.sh"):
+                (directory / name).write_bytes(name.encode("ascii"))
+            (directory / "dist-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "announcement_tag": f"v{version}",
+                        "releases": [
+                            {"app_name": "gravlax", "app_version": version}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            command = [
+                PYTHON,
+                str(ROOT / "packaging/verify_complete_release_set.py"),
+                str(directory),
+                "--version",
+                version,
+            ]
+            subprocess.run(command, check=True, capture_output=True)
+
+            missing = directory / "gravlax-installer.sh"
+            missing.unlink()
+            rejected = subprocess.run(command, capture_output=True)
+            self.assertNotEqual(rejected.returncode, 0)
+
+    def test_vendored_source_preserves_the_release_cpu_policy(self):
+        version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))[
+            "workspace"
+        ]["package"]["version"]
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            subprocess.run(
+                [
+                    PYTHON,
+                    str(ROOT / "packaging/stage_source.py"),
+                    "--repository",
+                    str(ROOT),
+                    "--revision",
+                    "HEAD",
+                    "--version",
+                    version,
+                    "--output-dir",
+                    str(output),
+                ],
+                check=True,
+                capture_output=True,
+                env={**os.environ, "SOURCE_DATE_EPOCH": "1788408000"},
+            )
+            archive_path = output / f"gravlax-{version}-source.tar.gz"
+            with tarfile.open(archive_path, "r:gz") as archive:
+                config_member = archive.getmember(
+                    f"gravlax-{version}/.cargo/config.toml"
+                )
+                extracted = archive.extractfile(config_member)
+                self.assertIsNotNone(extracted)
+                config = extracted.read().decode("utf-8")
+                for cpu in ("x86-64", "penryn", "apple-m1"):
+                    self.assertIn(f"target-cpu={cpu}", config)
+                self.assertIn('[source.crates-io]', config)
+                self.assertIn('directory = "vendor"', config)
+                self.assertIn("[net]\noffline = true", config)
+                self.assertTrue(
+                    any(
+                        name.startswith(f"gravlax-{version}/vendor/")
+                        for name in archive.getnames()
+                    )
+                )
 
 
 if __name__ == "__main__":

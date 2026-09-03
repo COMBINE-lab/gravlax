@@ -36,10 +36,13 @@ def _vendor_dependencies(source: Path) -> None:
     cargo_dir = source / ".cargo"
     cargo_dir.mkdir(exist_ok=True)
     config_path = cargo_dir / "config.toml"
-    if config_path.exists() or (source / "vendor").exists():
-        raise RuntimeError(
-            "refusing to replace a tracked .cargo/config.toml or vendor directory"
-        )
+    if (source / "vendor").exists():
+        raise RuntimeError("refusing to replace a tracked vendor directory")
+    tracked_config = (
+        config_path.read_text(encoding="utf-8").rstrip()
+        if config_path.exists()
+        else ""
+    )
     result = subprocess.run(
         ["cargo", "vendor", "--locked", "vendor"],
         cwd=source,
@@ -48,7 +51,8 @@ def _vendor_dependencies(source: Path) -> None:
         stderr=None,
         text=True,
     )
-    config = result.stdout.rstrip() + "\n\n[net]\noffline = true\n"
+    sections = [tracked_config, result.stdout.rstrip(), "[net]\noffline = true"]
+    config = "\n\n".join(section for section in sections if section) + "\n"
     config_path.write_text(config, encoding="utf-8", newline="\n")
     # Resolve every Cargo.lock entry from the staged tree with networking
     # disabled before packaging it.

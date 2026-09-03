@@ -48,6 +48,21 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "missing=${missing}" >> "${GITHUB_OUTPUT}"
 
+      - name: Download the assembled release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: artifacts-*
+          path: dist/release-candidate
+          merge-multiple: true
+
+      - name: Verify the complete immutable release set
+        env:
+          VERSION: ${{ steps.registry.outputs.version }}
+        run: |
+          rm -f dist/release-candidate/*-dist-manifest.json
+          python3 packaging/verify_complete_release_set.py \
+            dist/release-candidate --version "${VERSION}"
+
       - name: Obtain a short-lived crates.io credential
         if: steps.registry.outputs.missing == 'true'
         id: auth
