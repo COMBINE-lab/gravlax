@@ -5908,8 +5908,12 @@ fn rename_no_replace(source: &Path, destination: &Path) -> Result<()> {
     let source = CString::new(source.as_os_str().as_bytes()).context("source path contains NUL")?;
     let destination = CString::new(destination.as_os_str().as_bytes())
         .context("destination path contains NUL")?;
+    // Call the kernel entry point directly. glibc exports a `renameat2` wrapper, but musl does
+    // not, so referring to `libc::renameat2` leaves a fully static musl build with an unresolved
+    // symbol even though the syscall is available on every supported Linux kernel.
     let result = unsafe {
-        libc::renameat2(
+        libc::syscall(
+            libc::SYS_renameat2,
             libc::AT_FDCWD,
             source.as_ptr(),
             libc::AT_FDCWD,

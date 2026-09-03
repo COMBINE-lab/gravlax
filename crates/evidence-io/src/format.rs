@@ -779,7 +779,23 @@ impl SectionReader {
             self.file.read_exact_at(buffer, offset)?;
             Ok(())
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::FileExt;
+            let mut read = 0usize;
+            while read < buffer.len() {
+                let position = offset
+                    .checked_add(read as u64)
+                    .context("positioned read offset overflow")?;
+                let n = self.file.seek_read(&mut buffer[read..], position)?;
+                if n == 0 {
+                    return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+                }
+                read += n;
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
         {
             use std::io::{Seek, SeekFrom};
             let mut file = self.file.try_clone()?;
@@ -828,18 +844,16 @@ impl SectionReader {
         self.directory.iter().any(|(n, _, _, _)| n == name)
     }
 
-    /// Like [`Self::read_compressed`], but position-independent (`pread`) and `&self`, so many
-    /// sections can be read from worker threads concurrently.
-    #[cfg(unix)]
+    /// Like [`Self::read_compressed`], but position-independent and `&self`, so many sections
+    /// can be read from worker threads concurrently.
     pub fn read_compressed_at(&self, name: &str) -> Result<(Vec<u8>, usize)> {
-        use std::os::unix::fs::FileExt;
         let index = self.entry_index(name)?;
         let (_, offset, raw_len, comp_len) = self.directory[index].clone();
         let skip = 1 + name.len() as u64 + 16;
         let comp_len = usize::try_from(comp_len).context("compressed section is too large")?;
         let raw_len = usize::try_from(raw_len).context("raw section is too large")?;
         let mut comp = vec![0u8; comp_len];
-        self.file.read_exact_at(&mut comp, offset + skip)?;
+        self.read_exact_at(&mut comp, offset + skip)?;
         self.record_read(comp_len as u64);
         self.verify_compressed(index, name, &comp)?;
         Ok((comp, raw_len))
@@ -1630,7 +1644,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("digest mismatch"));
-        #[cfg(unix)]
         assert!(reader
             .read_compressed_at("x")
             .unwrap_err()
@@ -1642,6 +1655,32 @@ mod tests {
             .to_string()
             .contains("digest mismatch"));
         assert!(read_sections(&p).is_err());
+        std::fs::remove_file(p).ok();
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn compressed_at_reads_multiple_sections_concurrently() {
+        let p = test_path("concurrent-compressed-at");
+        let sections: [(&str, &[u8]); 3] = [
+            ("first", b"the first payload"),
+            ("second", b"the second payload is different"),
+            ("third", b"the third payload is different again"),
+        ];
+        write_v2(&p, &sections);
+        let reader = std::sync::Arc::new(SectionReader::open(&p).unwrap());
+        std::thread::scope(|scope| {
+            for worker in 0..8 {
+                let reader = std::sync::Arc::clone(&reader);
+                scope.spawn(move || {
+                    for iteration in 0..64 {
+                        let (name, expected) = sections[(worker + iteration) % sections.len()];
+                        let (compressed, raw_len) = reader.read_compressed_at(name).unwrap();
+                        assert_eq!(decompress(&compressed, raw_len).unwrap(), expected);
+                    }
+                });
+            }
+        });
         std::fs::remove_file(p).ok();
     }
 

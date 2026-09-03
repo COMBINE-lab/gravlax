@@ -172,6 +172,7 @@ class DistributionTests(unittest.TestCase):
         release_workflows = [
             ROOT / ".github/workflows/release.yml",
             ROOT / ".github/workflows/release-checks.yml",
+            ROOT / ".github/workflows/portability.yml",
             ROOT / ".github/workflows/build-release-extras.yml",
             ROOT / ".github/workflows/publish-crates.yml",
             ROOT / ".github/workflows/publish-python.yml",
@@ -253,6 +254,43 @@ class DistributionTests(unittest.TestCase):
         self.assertIn("top-level workflow `publish-python.yml`", maintenance)
         self.assertIn("workflow\n`release.yml`", maintenance)
         self.assertNotIn("workflow `publish-crates.yml`", maintenance)
+
+    def test_pre_release_portability_links_and_smoke_tests_native_targets(self):
+        portability = (ROOT / ".github/workflows/portability.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertRegex(portability, r"(?m)^  pull_request:\s*$")
+        self.assertRegex(portability, r"(?m)^  push:\s*$")
+        self.assertIn("branches: [main]", portability)
+        self.assertIn("workflow_dispatch:", portability)
+        self.assertNotIn("tags:", portability)
+        self.assertIn("windows-2022", portability)
+        self.assertIn("ubuntu-22.04", portability)
+        release_flags = {
+            "x86_64-pc-windows-msvc": (
+                "-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static"
+            ),
+            "x86_64-unknown-linux-musl": (
+                "-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static "
+                "-Clink-self-contained=yes"
+            ),
+        }
+        for target, rustflags in release_flags.items():
+            self.assertIn(target, portability)
+            self.assertIn(f"target/{target}/dist/aie", portability)
+            self.assertIn(f"rustflags: '{rustflags}'", portability)
+        self.assertIn("toolchain: 1.98.0", portability)
+        self.assertIn("target: ${{ matrix.target }}", portability)
+        self.assertIn("rustflags: ''", portability)
+        self.assertIn("RUSTFLAGS: ${{ matrix.rustflags }}", portability)
+        self.assertIn(
+            "cargo build --locked --profile dist --package gravlax --bin aie",
+            portability,
+        )
+        self.assertIn("--target ${{ matrix.target }}", portability)
+        self.assertGreaterEqual(portability.count('"${binary}" --version'), 2)
+        self.assertIn("readelf --program-headers", portability)
+        self.assertIn("Requesting program interpreter", portability)
 
     def test_release_cpu_policy_matches_cargo_dist_setup(self):
         expected = {
