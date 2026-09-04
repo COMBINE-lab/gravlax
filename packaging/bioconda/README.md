@@ -76,7 +76,7 @@ bioconda-utils lint recipes/ config.yml --packages gravlax
 bioconda-utils build recipes/ config.yml \
   --packages gravlax \
   --docker \
-  --mulled-build-and-test \
+  --mulled-test \
   --force
 ```
 

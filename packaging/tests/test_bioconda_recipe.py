@@ -49,6 +49,14 @@ class BiocondaRecipeTests(unittest.TestCase):
             self.assertIn("rust >=1.98,<2", text)
             self.assertIn("cargo-bundle-licenses", text)
             self.assertIn("THIRDPARTY.yml", text)
+            self.assertIn(
+                'export CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER="${CC}"  # [osx and x86_64]',
+                text,
+            )
+            self.assertIn(
+                'export CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER="${CC}"  # [osx and arm64]',
+                text,
+            )
             self.assertIn("should_use_compilers", text)
             self.assertIn("run_exports:", text)
             self.assertIn('pin_subpackage(name, max_pin="x.x")', text)
