@@ -33,6 +33,8 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(version, docs_lock["packages"][""]["version"])
         local_recipe = (ROOT / "packaging/conda/local/meta.yaml").read_text(encoding="utf-8")
         self.assertIn(f'environ.get("GRAVLAX_VERSION", "{version}")', local_recipe)
+        self.assertIn("compiler('rust')", local_recipe)
+        self.assertNotIn("should_use_compilers", local_recipe)
 
         accepted = subprocess.run(
             [
@@ -62,6 +64,29 @@ class DistributionTests(unittest.TestCase):
         )
         self.assertNotEqual(rejected.returncode, 0)
 
+    def test_msrv_configuration_is_consistent(self):
+        cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+        self.assertEqual(cargo["workspace"]["package"]["rust-version"], "1.89")
+        toolchain = tomllib.loads(
+            (ROOT / "rust-toolchain.toml").read_text(encoding="utf-8")
+        )["toolchain"]
+        self.assertEqual(toolchain, {"channel": "1.89.0", "profile": "minimal"})
+
+        portability = (ROOT / ".github/workflows/portability.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertRegex(portability, r"(?m)^  msrv:\s*$")
+        self.assertIn("toolchain: 1.89.0", portability)
+        self.assertIn(
+            "cargo test --workspace --all-targets --all-features --locked",
+            portability,
+        )
+        self.assertIn(
+            "cargo clippy --workspace --all-targets --all-features --locked "
+            "-- -D warnings",
+            portability,
+        )
+
     def test_cargo_dist_workflow_is_generated_and_composes_release_channels(self):
         cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
         dist = cargo["workspace"]["metadata"]["dist"]
@@ -88,7 +113,7 @@ class DistributionTests(unittest.TestCase):
             tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))[
                 "toolchain"
             ],
-            {"channel": "1.98.0", "profile": "minimal"},
+            {"channel": "1.89.0", "profile": "minimal"},
         )
 
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -247,6 +272,7 @@ class DistributionTests(unittest.TestCase):
             encoding="utf-8"
         )
         for rust_workflow in (release_checks, crates, extras):
+            self.assertIn("toolchain: 1.89.0", rust_workflow)
             self.assertIn("rustflags: ''", rust_workflow)
         self.assertIn(
             "anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610",
@@ -289,7 +315,7 @@ class DistributionTests(unittest.TestCase):
             self.assertIn(target, portability)
             self.assertIn(f"target/{target}/dist/aie", portability)
             self.assertIn(f"rustflags: '{rustflags}'", portability)
-        self.assertIn("toolchain: 1.98.0", portability)
+        self.assertIn("toolchain: 1.89.0", portability)
         self.assertIn("target: ${{ matrix.target }}", portability)
         self.assertIn("rustflags: ''", portability)
         self.assertIn("RUSTFLAGS: ${{ matrix.rustflags }}", portability)
@@ -352,7 +378,7 @@ class DistributionTests(unittest.TestCase):
         )
         environment = {
             **os.environ,
-            "RUSTUP_TOOLCHAIN": "1.98.0-x86_64-unknown-linux-gnu",
+            "RUSTUP_TOOLCHAIN": "1.89.0-x86_64-unknown-linux-gnu",
         }
         for package in packages:
             completed = subprocess.run(

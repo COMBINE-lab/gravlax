@@ -1,4 +1,4 @@
-# Release builds name Rust 1.98's portable CPU model for every distributed
+# Release builds name portable CPU models explicitly for every distributed
 # target. Keep this map synchronized with the cargo-dist build setup fragment.
 # Do not use `target-cpu=native` in distributable builds.
 

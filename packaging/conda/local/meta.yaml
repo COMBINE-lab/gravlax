@@ -27,9 +27,8 @@ requirements:
   build:
     - {{ compiler('c') }}
     - {{ stdlib('c') }}
-    # The rust compiler activation package on conda-forge can lag the native
-    # package, so request the workspace's minimum toolchain directly.
-    - rust >=1.98,<2
+    # Gravlax's minimum supported Rust version is 1.89.
+    - {{ compiler('rust') }}
     - cargo-bundle-licenses
 
 test:

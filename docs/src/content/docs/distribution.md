@@ -20,7 +20,9 @@ artifact but stopped before publication because its checksum verifier rejected
 the trailing blank line emitted by cargo-dist 0.32. Version 0.1.4 is the first
 complete distribution. Version 0.1.5 adds rooted alignment provenance, sparse
 terminal-tail evidence, coordinate-free atlas event discovery, and Boolean
-same-molecule queries, and is the recommended version for new installations.
+same-molecule queries. Version 0.1.6 fixes ingestion of archives containing only
+unique placements and corrects the declared minimum Rust version to 1.89; it is
+the recommended version for new installations.
 
 ## Install the `aie` command
 
@@ -62,7 +64,7 @@ the CPU features of the particular build runner through `target-cpu=native`.
 Each native archive contains `aie` (or `aie.exe`) and its release metadata.
 Generate Bash, Zsh, or Fish completions from the installed binary with
 `aie completions`. Platforms not listed here can build from source with Rust
-1.98 or newer.
+1.89 or newer.
 
 ## Install the Python client
 
@@ -131,7 +133,7 @@ build.
 The repository uses cargo-dist for native archives and installers. The
 `scripts/bump-and-publish` command keeps the Rust, Python, documentation, and
 local Conda versions synchronized and creates the annotated release tag. The
-release manager needs Rust 1.98, Python 3.11 or newer, Node.js 22.19 or newer,
+release manager needs Rust 1.89, Python 3.11 or newer, Node.js 22.19 or newer,
 GitHub CLI, and the normal Cargo and npm tooling. In the examples below,
 replace `0.2.0` with the version being released.
 

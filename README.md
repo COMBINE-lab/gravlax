@@ -42,7 +42,7 @@ cargo build --release
 # binary: target/release/aie
 ```
 
-Requires Rust 1.98 or later and a C toolchain (for zstd). Run `aie doctor` to check the installation.
+Requires Rust 1.89 or later and a C toolchain (for zstd). Run `aie doctor` to check the installation.
 
 ## Quick start
 

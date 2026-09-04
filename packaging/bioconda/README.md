@@ -9,10 +9,10 @@ Submit only a rendered `meta.yaml`, never `meta.yaml.in`.
 
 ## Prerequisites
 
-Wait until the public, non-draft GitHub release exists. For version `0.1.5`, it
+Wait until the public, non-draft GitHub release exists. For version `0.1.6`, it
 must contain these two files:
 
-- `gravlax-0.1.5-source.tar.gz`
+- `gravlax-0.1.6-source.tar.gz`
 - `SHA256SUMS`
 
 The source archive contains the tagged repository, `Cargo.lock`, and vendored
@@ -22,18 +22,18 @@ bytes, and its build does not access the network.
 Download and verify the published files in a new directory:
 
 ```sh
-mkdir -p /tmp/gravlax-0.1.5-release
-gh release download v0.1.5 \
+mkdir -p /tmp/gravlax-0.1.6-release
+gh release download v0.1.6 \
   --repo COMBINE-lab/gravlax \
-  --pattern 'gravlax-0.1.5-source.tar.gz' \
+  --pattern 'gravlax-0.1.6-source.tar.gz' \
   --pattern SHA256SUMS \
-  --dir /tmp/gravlax-0.1.5-release
-cd /tmp/gravlax-0.1.5-release
+  --dir /tmp/gravlax-0.1.6-release
+cd /tmp/gravlax-0.1.6-release
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
 The checksum command must report
-`gravlax-0.1.5-source.tar.gz: OK` before continuing.
+`gravlax-0.1.6-source.tar.gz: OK` before continuing.
 
 ## Create the submission
 
@@ -44,7 +44,7 @@ git clone git@github.com:YOUR-GITHUB-ACCOUNT/bioconda-recipes.git
 cd bioconda-recipes
 git remote add upstream https://github.com/bioconda/bioconda-recipes.git
 git fetch upstream
-git switch -c add-gravlax-0.1.5 upstream/master
+git switch -c add-gravlax-0.1.6 upstream/master
 ```
 
 From that checkout, render the recipe using the script in the tagged Gravlax
@@ -52,8 +52,8 @@ source tree:
 
 ```sh
 python /path/to/gravlax/packaging/bioconda/render_recipe.py \
-  --version 0.1.5 \
-  --source-archive /tmp/gravlax-0.1.5-release/gravlax-0.1.5-source.tar.gz \
+  --version 0.1.6 \
+  --source-archive /tmp/gravlax-0.1.6-release/gravlax-0.1.6-source.tar.gz \
   --output recipes/gravlax/meta.yaml
 ```
 
@@ -86,12 +86,10 @@ third-party licenses. The tests run `aie --version`, `aie --help`, `aie doctor
 --help`, completion generation, and checks for all three installed completion
 files. The mulled test repeats the commands in a minimal runtime container.
 
-The recipe requests the native `rust >=1.98` package and documents a narrow
-`should_use_compilers` lint exception. At the time of the 0.1.5 release,
-Conda-forge's Rust 1.98 package is available on its main channel, while the
-corresponding compiler activation package on that channel is still Rust 1.97.1.
-Remove the exception and switch to `{{ compiler('rust') }}` once the activation
-package reaches Rust 1.98 or newer.
+The recipe uses Bioconda's standard `{{ compiler('rust') }}` activation package.
+Gravlax's minimum supported Rust version is 1.89, which is available through
+the current conda-forge compiler activation package, so no compiler-policy lint
+exception is needed.
 
 The recipe exports `{{ pin_subpackage(name, max_pin="x.x") }}`. Downstream
 packages that build against the Gravlax command therefore remain within the

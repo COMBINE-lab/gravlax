@@ -47,10 +47,14 @@ pub struct Table {
 
 impl Table {
     /// Normalize observed counts to SCALE, guaranteeing every present symbol a nonzero slot.
+    /// An empty stream receives a canonical all-zero-symbol table; the table is serialized with
+    /// the archive but is never consulted while decoding its zero values.
     pub fn from_counts(counts: &[u64; NSYM]) -> Result<Table> {
         let total: u64 = counts.iter().sum();
         if total == 0 {
-            bail!("empty stream has no table");
+            let mut freq = [0u32; NSYM];
+            freq[0] = SCALE;
+            return Ok(Table::from_freqs(freq));
         }
         let mut freq = [0u32; NSYM];
         let mut assigned = 0u32;
@@ -261,9 +265,10 @@ mod tests {
 
     #[test]
     fn empty_stream_encodes() {
-        let mut counts = [0u64; NSYM];
-        counts[0] = 1;
+        let counts = [0u64; NSYM];
         let t = Table::from_counts(&counts).unwrap();
+        assert_eq!(t.freq[0], SCALE);
+        assert!(t.freq[1..].iter().all(|frequency| *frequency == 0));
         let mut payload = Vec::new();
         encode(&[], &t, &mut payload);
         assert_eq!(decode(&payload, &t).unwrap(), Vec::<u64>::new());

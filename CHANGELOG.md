@@ -2,6 +2,27 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## [0.1.6] - 2026-09-04
+
+### Correctness and compatibility
+
+- Encode an empty multimap-pattern stream with the canonical empty rANS table,
+  allowing BAMs containing only unique placements to be ingested, read, and
+  validated normally.
+- Lower the declared minimum supported Rust version from 1.98 to the tested
+  dependency floor, Rust 1.89. Pull requests and pushes to `main` now run the
+  locked workspace tests and deny all Clippy warnings on that exact toolchain.
+- Activate the checked-in Google Colab notebooks against the immutable,
+  checksum-bound `demo-data-v1` release locators, preserving fail-closed
+  downloads and executable demonstrations.
+- Correct the Bioconda Intel and Apple Silicon linker selection so both macOS
+  builds use the active Conda C compiler driver. With the lower MSRV, the recipe
+  returns to the standard Rust compiler activation package and no longer needs
+  a compiler-policy lint exception.
+
+Archive schemas, archive commitments, query result schemas, and command
+interfaces are unchanged from version 0.1.5.
+
 ## [0.1.5] - 2026-09-04
 
 ### Molecular evidence and provenance
@@ -151,6 +172,7 @@ annotation be changed or compared without realigning the source reads.
 - Gravlax 0.1 is an initial public interface. Result and archive formats are
   versioned so readers can reject incompatible future changes explicitly.
 
+[0.1.6]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.6
 [0.1.5]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.5
 [0.1.4]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.4
 [0.1.3]: https://github.com/COMBINE-lab/gravlax/tree/v0.1.3

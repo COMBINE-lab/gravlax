@@ -20,7 +20,7 @@ Prebuilt Linux, macOS, and Windows installers are described on the
 
 ## Source-build requirements
 
-- **Rust 1.98 or newer** — install via [rustup](https://rustup.rs) if needed.
+- **Rust 1.89 or newer** — install via [rustup](https://rustup.rs) if needed.
 - A C toolchain (for the vendored zstd). No other system dependencies.
 
 ## Build from source
