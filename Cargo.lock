@@ -507,6 +507,7 @@ dependencies = [
  "flate2",
  "rustc-hash",
  "serde",
+ "serde_json",
  "zstd",
 ]
 

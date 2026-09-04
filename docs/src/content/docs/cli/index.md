@@ -18,28 +18,21 @@ version.
 | [`explore`](/gravlax/cli/explore/) | Browse exact project artifacts and export checked scientific plans from a loopback-only, read-only UI |
 | [`resolve`](/gravlax/cli/resolve/) | Resolve gene, transcript, and exon identifiers against an explicit reference identity |
 | [`ingest`](/gravlax/cli/ingest/) | Generate chemistry-specific STAR recipes and preflight BAM/whitelist inputs |
-| [`ingest-archive`](/gravlax/cli/ingest-archive/) | Build the `.aie` index from the annotation-free ingest BAM |
+| [`ingest-archive`](/gravlax/cli/ingest-archive/) | Build the `.aie` index from a compatible tagged, coordinate-sorted BAM |
 | [`compile-annotation`](/gravlax/cli/compile-annotation/) | Compile a GTF once into a checksummed, reusable `.aic` artifact |
 | [`export-molecule-bam`](/gravlax/cli/export-molecule-bam/) | Export the exact post-correction molecule abstraction for interchange or a function-matched BAM/CRAM baseline |
 | [`replay-rows`](/gravlax/cli/replay-rows/) | Quantify a compatible GTF from an index using Gene or Velocyto semantics |
 | [`compare-annotations`](/gravlax/cli/compare-annotations/) | Compare two bound annotations on one fixed archive and explain count changes |
-| [`query`](/gravlax/cli/query/) | Indexed single or batched region/junction queries, APA, discovery, and transcript compatibility |
+| [`query`](/gravlax/cli/query/) | Indexed region/junction queries, Boolean same-record predicates, APA, discovery, and transcript compatibility |
 | [`query … transcript-ecs`](/gravlax/cli/transcript-ecs/) | Derive annotation-conditional transcript compatibility sets for archived UMI classes |
 | [`federate`](/gravlax/cli/federate/) | One junction query across N indexes |
 | [`cohort`](/gravlax/cli/cohort/) | Coordinate-defined splice events across named indexes and groups |
-| [`collection`](/gravlax/cli/collection/) | Build and query a content-addressed derived index over independent source archives |
+| [`collection`](/gravlax/cli/collection/) | Build a content-addressed federation and reverse-search events across samples, donors, and cell groups |
 | [`extend`](/gravlax/cli/extend/) | Propose evidence-supported per-gene 3′ annotation extensions |
 | [`stamp-genome`](/gravlax/cli/stamp-genome/) | Bind the reference-genome signature used by sequence-consulting analyses |
 | [`seal-archive`](/gravlax/cli/archive-integrity/) | Copy a legacy v1 archive into an authenticated v2 container without recompressing its sections |
 | [`inspect-archive`](/gravlax/cli/archive-integrity/) | Report archive identities and optionally verify every compressed payload |
 | [`completions`](/gravlax/cli/completions/) | Generate Bash, Zsh, or Fish completions from the installed command graph |
-
-## Development and evaluation commands
-
-`aie dev` groups specialized BAM comparisons, archive accounting, replay
-inspection, and model-analysis commands. Their former top-level spellings
-remain accepted as hidden, deprecated compatibility aliases. See the
-[diagnostic commands](/gravlax/cli/development/) page.
 
 ## Conventions
 

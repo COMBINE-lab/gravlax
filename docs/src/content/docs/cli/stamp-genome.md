@@ -3,19 +3,26 @@ title: aie stamp-genome
 description: Stamp the reference genome's BLAKE3 signature into an index.
 ---
 
-Stamps (or re-stamps) a signature of the reference genome into an index's
-metadata so sequence-consulting analyses — the internal-priming filter in
+Stamps (or re-stamps) a reference-genome signature into an index's metadata so
+sequence-consulting analyses — the internal-priming filter in
 [`query apa`](/gravlax/cli/query/), [`aie extend`](/gravlax/cli/extend/) — can verify
-they are looking at the genome the reads were aligned to. A mismatched FASTA is
-refused, contig by contig.
+that they are using the same bound reference. A FASTA is refused if it lacks any
+chromosome named by the archive. If a different signature is already present,
+the command reports that it is replacing it.
 
 The signature is per-contig BLAKE3 over the uppercased bases, so it is invariant
 to line wrapping, case, and gzip framing. It adds ~8 KB. All evidence streams are
 copied compressed, byte-for-byte — stamping cannot perturb the data, and replayed
-matrices remain byte-identical.
+matrices remain byte-identical. For a logical
+`gravlax.molecular-evidence.v2` archive, `meta.genome_reference_binding` records
+the exact FASTA identity, normalized signature, the `stamp-genome` action, and a
+caller-declared relationship. The original `alignment.provenance` section is
+never rewritten: a later stamp cannot prove which reference produced the BAM.
+Older archives update only `meta.genome_sig` and retain legacy/unattributed
+binding semantics.
 
 Indexes built with `ingest-archive --genome` are stamped from the start;
-`stamp-genome` retrofits existing indexes (~10 s).
+`stamp-genome` retrofits existing indexes.
 
 ## Usage
 
@@ -27,7 +34,7 @@ aie stamp-genome sample.aie --genome genome.fa --out stamped.aie
 
 | Option | Description |
 |---|---|
-| `--genome <GENOME>` | Reference FASTA (plain or gzipped) the reads were aligned to |
+| `--genome <GENOME>` | Reference FASTA (plain or gzipped) to bind for sequence-consulting queries; the command verifies its bytes and archive-contig coverage, while its relationship to the original alignment is caller-declared |
 | `--out <OUT>` | Write here instead of replacing the input in place |
 | `--report-format <FORMAT>` | Opt in to a versioned `text`, `tsv`, or `json` operation report |
 | `--report-output <PATH>` | Atomically publish the report without replacement; requires `--report-format` |

@@ -21,7 +21,21 @@ sections are selected. `--verify-content` additionally reads and verifies
 every compressed payload. A v1 archive has no committed directory, so even
 ordinary identity inspection requires one complete file scan.
 
-The established human output and `--json` object remain available unchanged.
+Inspection also reports the archive's logical evidence capabilities. For a
+current ingest it includes `gravlax.molecular-evidence.v2`, the full parsed
+alignment-provenance manifest, and terminal-tail availability plus its event,
+molecule, and routed-chunk counts. It also reports the current genome-reference
+binding, including whether it was established at ingest or by `stamp-genome`.
+It verifies an embedded junction catalogue's length, BLAKE3 digest, and parsed
+row count against the manifest. Older archives state that alignment provenance
+and terminal tails are **unavailable**, and label any genome signature as
+legacy/unattributed;
+inspection never guesses “one pass” or reports a missing tail section as zero.
+An unknown logical schema, a declared section that is absent, an undeclared
+capability section, or a side-section identity mismatch is an error.
+
+The human output and `--json` object remain available; both include these
+capability fields.
 For the shared result contract, use:
 
 ```sh
@@ -35,8 +49,10 @@ is checked before the archive is opened, and atomically installs a complete
 file without replacing an existing path. The
 `gravlax.archive.inspect-report.v1` summary contains the native and
 encoded-section identities, format and file sizes, verification mode, and
-bytes read. The streamed `sections` table carries exact raw and compressed
-byte counts. Machine-readable stdout contains no progress text.
+bytes read, together with the same logical-schema, alignment-provenance,
+terminal-tail, and genome-reference-binding fields. The streamed `sections`
+table carries exact raw and compressed byte counts. Machine-readable stdout
+contains no progress text.
 
 ## Seal a legacy archive
 

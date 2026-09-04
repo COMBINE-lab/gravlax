@@ -121,6 +121,240 @@ def _uniform_count_query_args(
     return args
 
 
+def _cooccurrence_query_args(
+    archive: PathToken,
+    predicates: Mapping[str, str],
+    expression: str,
+    universe: str,
+    *,
+    unit: str,
+    region_match: str,
+    placements: str,
+    allow_full_scan: bool,
+    cells: Optional[PathToken],
+    groups: Optional[PathToken],
+    aggregation: str,
+    emit_membership: bool,
+    max_memberships: int,
+    max_pattern_rows: int,
+    max_chunks: int,
+    max_evidence_records: int,
+    max_terminal_events: int,
+) -> list[PathToken]:
+    if not predicates:
+        raise ValueError("predicates must contain at least one named predicate")
+    if not isinstance(expression, str) or not expression.strip():
+        raise ValueError("expression must not be empty")
+    if not isinstance(universe, str) or not universe.strip():
+        raise ValueError("universe must not be empty")
+    if universe not in predicates:
+        raise ValueError("universe must name one of predicates")
+    if cells is not None and groups is not None:
+        raise ValueError("cells and groups are mutually exclusive")
+    aggregation = _choice(
+        aggregation, {"auto", "cell", "group", "bulk"}, "aggregation"
+    )
+    if aggregation == "group" and groups is None:
+        raise ValueError("group aggregation requires groups")
+    unit = _choice(unit, {"molecule-record", "umi-class"}, "unit")
+    region_match = _choice(
+        region_match, {"anchor", "aligned-block"}, "region_match"
+    )
+    placements = _choice(placements, {"unique", "direct", "all"}, "placements")
+    if unit == "umi-class" and not allow_full_scan:
+        raise ValueError("unit='umi-class' requires allow_full_scan=True")
+    max_memberships = _positive(max_memberships, "max_memberships")
+    max_pattern_rows = _positive(max_pattern_rows, "max_pattern_rows")
+    max_chunks = _positive(max_chunks, "max_chunks")
+    max_evidence_records = _positive(
+        max_evidence_records, "max_evidence_records"
+    )
+    max_terminal_events = _nonnegative(
+        max_terminal_events, "max_terminal_events"
+    )
+    args: list[PathToken] = [
+        "query",
+        _token(archive, "archive"),
+        "cooccur",
+    ]
+    for name, descriptor in predicates.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("predicate names must be non-empty strings")
+        if not isinstance(descriptor, str) or not descriptor:
+            raise ValueError(f"predicate {name!r} must have a non-empty descriptor")
+        args.append(_option("predicate", f"{name}={descriptor}"))
+    args.extend(
+        [
+            _option("where", expression),
+            _option("universe", universe),
+            _option("unit", unit),
+            _option("region-match", region_match),
+            _option("placements", placements),
+            _option("max-pattern-rows", str(max_pattern_rows)),
+            _option("max-chunks", str(max_chunks)),
+            _option("max-evidence-records", str(max_evidence_records)),
+            _option("max-terminal-events", str(max_terminal_events)),
+            "--format=json",
+        ]
+    )
+    if allow_full_scan:
+        args.append("--allow-full-scan")
+    if emit_membership:
+        args.append("--emit-membership")
+        args.append(_option("max-memberships", str(max_memberships)))
+    if cells is not None:
+        args.append(_option("cells", cells))
+    if groups is not None:
+        args.append(_option("groups", groups))
+    if aggregation != "auto":
+        args.append(_option("agg", aggregation))
+    return args
+
+
+def _collection_find_events_args(
+    collection: PathToken,
+    *,
+    kinds: Sequence[str],
+    design: Optional[PathToken],
+    groups: Optional[PathToken],
+    require_groups: Sequence[str],
+    min_group_umi_classes: int,
+    min_donors: int,
+    min_samples: int,
+    min_umi_classes: int,
+    min_side_umi_classes: int,
+    min_support: int,
+    terminal_cluster_bp: int,
+    max_terminal_events: int,
+    annotation: Optional[PathToken],
+    assembly: Optional[str],
+    annotation_label: Optional[str],
+    annotation_digest: Optional[str],
+    novel_only: bool,
+    solo_strand: str,
+    max_candidates: int,
+    max_candidates_considered: int,
+    max_routed_entries: int,
+    max_exact_match_attempts: int,
+    max_annotation_comparisons: int,
+    verify_content: bool,
+) -> list[PathToken]:
+    selected_kinds = tuple(
+        _choice(
+            kind,
+            {
+                "junction",
+                "alt-acceptor",
+                "alt-donor",
+                "cassette",
+                "terminal-tail",
+            },
+            "kind",
+        )
+        for kind in kinds
+    )
+    if len(selected_kinds) != len(set(selected_kinds)):
+        raise ValueError("kinds must not contain duplicates")
+    selected_groups = _args(require_groups)
+    if selected_groups and groups is None:
+        raise ValueError("require_groups requires groups")
+    if len(selected_groups) != len(set(selected_groups)):
+        raise ValueError("require_groups must not contain duplicates")
+    if novel_only and annotation is None:
+        raise ValueError("novel_only requires annotation")
+    annotation_identity = (assembly, annotation_label, annotation_digest)
+    if annotation is None and any(value is not None for value in annotation_identity):
+        raise ValueError(
+            "assembly, annotation_label, and annotation_digest require annotation"
+        )
+    if annotation is not None:
+        if not isinstance(assembly, str) or not assembly.strip():
+            raise ValueError("annotation requires a non-empty assembly")
+        if not isinstance(annotation_label, str) or not annotation_label.strip():
+            raise ValueError("annotation requires a non-empty annotation_label")
+    solo_strand = _choice(
+        solo_strand,
+        {"forward", "reverse", "unstranded"},
+        "solo_strand",
+    )
+    terminal_requested = not selected_kinds or "terminal-tail" in selected_kinds
+    if terminal_requested and solo_strand != "forward":
+        raise ValueError("terminal-tail discovery requires solo_strand='forward'")
+    min_group_umi_classes = _positive(
+        min_group_umi_classes, "min_group_umi_classes"
+    )
+    min_donors = _positive(min_donors, "min_donors")
+    min_samples = _positive(min_samples, "min_samples")
+    min_umi_classes = _positive(min_umi_classes, "min_umi_classes")
+    min_side_umi_classes = _positive(
+        min_side_umi_classes, "min_side_umi_classes"
+    )
+    min_support = _nonnegative(min_support, "min_support")
+    terminal_cluster_bp = _nonnegative(
+        terminal_cluster_bp, "terminal_cluster_bp"
+    )
+    max_terminal_events = _nonnegative(
+        max_terminal_events, "max_terminal_events"
+    )
+    max_candidates = _positive(max_candidates, "max_candidates")
+    max_candidates_considered = _positive(
+        max_candidates_considered, "max_candidates_considered"
+    )
+    max_routed_entries = _positive(max_routed_entries, "max_routed_entries")
+    max_exact_match_attempts = _positive(
+        max_exact_match_attempts, "max_exact_match_attempts"
+    )
+    max_annotation_comparisons = _positive(
+        max_annotation_comparisons, "max_annotation_comparisons"
+    )
+    args: list[PathToken] = [
+        "collection",
+        "find-events",
+        _token(collection, "collection"),
+    ]
+    for kind in selected_kinds:
+        args.append(_option("kind", kind))
+    if design is not None:
+        args.append(_option("design", design))
+    if groups is not None:
+        args.append(_option("groups", groups))
+    for group in selected_groups:
+        args.append(_option("require-group", group))
+    if selected_groups:
+        args.append(
+            _option("min-group-umi-classes", str(min_group_umi_classes))
+        )
+    args.extend(
+        [
+            _option("min-donors", str(min_donors)),
+            _option("min-samples", str(min_samples)),
+            _option("min-umi-classes", str(min_umi_classes)),
+            _option("min-side-umi-classes", str(min_side_umi_classes)),
+            _option("min-support", str(min_support)),
+            _option("terminal-cluster-bp", str(terminal_cluster_bp)),
+            _option("max-terminal-events", str(max_terminal_events)),
+            _option("solo-strand", solo_strand),
+            _option("max-candidates", str(max_candidates)),
+            _option("max-candidates-considered", str(max_candidates_considered)),
+            _option("max-routed-entries", str(max_routed_entries)),
+            _option("max-exact-match-attempts", str(max_exact_match_attempts)),
+            _option("max-annotation-comparisons", str(max_annotation_comparisons)),
+        ]
+    )
+    if annotation is not None:
+        args.append(_option("annotation", annotation))
+        args.append(_option("assembly", assembly))
+        args.append(_option("annotation-label", annotation_label))
+        if annotation_digest is not None:
+            args.append(_option("annotation-digest", annotation_digest))
+    if novel_only:
+        args.append("--novel-only")
+    if verify_content:
+        args.append("--verify-content")
+    args.append("--format=json")
+    return args
+
+
 def _same_file_identity(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
 
@@ -637,6 +871,245 @@ class Client:
             cells=cells,
             groups=groups,
             aggregation=aggregation,
+        )
+        return self.result_bundle_to_file(
+            args, output, replace=replace, timeout=timeout
+        )
+
+    def query_cooccurrence(
+        self,
+        archive: PathToken,
+        predicates: Mapping[str, str],
+        expression: str,
+        *,
+        universe: str,
+        unit: str = "molecule-record",
+        region_match: str = "anchor",
+        placements: str = "unique",
+        allow_full_scan: bool = False,
+        cells: Optional[PathToken] = None,
+        groups: Optional[PathToken] = None,
+        aggregation: str = "auto",
+        emit_membership: bool = False,
+        max_memberships: int = 1_000_000,
+        max_pattern_rows: int = 1_000_000,
+        max_chunks: int = 100_000,
+        max_evidence_records: int = 10_000_000,
+        max_terminal_events: int = 10_000_000,
+    ) -> UniformResultBundle:
+        """Evaluate Boolean predicates on the same retained archive evidence unit.
+
+        ``universe`` names the positive predicate that bounds candidate records. A
+        negative expression term means only "not observed in retained evidence";
+        selection is unknown when representative reduction prevents that absence
+        from being established.
+        ``unit='umi-class'`` explicitly merges records with the same
+        barcode-corrected cell and exact raw UMI value across the archive. It
+        does not collapse one-mismatch UMI edges and may combine distinct
+        physical molecules after a cell-local UMI collision.
+        ``placements='unique'`` excludes multimappers. The explicit ``direct``
+        and ``all`` modes are diagnostics and do not prove physical-molecule
+        co-occurrence.
+        """
+
+        return self.result_bundle(
+            _cooccurrence_query_args(
+                archive,
+                predicates,
+                expression,
+                universe,
+                unit=unit,
+                region_match=region_match,
+                placements=placements,
+                allow_full_scan=allow_full_scan,
+                cells=cells,
+                groups=groups,
+                aggregation=aggregation,
+                emit_membership=emit_membership,
+                max_memberships=max_memberships,
+                max_pattern_rows=max_pattern_rows,
+                max_chunks=max_chunks,
+                max_evidence_records=max_evidence_records,
+                max_terminal_events=max_terminal_events,
+            )
+        )
+
+    def query_cooccurrence_to_file(
+        self,
+        archive: PathToken,
+        predicates: Mapping[str, str],
+        expression: str,
+        output: PathToken,
+        *,
+        universe: str,
+        unit: str = "molecule-record",
+        region_match: str = "anchor",
+        placements: str = "unique",
+        allow_full_scan: bool = False,
+        cells: Optional[PathToken] = None,
+        groups: Optional[PathToken] = None,
+        aggregation: str = "auto",
+        emit_membership: bool = False,
+        max_memberships: int = 1_000_000,
+        max_pattern_rows: int = 1_000_000,
+        max_chunks: int = 100_000,
+        max_evidence_records: int = 10_000_000,
+        max_terminal_events: int = 10_000_000,
+        replace: bool = False,
+        timeout: Optional[float] = None,
+    ) -> FileCommandResult:
+        """Stream a Boolean co-occurrence result to a completed JSON file."""
+
+        args = _cooccurrence_query_args(
+            archive,
+            predicates,
+            expression,
+            universe,
+            unit=unit,
+            region_match=region_match,
+            placements=placements,
+            allow_full_scan=allow_full_scan,
+            cells=cells,
+            groups=groups,
+            aggregation=aggregation,
+            emit_membership=emit_membership,
+            max_memberships=max_memberships,
+            max_pattern_rows=max_pattern_rows,
+            max_chunks=max_chunks,
+            max_evidence_records=max_evidence_records,
+            max_terminal_events=max_terminal_events,
+        )
+        return self.result_bundle_to_file(
+            args, output, replace=replace, timeout=timeout
+        )
+
+    def collection_find_events(
+        self,
+        collection: PathToken,
+        *,
+        kinds: Sequence[str] = (),
+        design: Optional[PathToken] = None,
+        groups: Optional[PathToken] = None,
+        require_groups: Sequence[str] = (),
+        min_group_umi_classes: int = 1,
+        min_donors: int = 1,
+        min_samples: int = 1,
+        min_umi_classes: int = 1,
+        min_side_umi_classes: int = 1,
+        min_support: int = 2,
+        terminal_cluster_bp: int = 25,
+        max_terminal_events: int = 10_000_000,
+        annotation: Optional[PathToken] = None,
+        assembly: Optional[str] = None,
+        annotation_label: Optional[str] = None,
+        annotation_digest: Optional[str] = None,
+        novel_only: bool = False,
+        solo_strand: str = "forward",
+        max_candidates: int = 100_000,
+        max_candidates_considered: int = 1_000_000,
+        max_routed_entries: int = 10_000_000,
+        max_exact_match_attempts: int = 25_000_000,
+        max_annotation_comparisons: int = 10_000_000,
+        verify_content: bool = False,
+    ) -> UniformResultBundle:
+        """Reverse-search unique-chain events across a collection.
+
+        Candidate coordinates come from collection metadata; final sample, donor,
+        and group thresholds are applied to exact raw-UMI-value classes in the
+        rooted source archives. One-mismatch UMI edges and multimappers are not
+        included. Annotation assembly and label values are caller declarations.
+        """
+
+        return self.result_bundle(
+            _collection_find_events_args(
+                collection,
+                kinds=kinds,
+                design=design,
+                groups=groups,
+                require_groups=require_groups,
+                min_group_umi_classes=min_group_umi_classes,
+                min_donors=min_donors,
+                min_samples=min_samples,
+                min_umi_classes=min_umi_classes,
+                min_side_umi_classes=min_side_umi_classes,
+                min_support=min_support,
+                terminal_cluster_bp=terminal_cluster_bp,
+                max_terminal_events=max_terminal_events,
+                annotation=annotation,
+                assembly=assembly,
+                annotation_label=annotation_label,
+                annotation_digest=annotation_digest,
+                novel_only=novel_only,
+                solo_strand=solo_strand,
+                max_candidates=max_candidates,
+                max_candidates_considered=max_candidates_considered,
+                max_routed_entries=max_routed_entries,
+                max_exact_match_attempts=max_exact_match_attempts,
+                max_annotation_comparisons=max_annotation_comparisons,
+                verify_content=verify_content,
+            )
+        )
+
+    def collection_find_events_to_file(
+        self,
+        collection: PathToken,
+        output: PathToken,
+        *,
+        kinds: Sequence[str] = (),
+        design: Optional[PathToken] = None,
+        groups: Optional[PathToken] = None,
+        require_groups: Sequence[str] = (),
+        min_group_umi_classes: int = 1,
+        min_donors: int = 1,
+        min_samples: int = 1,
+        min_umi_classes: int = 1,
+        min_side_umi_classes: int = 1,
+        min_support: int = 2,
+        terminal_cluster_bp: int = 25,
+        max_terminal_events: int = 10_000_000,
+        annotation: Optional[PathToken] = None,
+        assembly: Optional[str] = None,
+        annotation_label: Optional[str] = None,
+        annotation_digest: Optional[str] = None,
+        novel_only: bool = False,
+        solo_strand: str = "forward",
+        max_candidates: int = 100_000,
+        max_candidates_considered: int = 1_000_000,
+        max_routed_entries: int = 10_000_000,
+        max_exact_match_attempts: int = 25_000_000,
+        max_annotation_comparisons: int = 10_000_000,
+        verify_content: bool = False,
+        replace: bool = False,
+        timeout: Optional[float] = None,
+    ) -> FileCommandResult:
+        """Stream collection event discovery to a completed uniform JSON file."""
+
+        args = _collection_find_events_args(
+            collection,
+            kinds=kinds,
+            design=design,
+            groups=groups,
+            require_groups=require_groups,
+            min_group_umi_classes=min_group_umi_classes,
+            min_donors=min_donors,
+            min_samples=min_samples,
+            min_umi_classes=min_umi_classes,
+            min_side_umi_classes=min_side_umi_classes,
+            min_support=min_support,
+            terminal_cluster_bp=terminal_cluster_bp,
+            max_terminal_events=max_terminal_events,
+            annotation=annotation,
+            assembly=assembly,
+            annotation_label=annotation_label,
+            annotation_digest=annotation_digest,
+            novel_only=novel_only,
+            solo_strand=solo_strand,
+            max_candidates=max_candidates,
+            max_candidates_considered=max_candidates_considered,
+            max_routed_entries=max_routed_entries,
+            max_exact_match_attempts=max_exact_match_attempts,
+            max_annotation_comparisons=max_annotation_comparisons,
+            verify_content=verify_content,
         )
         return self.result_bundle_to_file(
             args, output, replace=replace, timeout=timeout

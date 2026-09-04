@@ -9,10 +9,12 @@
 //! reduction. Richer levels exist for consumers whose decisions *do* depend on sequence and to
 //! bound what a future annotation might need.
 
+pub mod alignment_provenance;
 pub mod archive;
 pub mod format;
 pub mod genome;
 pub mod rans;
+pub mod terminal_tail;
 pub mod umi;
 
 use serde::{Deserialize, Serialize};

@@ -3087,10 +3087,28 @@ fn collection_routes_exact_queries_and_guards_archive_identity() {
     let reverse_collection = scratch.0.join("atlas-reverse.aicollection");
     let extended_collection = scratch.0.join("atlas-extended.aicollection");
     let fresh_three_collection = scratch.0.join("atlas-fresh-three.aicollection");
+    let search_gtf = scratch.0.join("search.gtf");
+    let wrong_contig_gtf = scratch.0.join("search-wrong-contig.gtf");
+    let search_groups = scratch.0.join("search-groups.tsv");
     write_event_fixture_bam(&bam);
     write_event_fixture_bam_variant(&bam_b, Some((101, "ACACACACACAC")));
     write_event_fixture_bam_variant(&bam_c, Some((1_701, "AGAGAGAGAGAG")));
     std::fs::write(&whitelist, format!("{BARCODE}\n")).unwrap();
+    let search_annotation = concat!(
+        "chr1\tt\texon\t101\t125\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+        "chr1\tt\texon\t226\t250\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+    );
+    std::fs::write(&search_gtf, search_annotation).unwrap();
+    std::fs::write(
+        &wrong_contig_gtf,
+        search_annotation.replacen("chr1", "1", 2),
+    )
+    .unwrap();
+    std::fs::write(
+        &search_groups,
+        format!("sample\tbarcode\tgroup\nA\t{BARCODE}\tg\nB\t{BARCODE}\tg\n"),
+    )
+    .unwrap();
 
     let bin = env!("CARGO_BIN_EXE_aie");
     let mut ingest = Command::new(bin);
@@ -3313,6 +3331,208 @@ fn collection_routes_exact_queries_and_guards_archive_identity() {
             .collect()
     };
     let collection_path = collection.to_str().unwrap();
+    let reverse_search = uniform_json_command(&[
+        "collection",
+        "find-events",
+        collection_path,
+        "--kind",
+        "junction",
+        "--min-support",
+        "1",
+        "--min-samples",
+        "2",
+        "--min-donors",
+        "2",
+        "--min-umi-classes",
+        "1",
+    ]);
+    assert_eq!(
+        reverse_search["result_schema"],
+        "gravlax.collection.find-events.result.v1"
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["evidence_placement_policy"],
+        "unique_chain_representatives_only"
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["multimapper_placements_included"],
+        false
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["max_candidates_considered"],
+        1_000_000
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["max_routed_entries"],
+        10_000_000
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["max_exact_match_attempts"],
+        25_000_000
+    );
+    assert_eq!(
+        reverse_search["data"]["summary"]["max_annotation_comparisons"],
+        10_000_000
+    );
+    assert!(
+        reverse_search["data"]["summary"]["routed_target_associations"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(
+        reverse_search["data"]["summary"]["exact_match_attempts"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    let reverse_entities = uniform_table(&reverse_search, "entities");
+    let searched = reverse_entities
+        .iter()
+        .find(|row| {
+            row["entity_id"]
+                .as_str()
+                .unwrap()
+                .contains("chr1:+:125-225")
+        })
+        .expect("reverse search should find the exact fixture junction");
+    assert_eq!(searched["kind"], "junction");
+    assert_eq!(searched["exact_samples"], 2);
+    assert_eq!(searched["exact_donors"], 2);
+    assert!(searched["exact_umi_classes"].as_u64().unwrap() >= 2);
+    assert!(searched.get("exact_umis").is_none());
+    let reverse_components = uniform_table(&reverse_search, "components");
+    assert!(reverse_components.iter().any(|row| {
+        row["entity_id"] == searched["entity_id"]
+            && row["exact_umi_classes"].as_u64().unwrap_or(0) > 0
+    }));
+    let reverse_counts = uniform_table(&reverse_search, "counts");
+    assert!(reverse_counts.iter().any(|row| {
+        row["entity_id"] == searched["entity_id"]
+            && row["sample"] == "A"
+            && row["support_umi_classes"].as_u64().unwrap_or(0) > 0
+    }));
+
+    let invalid_side = Command::new(bin)
+        .args(["collection", "find-events"])
+        .arg(&collection)
+        .args(["--kind", "junction", "--min-side-umi-classes", "0"])
+        .output()
+        .unwrap();
+    assert!(!invalid_side.status.success());
+    assert!(String::from_utf8_lossy(&invalid_side.stderr)
+        .contains("--min-side-umi-classes must be at least 1"));
+
+    let invalid_group = Command::new(bin)
+        .args(["collection", "find-events"])
+        .arg(&collection)
+        .args(["--kind", "junction", "--groups"])
+        .arg(&search_groups)
+        .args([
+            "--require-group",
+            "g",
+            "--min-group-umi-classes",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    assert!(!invalid_group.status.success());
+    assert!(String::from_utf8_lossy(&invalid_group.stderr)
+        .contains("--min-group-umi-classes must be at least 1"));
+
+    let missing_annotation_identity = Command::new(bin)
+        .args(["collection", "find-events"])
+        .arg(&collection)
+        .args(["--kind", "junction", "--annotation"])
+        .arg(&search_gtf)
+        .output()
+        .unwrap();
+    assert!(!missing_annotation_identity.status.success());
+    let identity_error = String::from_utf8_lossy(&missing_annotation_identity.stderr);
+    assert!(identity_error.contains("--assembly"));
+    assert!(identity_error.contains("--annotation-label"));
+
+    let annotation_digest = format!(
+        "blake3:{}",
+        blake3::hash(search_annotation.as_bytes()).to_hex()
+    );
+    let annotated = uniform_json_command(&[
+        "collection",
+        "find-events",
+        collection_path,
+        "--kind",
+        "junction",
+        "--min-support",
+        "1",
+        "--annotation",
+        search_gtf.to_str().unwrap(),
+        "--assembly",
+        "GRCh38",
+        "--annotation-label",
+        "fixture-v1",
+        "--annotation-digest",
+        &annotation_digest,
+    ]);
+    assert_eq!(
+        annotated["data"]["summary"]["annotation_identity"]["assembly"],
+        "GRCh38"
+    );
+    assert_eq!(
+        annotated["data"]["summary"]["annotation_identity"]["annotation"],
+        "fixture-v1"
+    );
+    assert_eq!(
+        annotated["data"]["summary"]["annotation_collection_compatibility"],
+        "caller_declared_unverified"
+    );
+    assert!(annotated["data"]["summary"]["annotation_comparisons"]
+        .as_u64()
+        .unwrap()
+        > 0);
+    assert_eq!(
+        annotated["data"]["summary"]["annotation_excluded_splice_candidates"],
+        0
+    );
+    assert_eq!(
+        annotated["data"]["summary"]["annotation_unmatched_evidence_contigs"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        annotated["provenance"]["parameters"]["annotation_identity"]["digest"],
+        annotation_digest
+    );
+    assert_eq!(
+        annotated["provenance"]["parameters"]["annotation_collection_compatibility"]["status"],
+        "caller_declared_unverified"
+    );
+    assert_eq!(
+        annotated["provenance"]["parameters"]["reference"]["stamped"],
+        false
+    );
+
+    let unmatched_annotation = Command::new(bin)
+        .args(["collection", "find-events"])
+        .arg(&collection)
+        .args([
+            "--kind",
+            "junction",
+            "--annotation",
+            wrong_contig_gtf.to_str().unwrap(),
+            "--assembly",
+            "GRCh38",
+            "--annotation-label",
+            "wrong-contig-fixture",
+        ])
+        .output()
+        .unwrap();
+    assert!(!unmatched_annotation.status.success());
+    assert!(String::from_utf8_lossy(&unmatched_annotation.stderr)
+        .contains("shares no exact contig names"));
+    assert!(reverse_counts.iter().any(|row| {
+        row["entity_id"] == searched["entity_id"]
+            && row["sample"] == "B"
+            && row["support_umi_classes"].as_u64().unwrap_or(0) > 0
+    }));
     let extended = json_command(&[
         "collection",
         "junction",

@@ -15,8 +15,11 @@
 
 use crate::build::{load_whitelist, to_ops, BcCorrector};
 use anyhow::{bail, Context, Result};
+use evidence_io::alignment_provenance::{BamProgram, ProvenanceStatus};
 use evidence_io::archive::Shape;
+use evidence_io::terminal_tail::TerminalTailSignal;
 use evidence_io::{umi, Block, Junction, Placement, Strand};
+use ingest::cigar::Op;
 use ingest::placement_from_alignment;
 use noodles_bam as bam;
 use noodles_sam::alignment::record::data::field::Value;
@@ -30,6 +33,7 @@ use rayon::prelude::*;
 // paths would make outputs nondeterministic, not just different.
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -187,7 +191,7 @@ pub type EmCalibrationRow = (String, [[u64; 2]; 10], f64, u64);
 
 /// One junction chain of a molecule: its read count and one or two span-extreme representatives.
 /// `reps` is inline (never more than 2 entries by construction), so a chain costs no heap.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MolChain {
     pub weight: u32,
     pub reps: SmallVec<[(u32, u32); 2]>, // (pos, shape), 1 or 2 entries
@@ -198,7 +202,7 @@ pub struct MolChain {
 /// signature). On an approximately 100-million-molecule benchmark archive, the previous
 /// per-molecule `Vec` pair created about 200 million small heap allocations, dominating archive
 /// load time and teardown.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MolRec {
     pub cell: u32,
     pub umi_class: u32,
@@ -232,6 +236,28 @@ pub struct Extracted {
     pub patterns: Vec<Vec<PatAlt>>,
     pub n_classes: u32,
     pub chrom_names: Vec<String>,
+}
+
+/// All selected terminal-tail events attached to one stable serialized molecule ordinal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MoleculeTerminalTailEvents {
+    pub molecule_ordinal: u64,
+    pub events: Vec<(u32, TerminalTailSignal)>,
+}
+
+/// Optional archive evidence produced by the frozen qualifying-read and global-dedup rule.
+/// `Some(empty)` means the capability was evaluated and no reads qualified; `None` means it was
+/// not evaluated and must never be interpreted as biological zero.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtractedTerminalTails {
+    pub molecules: Vec<MoleculeTerminalTailEvents>,
+}
+
+pub(crate) struct ArchiveExtraction {
+    pub(crate) evidence: Extracted,
+    pub(crate) terminal_tails: Option<ExtractedTerminalTails>,
+    pub(crate) bam_identity: ConsumedFileIdentity,
+    pub(crate) bam_programs: Vec<BamProgram>,
 }
 
 /// Canonical flat rows from molecule records. Both replay paths call this, so any serialization
@@ -3138,6 +3164,200 @@ struct URead {
     shape: u32,
 }
 
+fn terminal_soft_clip(ops: &[Op], reverse: bool) -> usize {
+    let mut index = if reverse { 0 } else { ops.len() };
+    loop {
+        let op = if reverse {
+            let Some(op) = ops.get(index) else { return 0 };
+            index += 1;
+            op
+        } else {
+            let Some(next) = index.checked_sub(1) else {
+                return 0;
+            };
+            index = next;
+            &ops[index]
+        };
+        match op {
+            Op::HardClip(_) | Op::Pad(_) => continue,
+            Op::SoftClip(length) => return *length as usize,
+            _ => return 0,
+        }
+    }
+}
+
+/// Exact read-level signal. Qualification and duplicate ranking use the unsaturated counts; only
+/// the selected archive observable is saturated for its packed five-bit fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RawTerminalTailSignal {
+    clip_len: usize,
+    tail_bases: usize,
+    terminal_run: usize,
+}
+
+type ExtractRowsInnerOutput = (
+    Extracted,
+    Option<ConsumedFileIdentity>,
+    Option<ExtractedTerminalTails>,
+    Vec<BamProgram>,
+);
+type TerminalTailDedupKey = (u32, u32, bool, u32, u32);
+type TerminalTailDedupValue = (usize, RawTerminalTailSignal);
+
+impl RawTerminalTailSignal {
+    fn from_counts(clip_len: usize, tail_bases: usize, terminal_run: usize) -> Self {
+        Self {
+            clip_len,
+            tail_bases,
+            terminal_run,
+        }
+    }
+
+    fn positive(self) -> bool {
+        self.clip_len >= usize::from(evidence_io::terminal_tail::MIN_CLIP)
+            && (self.tail_bases as u128)
+                * u128::from(evidence_io::terminal_tail::MIN_TAIL_DENOMINATOR)
+                >= (self.clip_len as u128)
+                    * u128::from(evidence_io::terminal_tail::MIN_TAIL_NUMERATOR)
+            && self.terminal_run >= usize::from(evidence_io::terminal_tail::MIN_TERMINAL_RUN)
+    }
+
+    fn stronger_than(self, other: Self) -> bool {
+        let left = (self.tail_bases as u128) * (other.clip_len.max(1) as u128);
+        let right = (other.tail_bases as u128) * (self.clip_len.max(1) as u128);
+        (left, self.terminal_run, self.clip_len) > (right, other.terminal_run, other.clip_len)
+    }
+
+    fn stored(self) -> TerminalTailSignal {
+        TerminalTailSignal::saturated(self.clip_len, self.tail_bases, self.terminal_run)
+    }
+}
+
+fn terminal_tail_signal(
+    sequence: &bam::record::Sequence<'_>,
+    clip_len: usize,
+    reverse: bool,
+) -> Option<RawTerminalTailSignal> {
+    if clip_len == 0 || clip_len > sequence.len() {
+        return None;
+    }
+    let target = if reverse { b'T' } else { b'A' };
+    let start = if reverse {
+        0
+    } else {
+        sequence.len() - clip_len
+    };
+    let mut tail_bases = 0usize;
+    for index in start..start + clip_len {
+        tail_bases += usize::from(sequence.get(index)? == target);
+    }
+    let terminal_run = if reverse {
+        (0..clip_len)
+            .take_while(|&index| sequence.get(index) == Some(target))
+            .count()
+    } else {
+        (start..start + clip_len)
+            .rev()
+            .take_while(|&index| sequence.get(index) == Some(target))
+            .count()
+    };
+    let signal = RawTerminalTailSignal::from_counts(clip_len, tail_bases, terminal_run);
+    signal.positive().then_some(signal)
+}
+
+#[cfg(test)]
+mod terminal_tail_signal_tests {
+    use super::RawTerminalTailSignal;
+
+    #[test]
+    fn duplicate_ranking_uses_exact_signal_before_five_bit_storage() {
+        let longer = RawTerminalTailSignal {
+            clip_len: 40,
+            tail_bases: 36,
+            terminal_run: 10,
+        };
+        let purer = RawTerminalTailSignal {
+            clip_len: 31,
+            tail_bases: 29,
+            terminal_run: 20,
+        };
+        assert!(purer.stronger_than(longer));
+        assert!(!purer.stored().stronger_than(longer.stored()));
+        assert_eq!(purer.stored().clip_len, 31);
+        assert_eq!(purer.stored().tail_bases, 29);
+    }
+
+    #[test]
+    fn qualification_uses_exact_long_clip_fraction_before_bounded_storage() {
+        let false_positive_if_saturated = RawTerminalTailSignal::from_counts(300, 204, 4);
+        assert!(!false_positive_if_saturated.positive());
+
+        let qualifying = RawTerminalTailSignal::from_counts(300, 240, 4);
+        assert!(qualifying.positive());
+        assert_eq!(qualifying.stored().clip_len, 31);
+        assert_eq!(qualifying.stored().tail_bases, 31);
+        assert_eq!(qualifying.stored().terminal_run, 4);
+    }
+}
+
+fn bam_programs(header: &noodles_sam::Header) -> Result<Vec<BamProgram>> {
+    use noodles_sam::header::record::value::map::program::tag;
+
+    fn text(value: Option<&[u8]>, field: &str, id: &[u8]) -> Result<Option<String>> {
+        value
+            .map(|value| {
+                String::from_utf8(value.to_vec()).with_context(|| {
+                    format!(
+                        "BAM @PG {} for program {} is not valid UTF-8",
+                        field,
+                        String::from_utf8_lossy(id)
+                    )
+                })
+            })
+            .transpose()
+    }
+
+    header
+        .programs()
+        .as_ref()
+        .iter()
+        .map(|(id, program)| {
+            let id_text =
+                String::from_utf8(id.to_vec()).context("BAM @PG ID is not valid UTF-8")?;
+            Ok(BamProgram {
+                status: ProvenanceStatus::VerifiedBamHeader,
+                id: id_text,
+                name: text(
+                    program.other_fields().get(&tag::NAME).map(AsRef::as_ref),
+                    "PN",
+                    id.as_ref(),
+                )?,
+                version: text(
+                    program.other_fields().get(&tag::VERSION).map(AsRef::as_ref),
+                    "VN",
+                    id.as_ref(),
+                )?,
+                command_line: text(
+                    program
+                        .other_fields()
+                        .get(&tag::COMMAND_LINE)
+                        .map(AsRef::as_ref),
+                    "CL",
+                    id.as_ref(),
+                )?,
+                previous_program_id: text(
+                    program
+                        .other_fields()
+                        .get(&tag::PREVIOUS_PROGRAM_ID)
+                        .map(AsRef::as_ref),
+                    "PP",
+                    id.as_ref(),
+                )?,
+            })
+        })
+        .collect()
+}
+
 /// BAM reader over a multithreaded BGZF decoder: block inflation runs on a worker pool while the
 /// caller parses records. Worker count is deliberately below the rayon cap — beyond ~8 the serial
 /// record-parsing consumer is the bottleneck, not decompression.
@@ -3160,7 +3380,7 @@ fn bam_reader_mt(
 
 pub fn extract_rows(bam_path: &PathBuf, whitelist: &PathBuf, locus_gap: u32) -> Result<Extracted> {
     let wl = load_whitelist(whitelist)?;
-    Ok(extract_rows_inner(bam_path, wl, locus_gap, false)?.0)
+    Ok(extract_rows_inner(bam_path, wl, locus_gap, false, false, false)?.0)
 }
 
 /// Reporting path: parse the exact whitelist snapshot supplied by the caller and derive the BAM
@@ -3170,20 +3390,75 @@ pub(crate) fn extract_rows_with_identity(
     whitelist_text: &str,
     locus_gap: u32,
 ) -> Result<(Extracted, ConsumedFileIdentity)> {
-    let mut wl = FxHashSet::default();
-    for line in whitelist_text.lines() {
-        let bases = line.trim().as_bytes();
-        if bases.len() == 16 {
-            if let Some(packed) = umi::pack(bases) {
-                wl.insert(packed);
-            }
-        }
-    }
-    let (extracted, identity) = extract_rows_inner(bam_path, wl, locus_gap, true)?;
+    let wl = parse_whitelist_text_strict(whitelist_text)?;
+    let (extracted, identity, _, _) =
+        extract_rows_inner(bam_path, wl, locus_gap, true, false, false)?;
     Ok((
         extracted,
         identity.expect("reporting extraction requested a BAM identity"),
     ))
+}
+
+/// Archive-ingest path: in addition to the core quotient, bind the exact consumed BAM and its
+/// `@PG` records and optionally retain the frozen terminal-tail observable.
+pub(crate) fn extract_rows_for_archive(
+    bam_path: &PathBuf,
+    whitelist_text: &str,
+    locus_gap: u32,
+    terminal_tails: bool,
+) -> Result<ArchiveExtraction> {
+    let wl = parse_whitelist_text_strict(whitelist_text)?;
+    let (evidence, identity, tails, programs) =
+        extract_rows_inner(bam_path, wl, locus_gap, true, terminal_tails, true)?;
+    Ok(ArchiveExtraction {
+        evidence,
+        terminal_tails: tails,
+        bam_identity: identity.expect("archive extraction requested a BAM identity"),
+        bam_programs: programs,
+    })
+}
+
+/// Parse a snapshotted external cell-barcode scope without allowing the variable-width packed
+/// nucleotide representation to alias a short value to a 16 bp barcode. The legacy non-reporting
+/// extraction path intentionally retains `load_whitelist` behavior.
+fn parse_whitelist_text_strict(whitelist_text: &str) -> Result<FxHashSet<u32>> {
+    let mut wl = FxHashSet::default();
+    for (line_no, line) in whitelist_text.lines().enumerate() {
+        let barcode = line.trim();
+        if barcode.is_empty() {
+            continue;
+        }
+        if barcode.len() != 16 {
+            bail!(
+                "whitelist line {}: barcode must contain exactly 16 A/C/G/T bases",
+                line_no + 1
+            );
+        }
+        let packed = umi::pack(barcode.as_bytes()).with_context(|| {
+            format!(
+                "whitelist line {}: barcode must contain exactly 16 A/C/G/T bases",
+                line_no + 1
+            )
+        })?;
+        wl.insert(packed);
+    }
+    Ok(wl)
+}
+
+#[cfg(test)]
+mod strict_whitelist_tests {
+    use super::parse_whitelist_text_strict;
+
+    #[test]
+    fn short_barcode_cannot_alias_a_sixteen_base_whitelist_entry() {
+        let short = parse_whitelist_text_strict("A\n").unwrap_err();
+        assert!(short
+            .to_string()
+            .contains("barcode must contain exactly 16 A/C/G/T bases"));
+
+        let parsed = parse_whitelist_text_strict("AAAAAAAAAAAAAAAA\n").unwrap();
+        assert_eq!(parsed.len(), 1);
+    }
 }
 
 fn extract_rows_inner(
@@ -3191,7 +3466,9 @@ fn extract_rows_inner(
     wl: FxHashSet<u32>,
     locus_gap: u32,
     capture_identity: bool,
-) -> Result<(Extracted, Option<ConsumedFileIdentity>)> {
+    capture_terminal_tails: bool,
+    capture_bam_programs: bool,
+) -> Result<ExtractRowsInnerOutput> {
     let source = if capture_identity {
         let file = File::open(bam_path)
             .with_context(|| format!("opening {}", bam_path.display()))?;
@@ -3252,6 +3529,11 @@ fn extract_rows_inner(
         None => (open_bam_mt(bam_path)?, None),
     };
     let header = reader.read_header()?;
+    let bam_programs = if capture_bam_programs {
+        bam_programs(&header)?
+    } else {
+        Vec::new()
+    };
     let chrom_names: Vec<String> = header
         .reference_sequences()
         .keys()
@@ -3271,6 +3553,9 @@ fn extract_rows_inner(
     type MultimapSignature = (u32, u32, u32, u32);
     type UmiMultimapSignatures = (u32, Vec<MultimapSignature>);
     let mut mm: FxHashMap<u64, MmEntry> = FxHashMap::default();
+    type UniqueTailKey = (u32, u32, u32, u32, bool, u32);
+    let mut unique_tail_events: FxHashMap<UniqueTailKey, Vec<(u32, RawTerminalTailSignal)>> =
+        FxHashMap::default();
 
     let mut rec = bam::Record::default();
     while reader.read_record(&mut rec)? != 0 {
@@ -3279,6 +3564,7 @@ fn extract_rows_inner(
             continue;
         }
         let (mut cr_b, mut cy_b, mut ur, mut nh) = (None::<Vec<u8>>, None::<Vec<u8>>, None, 1u16);
+        let mut nh_is_explicit_one = false;
         for field in rec.data().iter() {
             let (tag, value) = field?;
             let key = <[u8; 2]>::from(tag);
@@ -3291,15 +3577,17 @@ fn extract_rows_inner(
                 },
                 v => {
                     if key == *b"NH" {
-                        nh = match v {
-                            Value::Int8(x) => x as u16,
-                            Value::UInt8(x) => x as u16,
-                            Value::Int16(x) => x as u16,
-                            Value::UInt16(x) => x,
-                            Value::Int32(x) => x as u16,
-                            Value::UInt32(x) => x as u16,
-                            _ => 1,
+                        let (value, is_one) = match v {
+                            Value::Int8(x) => (x as u16, x == 1),
+                            Value::UInt8(x) => (x as u16, x == 1),
+                            Value::Int16(x) => (x as u16, x == 1),
+                            Value::UInt16(x) => (x, x == 1),
+                            Value::Int32(x) => (x as u16, x == 1),
+                            Value::UInt32(x) => (x as u16, x == 1),
+                            _ => (1, false),
                         };
+                        nh = value;
+                        nh_is_explicit_one = is_one;
                     }
                 }
             }
@@ -3310,9 +3598,9 @@ fn extract_rows_inner(
             .transpose()?
             .map(|p| usize::from(p) as u32 - 1)
             .unwrap_or(0);
-        let pl = placement_from_alignment(
-            chrom, pos, flags.is_reverse_complemented(), &to_ops(rec.cigar().iter())?, 0, 0, nh,
-        );
+        let ops = to_ops(rec.cigar().iter())?;
+        let pl =
+            placement_from_alignment(chrom, pos, flags.is_reverse_complemented(), &ops, 0, 0, nh);
         let shape_id = {
             let s = Shape::of(&pl);
             match shape_intern.get(&s) {
@@ -3337,6 +3625,9 @@ fn extract_rows_inner(
         };
 
         if nh > 1 {
+            // The v1 tail section stores an exact cleavage coordinate but no association to one
+            // alternative in a multimapper pattern. A BAM-primary placement is not evidence that
+            // this is the true tail coordinate, so terminal extraction is intentionally NH=1 only.
             let key = {
                 use std::hash::{Hash, Hasher};
                 let mut h = rustc_hash::FxHasher::default();
@@ -3374,6 +3665,29 @@ fn extract_rows_inner(
             cells.push(packed);
             next
         });
+        if capture_terminal_tails && nh_is_explicit_one {
+            let clip_len = terminal_soft_clip(&ops, flags.is_reverse_complemented());
+            if let Some(signal) =
+                terminal_tail_signal(&rec.sequence(), clip_len, flags.is_reverse_complemented())
+            {
+                let anchor = if flags.is_reverse_complemented() {
+                    pl.start()
+                } else {
+                    pl.end()
+                };
+                unique_tail_events
+                    .entry((
+                        cell,
+                        u,
+                        chrom,
+                        pl.start(),
+                        flags.is_reverse_complemented(),
+                        shape_id,
+                    ))
+                    .or_default()
+                    .push((anchor, signal));
+            }
+        }
         ureads.push(URead {
             cell, umi: u, chrom, pos: pl.start(), strand_rev: flags.is_reverse_complemented(), shape: shape_id,
         });
@@ -3407,7 +3721,7 @@ fn extract_rows_inner(
         pattern: u32,
     }
     let mut mreads: Vec<MRead> = Vec::new();
-    for (_k, (cb, prim_idx, mut alts)) in mm.drain() {
+    for (_read_name_key, (cb, prim_idx, mut alternatives)) in mm.drain() {
         let (Some((packed_cell, u)), Some(pi)) = (cb, prim_idx) else {
             continue;
         };
@@ -3416,9 +3730,9 @@ fn extract_rows_inner(
             cells.push(packed_cell);
             next
         });
-        let (a_chrom, a_pos, a_rev, a_shape) = alts[pi];
-        alts.sort_unstable_by_key(|&(c, p, _, _)| (c, p));
-        let pat: Vec<PatAlt> = alts
+        let (a_chrom, a_pos, a_rev, a_shape) = alternatives[pi];
+        alternatives.sort_unstable_by_key(|&(c, p, _, _)| (c, p));
+        let pat: Vec<PatAlt> = alternatives
             .iter()
             .map(|&(c, p, r, s)| PatAlt {
                 chrom: c,
@@ -3446,6 +3760,9 @@ fn extract_rows_inner(
     mreads.sort_unstable_by_key(|r| (r.cell, r.chrom, r.strand_rev, r.pos));
 
     let mut mols: Vec<MolRec> = Vec::new();
+    // Sparse `(temporary molecule ordinal, cleavage anchor, signal)` attachments. Keeping this
+    // separate avoids adding a Vec-sized field to every core molecule when the capability is off.
+    let mut raw_tail_events: Vec<(usize, u32, RawTerminalTailSignal)> = Vec::new();
     let mut edges: Vec<(u32, u32)> = Vec::new();
     let mut n_classes = 0u32;
     // Global class map: (cell, umi value) -> class id. Value semantics, not locus semantics.
@@ -3529,6 +3846,22 @@ fn extract_rows_inner(
             }
             // One MolRec per UMI in this locus, gathering all its chains.
             let mut per_umi: FxHashMap<u32, SmallVec<[MolChain; 1]>> = FxHashMap::default();
+            let mut per_umi_tails: FxHashMap<u32, Vec<(u32, RawTerminalTailSignal)>> =
+                FxHashMap::default();
+            if capture_terminal_tails {
+                for read in locus {
+                    if let Some(events) = unique_tail_events.remove(&(
+                        read.cell,
+                        read.umi,
+                        read.chrom,
+                        read.pos,
+                        read.strand_rev,
+                        read.shape,
+                    )) {
+                        per_umi_tails.entry(read.umi).or_default().extend(events);
+                    }
+                }
+            }
             let mut items: Vec<(ChainKey, ChainExtrema)> = chains.into_iter().collect();
             items.sort_unstable_by_key(|((u, ch), _)| (*u, *ch));
             for ((u, _ch), (ci, ei, w)) in items {
@@ -3548,9 +3881,34 @@ fn extract_rows_inner(
                 // after this sort chains[0].reps[0].0 IS the molecule anchor — the serialization
                 // elides that first representative's offset with no flag.
                 chains.sort_unstable_by_key(|c| (c.reps[0], c.reps.last().copied(), c.weight));
-                let anchor = chains.iter().flat_map(|c| c.reps.iter().map(|r| r.0)).min().unwrap_or(0);
-                let cls = class_of(u, anchor, &mut global_classes, &mut cell_values, &mut n_classes);
-                mols.push(MolRec { cell, umi_class: cls, chrom, strand_rev, chains, mms: SmallVec::new() });
+                let anchor = chains
+                    .iter()
+                    .flat_map(|c| c.reps.iter().map(|r| r.0))
+                    .min()
+                    .unwrap_or(0);
+                let cls = class_of(
+                    u,
+                    anchor,
+                    &mut global_classes,
+                    &mut cell_values,
+                    &mut n_classes,
+                );
+                let molecule_ordinal = mols.len();
+                mols.push(MolRec {
+                    cell,
+                    umi_class: cls,
+                    chrom,
+                    strand_rev,
+                    chains,
+                    mms: SmallVec::new(),
+                });
+                if let Some(events) = per_umi_tails.remove(&u) {
+                    raw_tail_events.extend(
+                        events
+                            .into_iter()
+                            .map(|(anchor, signal)| (molecule_ordinal, anchor, signal)),
+                    );
+                }
             }
         }
 
@@ -3620,7 +3978,32 @@ fn extract_rows_inner(
     // Serialized molecule order: genome-major by anchor. Class ids are then renumbered by first
     // occurrence in THIS order. Cell-major ids delta-code poorly against genome-major storage, so
     // renumbering is applied at molecule granularity.
+    // The sparse side map retains structural identities only for selected molecules. Core
+    // molecules themselves always take the exact same sort path and element layout, so enabling
+    // tail capture cannot perturb the established ten evidence streams even when primary sort
+    // keys tie.
+    let selected_before_sort = capture_terminal_tails.then(|| {
+        raw_tail_events
+            .iter()
+            .map(|(ordinal, _, _)| (*ordinal, mols[*ordinal].clone()))
+            .collect::<FxHashMap<_, _>>()
+    });
     mols.sort_unstable_by_key(|m| (m.chrom, m.anchor(), m.cell, m.umi_class, m.strand_rev));
+    if let Some(selected_before_sort) = selected_before_sort {
+        let selected_records: FxHashSet<MolRec> = selected_before_sort.values().cloned().collect();
+        let mut first_ordinal: FxHashMap<MolRec, usize> = FxHashMap::default();
+        for (ordinal, molecule) in mols.iter().enumerate() {
+            if selected_records.contains(molecule) {
+                first_ordinal.entry(molecule.clone()).or_insert(ordinal);
+            }
+        }
+        for (ordinal, _, _) in &mut raw_tail_events {
+            let record = &selected_before_sort[ordinal];
+            *ordinal = *first_ordinal
+                .get(record)
+                .expect("selected molecule survived serialized-order sort");
+        }
+    }
     {
         let mut remap: FxHashMap<u32, u32> = FxHashMap::default();
         for m in mols.iter_mut() {
@@ -3636,6 +4019,56 @@ fn extract_rows_inner(
     }
     edges.sort_unstable();
     edges.dedup();
+
+    let terminal_tails = capture_terminal_tails.then(|| {
+        // The frozen witness key is `(chrom, cleavage anchor, strand, corrected cell, UMI)`.
+        // Cell and UMI are represented exactly here by `(cell, umi_class)`. If duplicate-key
+        // witnesses were absorbed into different emitted records, the ordinal and signal remain
+        // one atomic witness: attach the selected strongest signal to the record it came from.
+        // Exact-signal ties choose the first serialized record deterministically.
+        let mut deduplicated: BTreeMap<TerminalTailDedupKey, TerminalTailDedupValue> =
+            BTreeMap::new();
+        for (ordinal, anchor, signal) in raw_tail_events {
+            let molecule = &mols[ordinal];
+            let key = (
+                molecule.chrom,
+                anchor,
+                molecule.strand_rev,
+                molecule.cell,
+                molecule.umi_class,
+            );
+            deduplicated
+                .entry(key)
+                .and_modify(|(current_ordinal, current_signal)| {
+                    if signal.stronger_than(*current_signal)
+                        || (signal == *current_signal && ordinal < *current_ordinal)
+                    {
+                        *current_ordinal = ordinal;
+                        *current_signal = signal;
+                    }
+                })
+                .or_insert((ordinal, signal));
+        }
+        let mut by_molecule: BTreeMap<u64, Vec<(u32, TerminalTailSignal)>> = BTreeMap::new();
+        for ((_, anchor, _, _, _), (ordinal, signal)) in deduplicated {
+            by_molecule
+                .entry(ordinal as u64)
+                .or_default()
+                .push((anchor, signal.stored()));
+        }
+        ExtractedTerminalTails {
+            molecules: by_molecule
+                .into_iter()
+                .map(|(molecule_ordinal, mut events)| {
+                    events.sort_unstable_by_key(|(anchor, signal)| (*anchor, *signal));
+                    MoleculeTerminalTailEvents {
+                        molecule_ordinal,
+                        events,
+                    }
+                })
+                .collect(),
+        }
+    });
 
     let extracted = Extracted {
         mols,
@@ -3653,7 +4086,7 @@ fn extract_rows_inner(
                 .map_err(|_| anyhow::anyhow!("BAM identity thread panicked"))?
         })
         .transpose()?;
-    Ok((extracted, identity))
+    Ok((extracted, identity, terminal_tails, bam_programs))
 }
 
 type ReplayTuple = (u32, u32, u32, u32); // (cell, class, gene, weight)

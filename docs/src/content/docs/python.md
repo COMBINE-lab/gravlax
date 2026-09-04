@@ -140,6 +140,59 @@ from classes derived from every original read, and their
 `no_compatible_transcript` and `conflict` flags are
 non-exclusive.
 
+Boolean same-record queries and whole-collection reverse search also have
+argument-safe wrappers:
+
+```python
+cooccurrence = aie.query_cooccurrence(
+    "sample.aie",
+    {
+        "locus": "region:chr1:155230000-155240000:+",
+        "splice": "junction:chr1:155234452-155235327:+",
+        "tail": "terminal:chr1:155239900-155240025:+",
+    },
+    "locus & splice & !tail",
+    universe="locus",
+    groups="cell-types.tsv",
+    aggregation="group",
+)
+print(cooccurrence.table("patterns").records())
+
+events = aie.collection_find_events(
+    "atlas.aicollection",
+    kinds=("junction", "cassette", "terminal-tail"),
+    design="donors.tsv",
+    groups="atlas-groups.tsv",
+    require_groups=("neuron", "astrocyte"),
+    min_donors=4,
+    terminal_cluster_bp=25,
+    max_terminal_events=10_000_000,
+    annotation="gencode.v49.aic",
+    assembly="GRCh38",
+    annotation_label="GENCODE 49",
+    novel_only=True,
+)
+print(events.table("entities").records())
+```
+
+Use `collection_find_events_to_file(..., replace=False)` for a large atlas
+result so the subprocess stream is installed atomically without being retained
+in Python memory.
+
+The co-occurrence universe bounds the candidate population. `!` denotes only
+absence from the selected retained evidence unit. The `selection_state` is
+`unknown` when representative reduction prevents that absence from being
+established; positive matches always have a stored witness. Co-occurrence uses
+unique-chain records by default. UMI-class merging requires
+`allow_full_scan=True`, joins only exact raw UMI values (not one-mismatch
+edges), and may combine distinct physical molecules after a cell-local
+collision. Collection discovery generates candidates from the
+compact collection catalogue, but reports only unique-chain exact raw-UMI-value
+class counts recomputed from the rooted source archives. Its annotation
+identity is a caller declaration retained in provenance; contig-name matching
+is checked, but the command does not infer that a GTF and collection were built
+from the same assembly.
+
 Historical query `--json` responses remain command-specific for byte
 compatibility. Supported result-streaming query families expose the typed
 envelope explicitly through `--format=json`. Commands that advertise a

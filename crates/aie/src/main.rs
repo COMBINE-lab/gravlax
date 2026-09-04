@@ -98,7 +98,7 @@ enum Cmd {
     /// stream encodings.
     #[command(hide = true)]
     SigStats(sigstats::Args),
-    /// Build an authenticated .aie v2 archive from an annotation-free ingest BAM.
+    /// Build an authenticated .aie v2 archive from a tagged, coordinate-sorted ingest BAM.
     IngestArchive(archivecmd::IngestArgs),
     /// Compile a GTF into a deterministic, guarded annotation artifact for fast reuse.
     CompileAnnotation(CompileAnnotationArgs),

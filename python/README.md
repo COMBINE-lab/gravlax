@@ -136,6 +136,44 @@ written = aie.query_junction_to_file(
 bundle = aie.result_bundle_from_file(written.output_path)
 ```
 
+Boolean evidence-unit queries and atlas-wide event discovery have argument-safe
+wrappers and matching bounded-memory file variants:
+
+```python
+cooccurrence = aie.query_cooccurrence(
+    "sample.aie",
+    {
+        "locus": "region:chr1:155230000-155240000:+",
+        "splice": "junction:chr1:155234452-155235327:+",
+        "tail": "terminal:chr1:155239900-155240025:+",
+    },
+    "locus & splice & !tail",
+    universe="locus",
+)
+for pattern in cooccurrence.table("patterns").records():
+    print(pattern["pattern_mask"], pattern["selection_state"])
+
+written = aie.collection_find_events_to_file(
+    "atlas.aicollection",
+    "events.json",
+    kinds=("junction", "cassette", "terminal-tail"),
+    design="donors.tsv",
+    groups="groups.tsv",
+    min_donors=3,
+)
+```
+
+`selection_state="unknown"` preserves an unresolvable absence when a
+two-representative chain omitted middle read placements; a positive predicate
+always has a retained witness. `unit="umi-class"` requires
+`allow_full_scan=True` and describes a barcode-corrected cell plus exact raw
+UMI-value class; it does not collapse one-mismatch UMI edges and is not proof
+of one physical molecule. The default `placements="unique"` excludes
+multimappers; `direct` and `all` are explicitly diagnostic placement modes.
+`collection_find_events_to_file()` rebuilds unique-chain, exact raw-UMI-value
+class counts by sample, donor, and group from the collection's rooted source
+archives and keeps the result stream out of Python memory.
+
 For any command that emits the same JSON contract, `result_bundle(args)` and
 `parse_uniform_bundle(document)` expose unique named tables, typed fields,
 row semantics, and exact or deferred selection metadata. A deferred one-pass

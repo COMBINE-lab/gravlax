@@ -144,7 +144,7 @@ fn public_help_groups_research_instruments_under_dev() {
         .unwrap();
     assert!(ingest.status.success());
     let ingest_help = String::from_utf8_lossy(&ingest.stdout);
-    assert!(!ingest_help.contains("frozen"));
+    assert!(!ingest_help.contains("frozen decision"));
     assert!(!ingest_help.contains("open block-size decision"));
     assert!(ingest_help.contains("authenticated .aie v2 archive"));
 

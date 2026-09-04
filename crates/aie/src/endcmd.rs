@@ -630,7 +630,7 @@ fn load_group_map(
         let Some(group) = contrast.iter().position(|value| value == fields[1]) else {
             continue;
         };
-        let packed = evidence_io::umi::pack(fields[0].as_bytes()).with_context(|| {
+        let packed = crate::querycmd::pack_cell_barcode_16(fields[0]).with_context(|| {
             format!(
                 "invalid barcode on {} line {}",
                 path.display(),

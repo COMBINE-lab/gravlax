@@ -41,6 +41,7 @@ export default defineConfig({
           items: [
             { label: 'Workflow and interfaces', link: '/workflow/' },
             { label: 'Capabilities', link: '/capabilities/' },
+            { label: 'Reproducible demonstrations', link: '/demos/' },
             { label: 'Python and AnnData', link: '/python/' },
             { label: 'The .aie format', link: '/format/' },
           ],
@@ -69,7 +70,6 @@ export default defineConfig({
             { label: 'aie stamp-genome', link: '/cli/stamp-genome/' },
             { label: 'Archive identity and sealing', link: '/cli/archive-integrity/' },
             { label: 'aie dev em', link: '/cli/em/' },
-            { label: 'Development commands', link: '/cli/development/' },
           ],
         },
       ],

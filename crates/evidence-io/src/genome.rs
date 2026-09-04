@@ -1,11 +1,13 @@
-//! Genome identity: a signature of the reference the archive's coordinates live on.
+//! Genome identity: a signature of the reference currently bound to an archive.
 //!
 //! The archive stores coordinates, never sequence; any consumer that *does* consult sequence
-//! (internal-priming filters and extension decisions) must be looking at the same genome the reads were
-//! aligned to, or its answers are silently wrong. The signature makes that checkable: per-contig
-//! BLAKE3 over the uppercased bases (whitespace ignored, so it is invariant to line wrapping and
-//! gzip framing), plus one combined digest over the sorted (name, length, hash) triples. It lives
-//! in the archive's `meta` section under `"genome_sig"`; readers that predate it ignore the key.
+//! (internal-priming filters and extension decisions) must use the same bound reference, or its
+//! answers are silently wrong. The signature makes that checkable: per-contig BLAKE3 over the
+//! uppercased bases (whitespace ignored, so it is invariant to line wrapping and gzip framing),
+//! plus one combined digest over the sorted (name, length, hash) triples. It lives in the archive's
+//! `meta` section under `"genome_sig"`; readers that predate it ignore the key. A signature proves
+//! sequence identity, not that the reference generated the original alignment; logical-v2
+//! archives record that relationship separately as an explicit caller declaration.
 //!
 //! Validation is per-contig on purpose: a windowed query loads one chromosome and can verify just
 //! that contig's hash instead of re-hashing 3 GB, and a dev archive restricted to one chromosome
@@ -25,14 +27,14 @@ fn finalize_reset(h: &mut blake3::Hasher) -> String {
     out
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ContigSig {
     pub name: String,
     pub len: u64,
     pub blake3: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GenomeSig {
     pub algo: String,
     /// BLAKE3 over "name\tlen\tblake3\n" lines, contigs sorted by name.
@@ -53,6 +55,27 @@ impl GenomeSig {
             h.update(format!("{}\t{}\t{}\n", c.name, c.len, c.blake3).as_bytes());
         }
         h.finalize().to_hex().to_string()
+    }
+
+    /// Validate a stored normalized signature before it participates in a provenance binding.
+    pub fn validate(&self) -> Result<()> {
+        if self.algo != GENOME_SIG_ALGO || self.contigs.is_empty() {
+            bail!("invalid genome signature algorithm or empty contig set");
+        }
+        let mut names = std::collections::BTreeSet::new();
+        for contig in &self.contigs {
+            if contig.name.is_empty()
+                || !names.insert(&contig.name)
+                || contig.blake3.len() != 64
+                || !contig.blake3.bytes().all(|byte| byte.is_ascii_hexdigit())
+            {
+                bail!("genome signature contains an invalid contig record");
+            }
+        }
+        if self.digest != Self::combined_digest(&self.contigs) {
+            bail!("genome signature combined digest is inconsistent with its contigs");
+        }
+        Ok(())
     }
 }
 
@@ -219,6 +242,7 @@ mod tests {
         assert_eq!(sig1.digest, sig2.digest);
         assert_eq!(sig1.contigs.len(), 2);
         assert_eq!(sig1.contig("chrA").unwrap().len, 8);
+        sig1.validate().unwrap();
         let seq = load_contig(&a, "chrB", Some(&sig1)).unwrap();
         assert_eq!(seq, b"NNNACG");
         std::fs::remove_file(&a).ok();
@@ -232,6 +256,24 @@ mod tests {
         assert!(verify_contig(&sig, "chrA", b"ACGT").is_err());
         assert!(verify_contig(&sig, "chrZ", b"ACGTACGT").is_err());
         assert!(verify_contig(&sig, "chrA", b"ACGTACGT").is_ok());
+        std::fs::remove_file(&a).ok();
+    }
+
+    #[test]
+    fn malformed_stored_signature_is_rejected() {
+        let a = temp_fasta("invalid", ">chrA\nACGTACGT\n");
+        let mut sig = sig_from_fasta(&a).unwrap();
+        let replacement = if sig.digest.starts_with('0') {
+            "1"
+        } else {
+            "0"
+        };
+        sig.digest.replace_range(..1, replacement);
+        assert!(sig.validate().is_err());
+        let mut duplicate = sig_from_fasta(&a).unwrap();
+        duplicate.contigs.push(duplicate.contigs[0].clone());
+        duplicate.digest = GenomeSig::combined_digest(&duplicate.contigs);
+        assert!(duplicate.validate().is_err());
         std::fs::remove_file(&a).ok();
     }
 }

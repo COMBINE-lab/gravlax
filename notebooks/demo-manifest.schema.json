@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gravlax:schema:demo-capsule:v1",
+  "title": "Gravlax immutable demonstration capsule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "software", "resources", "stories"],
+  "properties": {
+    "schema": {"const": "gravlax.demo-capsule.v1"},
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "aie", "python_wheel"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "aie": {"$ref": "#/$defs/asset"},
+        "python_wheel": {"$ref": "#/$defs/asset"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/asset"}
+    },
+    "stories": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotation_reinterpretation", "event_discovery", "junction_drilldown"],
+      "properties": {
+        "annotation_reinterpretation": {"$ref": "#/$defs/annotation_story"},
+        "event_discovery": {"$ref": "#/$defs/event_story"},
+        "junction_drilldown": {"$ref": "#/$defs/drilldown_story"}
+      }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "filename"],
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "filename": {"type": "string", "pattern": "^[^/\\\\]+$"},
+        "member": {"type": "string", "minLength": 1},
+        "archive_root": {"type": "string", "pattern": "^aie-directory-root-v2:[0-9a-f]{64}$"}
+      }
+    },
+    "archive_map": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "annotation_story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archive", "annotation_before", "annotation_after", "assembly", "before_label", "after_label"],
+      "properties": {
+        "archive": {"type": "string", "minLength": 1},
+        "annotation_before": {"type": "string", "minLength": 1},
+        "annotation_after": {"type": "string", "minLength": 1},
+        "assembly": {"type": "string", "minLength": 1},
+        "before_label": {"type": "string", "minLength": 1},
+        "after_label": {"type": "string", "minLength": 1},
+        "max_molecule_witnesses": {"type": "integer", "minimum": 1}
+      }
+    },
+    "event_story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archives", "groups", "design"],
+      "properties": {
+        "archives": {"$ref": "#/$defs/archive_map"},
+        "shape_routes": {"type": "boolean"},
+        "allow_unstamped": {"type": "boolean"},
+        "groups": {"type": "string", "minLength": 1},
+        "design": {"type": "string", "minLength": 1},
+        "annotation": {"type": "string", "minLength": 1},
+        "assembly": {"type": "string", "minLength": 1},
+        "annotation_label": {"type": "string", "minLength": 1},
+        "annotation_digest": {"type": "string", "pattern": "^blake3:[0-9a-f]{64}$"},
+        "kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["junction", "alt-acceptor", "alt-donor", "cassette", "terminal-tail"]}
+        },
+        "require_groups": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "min_group_umi_classes": {"type": "integer", "minimum": 1},
+        "min_donors": {"type": "integer", "minimum": 1},
+        "min_samples": {"type": "integer", "minimum": 1},
+        "min_umi_classes": {"type": "integer", "minimum": 1},
+        "min_side_umi_classes": {"type": "integer", "minimum": 1},
+        "min_support": {"type": "integer", "minimum": 0},
+        "terminal_cluster_bp": {"type": "integer", "minimum": 0},
+        "max_terminal_events": {"type": "integer", "minimum": 0},
+        "novel_only": {"type": "boolean"},
+        "solo_strand": {"enum": ["forward", "reverse", "unstranded"]},
+        "max_candidates": {"type": "integer", "minimum": 1},
+        "max_candidates_considered": {"type": "integer", "minimum": 1},
+        "max_routed_entries": {"type": "integer", "minimum": 1},
+        "max_exact_match_attempts": {"type": "integer", "minimum": 1},
+        "max_annotation_comparisons": {"type": "integer", "minimum": 1}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["annotation"]},
+          "then": {"required": ["assembly", "annotation_label"]}
+        }
+      ]
+    },
+    "drilldown_story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archives", "archive_sample", "junction", "predicates", "expression", "universe"],
+      "properties": {
+        "archives": {"$ref": "#/$defs/archive_map"},
+        "archive_sample": {"type": "string", "minLength": 1},
+        "shape_routes": {"type": "boolean"},
+        "allow_unstamped": {"type": "boolean"},
+        "groups": {"type": "string", "minLength": 1},
+        "junction": {"type": "string", "minLength": 1},
+        "predicates": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}},
+        "expression": {"type": "string", "minLength": 1},
+        "universe": {"type": "string", "minLength": 1},
+        "unit": {"enum": ["molecule-record", "umi-class"]},
+        "region_match": {"enum": ["anchor", "aligned-block"]},
+        "placements": {"enum": ["unique", "direct", "all"]},
+        "allow_full_scan": {"type": "boolean"},
+        "aggregation": {"enum": ["auto", "cell", "group", "bulk"]},
+        "emit_membership": {"type": "boolean"},
+        "max_memberships": {"type": "integer", "minimum": 1},
+        "max_pattern_rows": {"type": "integer", "minimum": 1},
+        "max_chunks": {"type": "integer", "minimum": 1},
+        "max_evidence_records": {"type": "integer", "minimum": 1},
+        "max_terminal_events": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

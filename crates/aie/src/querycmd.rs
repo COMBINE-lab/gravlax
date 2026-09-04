@@ -14,6 +14,8 @@
 //! Counting semantics: molecules are deduplicated per (cell, class) so the two span extremes of a
 //! chain never count twice; no gene model is consulted — these are annotation-free queries.
 
+mod cooccur;
+
 use crate::apastats;
 use crate::archivecmd::transcriptec::{
     derive_transcript_equivalence_classes_with_annotation, TranscriptEquivalenceOptions,
@@ -196,6 +198,8 @@ pub enum What {
         #[command(flatten)]
         scope: QueryScopeArgs,
     },
+    /// Evaluate named region, junction, and terminal-tail predicates on the same evidence unit.
+    Cooccur(cooccur::Args),
     /// Molecules with archive anchors in chrom:start-end; per-cell UMI counts to stdout.
     Region {
         /// e.g. chr6:73489308-73525587
@@ -623,7 +627,7 @@ fn load_transcript_ec_scope(
 ) -> Result<QueryScope> {
     let mut packed_to_id = FxHashMap::default();
     for cell in cells {
-        let packed = umi::pack(cell.barcode.as_bytes()).with_context(|| {
+        let packed = pack_cell_barcode_16(&cell.barcode).with_context(|| {
             format!(
                 "archive cell {} has an invalid stored barcode {}",
                 cell.cell_id, cell.barcode
@@ -666,7 +670,7 @@ fn load_query_scope_from_dictionary(
             if line.trim() != line || line.chars().any(char::is_whitespace) {
                 bail!("cell scope line {line_no} must contain exactly one barcode");
             }
-            let packed = umi::pack(line.as_bytes())
+            let packed = pack_cell_barcode_16(line)
                 .with_context(|| format!("cell scope line {line_no} has an invalid barcode"))?;
             let cell = packed_to_id.get(&packed).copied().with_context(|| {
                 format!("cell scope line {line_no}: barcode {line} is not in the archive")
@@ -701,7 +705,7 @@ fn load_query_scope_from_dictionary(
             {
                 bail!("group scope line {line_no} has invalid surrounding whitespace");
             }
-            let packed = umi::pack(fields[0].as_bytes())
+            let packed = pack_cell_barcode_16(fields[0])
                 .with_context(|| format!("group scope line {line_no} has an invalid barcode"))?;
             let cell = packed_to_id.get(&packed).copied().with_context(|| {
                 format!(
@@ -915,6 +919,15 @@ fn unpack_cell_bytes(packed: u32) -> [u8; 16] {
         packed >>= 2;
     }
     barcode
+}
+
+/// Pack an externally supplied archive cell barcode without allowing the length-erasing
+/// ambiguity of the generic two-bit sequence codec (`A`, `AA`, ..., and 16 `A`s all map to zero).
+pub(crate) fn pack_cell_barcode_16(barcode: &str) -> Result<u32> {
+    if barcode.len() != 16 {
+        bail!("barcode must contain exactly 16 A/C/G/T bases");
+    }
+    umi::pack(barcode.as_bytes()).context("barcode must contain exactly 16 A/C/G/T bases")
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -6054,6 +6067,7 @@ fn validate_query_args(what: &What) -> Result<()> {
         What::Batch { uniform_output, .. } => {
             validate_uniform_output_flags(uniform_output, false, false)?;
         }
+        What::Cooccur(args) => cooccur::validate(args)?,
         What::Region {
             plot,
             export_prefix,
@@ -6322,6 +6336,19 @@ pub fn run(args: Args) -> Result<()> {
                 t0,
                 t_open,
             })?;
+        }
+        What::Cooccur(args) => {
+            cooccur::run(
+                cooccur::RunContext {
+                    archive: &archive,
+                    la: &mut la,
+                    chunks: &chunks,
+                    chrom_names: &chrom_names,
+                    t0,
+                    t_open,
+                },
+                args,
+            )?;
         }
         What::Jset {
             include,
@@ -11785,6 +11812,18 @@ fn export_igv(
 mod junction_listing_tests {
     use super::*;
     use evidence_io::archive::put_varint;
+
+    #[test]
+    fn external_cell_barcodes_must_have_the_archive_width() {
+        assert_eq!(
+            pack_cell_barcode_16("AAAAAAAAAAAAAAAA").unwrap(),
+            umi::pack(b"AAAAAAAAAAAAAAAA").unwrap()
+        );
+        for ambiguous_prefix in ["A", "AA", "AAAAAAAAAAAAAAA"] {
+            assert!(pack_cell_barcode_16(ambiguous_prefix).is_err());
+        }
+        assert!(pack_cell_barcode_16("AAAAAAAAAAAAAAAN").is_err());
+    }
 
     fn catalogue_fixture() -> Vec<u8> {
         let mut raw = Vec::new();

@@ -8,10 +8,13 @@
 **Align once and query forever — a compact molecular-evidence index for annotation replay in
 single-cell RNA-seq.**
 
-Gravlax builds a compact, molecule-resolved evidence index (`.aie`) from raw 10x reads and a
-genome — **no annotation touches the build**. Supplying a compatible GTF at query time replays
-Gene, GeneFull, and Velocyto-style quantification from fixed genome alignments and fixed barcode
-correction. Archive-sourced and BAM-sourced Gravlax replay are byte-identical; compared with a
+Gravlax's recommended workflow builds a compact, molecule-resolved evidence index (`.aie`) from
+raw 10x reads and a genome, without consulting a gene annotation during alignment or evidence
+extraction. `ingest-archive` can also consume other compatible tagged alignments; the archive's
+root-bound provenance records whether the caller declared an alignment annotation. Supplying a
+compatible GTF at query time replays Gene, GeneFull, and Velocyto-style quantification from fixed
+genome alignments and fixed barcode correction. Archive-sourced and BAM-sourced Gravlax replay are
+byte-identical; compared with a
 fresh annotation-aware STARsolo run, the archive's two-representative encoding differs by
 0.22–0.45% of UMI mass across the four evaluated datasets. It occupies 11–18 bits per input read
 and opens in ~10 ms. Against a function-matched CRAM containing the same post-correction molecule
@@ -24,8 +27,12 @@ Because the evidence — not the interpretation — is what is stored, reanalysi
 - **Fast, bounded annotation replay** — quantify compatible past or future GTFs in seconds,
   without realignment or materializing the archive's molecule table.
 - **Indexed queries** — cell/group-scoped region, exact-junction, junction-set, automatic
-  splice-event, and junction-enumeration queries, plus 3′-site queries, from milliseconds to
-  chromosome-scale scans.
+  splice-event, junction-enumeration, and Boolean same-record queries, plus 3′-site queries, from
+  milliseconds to chromosome-scale scans.
+- **Atlas-wide reverse search** — find recurrent molecule-supported junctions, splice patterns,
+  and optional terminal-tail events across donors and cell groups without supplying coordinates
+  or remapping reads; a supplied annotation classifies exact gaps by junction, boundary, strand,
+  and overlap.
 - **Compiled annotations and query panels** — compile a GTF once into a guarded `.aic`, then
   share archive opens and chunk decodes across batched region/junction predicates.
 - **Paired annotation comparison** — replay two bound annotations independently and report exact
@@ -114,6 +121,10 @@ aie query sample.aie events chr2:1200000-1300000 \
   --groups cell-types.tsv --min-informative 10 --format json               # discover + reduce events
 aie query sample.aie splice-graph chr2:1200000-1300000 \
   --groups cell-types.tsv --min-path-umis 2 --format json                  # molecular path fragments
+aie query sample.aie cooccur \
+  --predicate locus=region:chr2:1200000-1300000 \
+  --predicate splice=junction:chr2:1234567-1250000 \
+  --where 'locus & splice' --universe locus --format json                 # same-record witnesses
 aie query sample.aie batch --plan panel.tsv --top 20 \
   --format json --output panel.json                                        # query panel
 aie federate a.aie b.aie c.aie chr2:1234567-1250000 --format json         # across samples
@@ -133,6 +144,12 @@ aie collection junction atlas.aicollection chr2:1234567-1250000 \
 aie collection region atlas.aicollection chr2:1200000-1300000 --format tsv
 aie collection jset atlas.aicollection --include chr2:1234567-1250000 \
   --exclude chr2:1234567-1260000 --format json
+aie collection find-events atlas.aicollection --kind junction --kind cassette \
+  --kind terminal-tail --terminal-cluster-bp 25 \
+  --design donors.tsv --groups cell-groups.tsv --min-donors 4 \
+  --min-umi-classes 20 --annotation gencode.v49.aic \
+  --assembly GRCh38.p14 --annotation-label GENCODE-v49 \
+  --novel-only --format json                                               # atlas-wide discovery
 aie dev em sample.aie --gtf gencode.v49.gtf                               # multimapper experiment
 ```
 
@@ -209,7 +226,8 @@ sources, identity comes directly from the authenticated directory; `--shape-rout
 reads the shape dictionary to derive exact, source-bound route blocks. Incremental builds write a
 new immutable layer rather than rewriting their parent. Collection support totals are pruning upper
 bounds, never substitutes for cell/group counts. Group maps and annotations stay query-time inputs;
-use the cohort commands for direct group-scoped reductions. Query JSON separates source identity,
+`collection find-events` uses them for atlas-wide exact recurrence and annotation-gap searches,
+while cohort commands provide locus-specific contrasts. Query JSON separates source identity,
 source execution, collection-sidecar, shape-route, and total logical bytes. The format, integrity
 guards, and deliberate limits are documented in
 the [`aie collection` reference](docs/src/content/docs/cli/collection.md) and

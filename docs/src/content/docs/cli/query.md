@@ -21,7 +21,7 @@ aie query <ARCHIVE> <COMMAND> [OPTIONS] ...
 
 ## Shared cell and group scopes
 
-`region`, `junction`, `junctions`, `jset`, `events`, `splice-graph`, `batch`,
+`region`, `junction`, `junctions`, `jset`, `events`, `splice-graph`, `batch`, `cooccur`,
 and `transcript-ecs` share one strict scope contract:
 
 - `--cells cells.txt` selects a headerless list containing one archive barcode
@@ -65,6 +65,7 @@ to materialize a second copy of all rows merely to change presentation.
 | Command | Result schema | Named tables |
 |---|---|---|
 | `batch` | `gravlax.query.batch.result.v1` | `queries`, `counts` |
+| `cooccur` | `gravlax.query.cooccur.result.v1` | `predicates`, `patterns`, optional `memberships` |
 | `region` | `gravlax.query.region.result.v1` | `counts` |
 | `junction` | `gravlax.query.junction.result.v1` | `counts` |
 | `junctions` | `gravlax.query.junctions.result.v1` | `junctions`, optional `counts` |
@@ -157,6 +158,97 @@ rendering remain separate commands.
 
 Use `--format text|tsv|json` for the normalized `queries` and `counts`
 tables, and `-o/--output` for atomic no-clobber publication.
+
+## `cooccur` — Boolean predicates on one evidence unit
+
+Ask whether named regions, exact junctions, and lossless terminal-tail events
+were witnessed on the same retained molecule record:
+
+```sh
+aie query sample.aie cooccur \
+  --predicate locus=region:chr1:155230000-155240000:+ \
+  --predicate splice=junction:chr1:155234452-155235327:+ \
+  --predicate tail=terminal:chr1:155239900-155240025:+ \
+  --universe locus \
+  --where 'locus & splice & !tail' \
+  --groups cell-types.tsv --agg group --format json
+```
+
+Predicate syntax is
+`NAME=KIND:chrom:start-end[:+|-]`. Names start with a letter or underscore and
+may contain ASCII letters, digits, `_`, `-`, or `.`. The expression grammar is
+predicate names, prefix `!`, infix `&` and `|`, and parentheses; precedence is
+`!`, then `&`, then `|`.
+
+`--universe NAME` is required and names one positive predicate. Only evidence
+units satisfying that predicate belong to the candidate population. This
+makes the query route explicit and gives a negative term a bounded meaning:
+`!tail` means that no matching tail was observed in that retained evidence
+unit. It does **not** mean that the biological molecule lacked a tail or that
+the event is absent from the cell.
+
+The default unit, `molecule-record`, requires the truth vector on one
+locus-resolved, uniquely mapped archive record. Multimapper records are excluded
+by the default `--placements unique` policy, and equal UMI strings observed at
+different loci are not merged. `--unit umi-class --allow-full-scan` instead
+unions every qualifying archive record
+with the same barcode-corrected cell and exact raw UMI value before evaluating
+the expression. It does not apply the archive's one-mismatch UMI edges. The
+union is exact for that raw-value class, but a cell-local UMI collision can
+combine distinct physical molecules, so it is never described as
+physical-molecule proof.
+
+Regions use archive-anchor membership by default. `--region-match
+aligned-block` tests overlap with retained aligned blocks and requires
+`--allow-full-scan` when it defines the universe because archive v2 has no
+complete block-overlap posting index. Multimappers are excluded by default.
+`--placements direct` and `--placements all` are explicit diagnostic modes:
+`direct` uses the stored BAM-primary placement, while `all` is existential per
+junction or aligned-block predicate across retained alternatives. Archive-anchor
+region predicates always test the record anchor and are unaffected by this
+option. Neither multimapper mode proves that a truth vector belongs to one
+physical molecule, and two true predicates in `all` mode do not assert one
+jointly realizable alternative placement. An all-alternative junction universe
+also requires an explicit full scan.
+
+Terminal predicates require a typed `meta.terminal_tail` capability and the
+corresponding rooted sparse sections. An older archive fails the query instead
+of returning a misleading zero. The interval contains cleavage anchors and is
+0-based, half-open; a one-base exact predicate therefore uses `p-(p+1)`.
+
+The `patterns` table contains every truth vector in the declared universe,
+including whether it satisfies `--where`, at cell, group, or bulk scope. Each
+row has an observed `pattern_mask`, an absence `completeness_mask`, and a
+three-valued `selection_state`. A witnessed predicate is true. An unwitnessed
+predicate is false only when the retained representation is complete for that
+test; otherwise it is `unknown`, and the nullable `selected` field is null.
+In particular, an aligned-block test can be unknown when a junction chain with
+more than two reads retained only its two span-extreme placements. This does
+not weaken positive matches, which always name a stored witness.
+`--emit-membership` adds stable record/class identities and exact truth vectors.
+`--max-chunks`, `--max-pattern-rows`, and `--max-memberships` are hard bounds;
+exceeding one fails rather than truncating the scientific result.
+
+| Option | Default | Description |
+|---|---|---|
+| `--predicate <NAME=KIND:LOCUS>` | required | Define a named `region`, `junction`, or `terminal` predicate; repeat for each name |
+| `--where <EXPRESSION>` | required | Combine names with `!`, `&`, `|`, and parentheses |
+| `--universe <NAME>` | required | Select the positive predicate that defines and routes the candidate population |
+| `--unit <UNIT>` | `molecule-record` | Evaluate one locus-resolved archive record, or explicitly merge a barcode-corrected cell plus exact raw-UMI-value class with `umi-class`; one-mismatch edges are not collapsed |
+| `--region-match <MODE>` | `anchor` | Match a record anchor or any `aligned-block` overlap |
+| `--placements <MODE>` | `unique` | Inspect uniquely mapped chains, or explicitly opt into diagnostic `direct` or `all` multimapper placement semantics |
+| `--allow-full-scan` | off | Authorize query modes whose exact result requires every archive chunk |
+| `--max-chunks <N>` | `100000` | Fail if the routed or authorized complete pass exceeds this chunk count |
+| `--max-evidence-records <N>` | `10000000` | Fail before retaining more decoded evidence records for evaluation |
+| `--max-terminal-events <N>` | `10000000` | Fail before tail-index or tail-payload decoding when the archive declares more terminal events |
+| `--emit-membership` | off | Add one stable identity row per candidate evidence unit |
+| `--max-memberships <N>` | `1000000` | Fail above this membership-row count; requires `--emit-membership` |
+| `--max-pattern-rows <N>` | `1000000` | Fail above this aggregate pattern-row count |
+| `--cells <FILE>` | all cells | Restrict to a headerless barcode list |
+| `--groups <TSV>` | — | Restrict to listed barcodes and map each to a group |
+| `--agg <LEVEL>` | `auto` | Aggregate by `cell`, `group`, or sample-wide `bulk`; auto chooses group when a group file is present |
+| `--format <FORMAT>` | required | Emit the uniform result as `text`, `tsv`, or `json` |
+| `-o, --output <PATH>` | stdout | Atomically publish without replacing an existing path |
 
 ## `region` — per-cell evidence in a genomic window
 

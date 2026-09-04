@@ -2,6 +2,25 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## Unreleased
+
+- Add logical molecular-evidence schema v2 within the authenticated `.aie` v2
+  container. New archives carry a root-bound alignment-provenance manifest,
+  including exact input identities and an optional embedded two-pass junction
+  catalogue.
+- Add optional sparse terminal-tail evidence for uniquely mapped 10x 3′ cDNA
+  reads. The side section retains every qualifying deduplicated cleavage-anchor
+  key without adding sequence, qualities, or names to the archive.
+- Add `aie collection find-events` for coordinate-free junction, alternative
+  splice, cassette, and terminal-tail discovery across samples, donors, and
+  cell groups, with optional annotation-gap classification.
+- Add `aie query … cooccur` for bounded Boolean region, junction, and terminal
+  predicates on the same retained molecule record, plus an explicit diagnostic
+  exact-UMI-class union mode.
+- Add typed Python wrappers and three fail-closed Colab demonstrations for
+  annotation reinterpretation, multi-donor event discovery, and federated
+  junction/co-occurrence analysis.
+
 ## [0.1.4] - 2026-09-03
 
 This is the first complete Gravlax distribution. Version 0.1.0 established the

@@ -25,10 +25,13 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## What is Gravlax?
 
-Gravlax builds a compact, molecule-resolved evidence index (`.aie`) from raw 10x
-reads and a genome — **no annotation touches the build**. A compatible GTF
-supplied *at query time* drives Gene, GeneFull, and Velocyto-style replay from
-fixed genome alignments and barcode correction fixed at ingest. Archive-sourced and
+Gravlax's recommended workflow builds a compact, molecule-resolved evidence
+index (`.aie`) from raw 10x reads and a genome without consulting a gene
+annotation during alignment or evidence extraction. `ingest-archive` can also
+consume other compatible tagged alignments, and root-bound provenance records
+whether the caller declared an alignment annotation. A compatible GTF supplied
+*at query time* drives Gene, GeneFull, and Velocyto-style replay from fixed
+genome alignments and barcode correction fixed at ingest. Archive-sourced and
 BAM-sourced Gravlax replay are byte-identical; against a fresh
 annotation-aware STARsolo run, the deployed archive differs by 0.22–0.45% of
 UMI mass across four datasets. It occupies 11–18 bits per input read and opens
@@ -50,6 +53,11 @@ reanalysis stops being a pipeline and becomes a query.
   <Card title="Indexed queries" icon="magnifier">
     Region, junction, splice-event, molecular-path, and 3′-site queries at
     cell or group resolution, straight from the index.
+  </Card>
+  <Card title="Atlas-wide event discovery" icon="magnifier">
+    Find recurrent molecule-supported junctions, splice patterns, and
+    terminal-tail events across donors and cell groups without supplying
+    coordinates or remapping reads.
   </Card>
   <Card title="Compare annotations" icon="approve-check">
     Replay two releases independently on fixed evidence and report exact

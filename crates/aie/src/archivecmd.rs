@@ -6,13 +6,25 @@ pub(crate) mod annotationcompare;
 pub(crate) mod transcriptec;
 
 use crate::rows::{
-    extract_rows, extract_rows_with_identity, identity_of_consumed_file, replay_rows_stranded,
-    ConsumedFileIdentity, Extracted, MolChain, MolRec, PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
+    extract_rows, extract_rows_for_archive, extract_rows_with_identity, identity_of_consumed_file,
+    replay_rows_stranded, ConsumedFileIdentity, Extracted, ExtractedTerminalTails, MolChain,
+    MolRec, PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
 };
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
+use evidence_io::alignment_provenance::{
+    AlignmentDeclaration, AlignmentInputs, AlignmentProvenanceManifest, DeclaredAlignmentFile,
+    GenomeBindingAction, GenomeReferenceBinding, IngestProvenance, JunctionCatalogue,
+    JunctionCatalogueRole, JunctionDiscoveryMode, ProvenanceStatus, VerifiedFileIdentity,
+    ALIGNMENT_PROVENANCE_SCHEMA, ALIGNMENT_PROVENANCE_SECTION, JUNCTION_CATALOGUE_SECTION,
+    MOLECULAR_EVIDENCE_SCHEMA,
+};
 use evidence_io::archive::{put_svarint, put_varint, Shape};
 use evidence_io::format::{Cursor, SectionReader, SectionWriter};
+use evidence_io::terminal_tail::{
+    self, EncodedTerminalTailEvent, EncodedTerminalTailMolecule, TerminalTailMetadata,
+    TerminalTailRoute, TerminalTailSignal,
+};
 use evidence_io::umi;
 use gravlax_output::{
     canonical_destination_key, install_open_file_no_clobber, publish_file_no_clobber,
@@ -60,7 +72,7 @@ pub struct UniformArchiveReportArgs {
 
 #[derive(Parser)]
 pub struct IngestArgs {
-    /// Annotation-free ingest BAM (CR/UR/CY, secondaries included).
+    /// Tagged, coordinate-sorted ingest BAM (CR/UR/CY, secondaries included).
     pub bam: PathBuf,
     #[arg(long)]
     pub whitelist: PathBuf,
@@ -74,14 +86,74 @@ pub struct IngestArgs {
     /// regional reads; the ingest report prints the resulting archive size.
     #[arg(long, default_value_t = 4)]
     pub chunk_mb: u32,
-    /// Reference genome FASTA (plain or gzipped) the reads were aligned to. When given, a
-    /// per-contig blake3 signature is stamped into the archive's meta so sequence-consulting
-    /// consumers (internal-priming filters, `aie extend`) can verify they are looking at the
-    /// same genome. Hashing runs concurrently with extraction.
+    /// Reference FASTA (plain or gzipped) to bind for sequence-consulting queries. Gravlax hashes
+    /// its exact bytes and normalized contigs; its relationship to the alignment is explicitly
+    /// caller-declared rather than inferred. Hashing runs concurrently with extraction.
     #[arg(long)]
     pub genome: Option<PathBuf>,
+    /// Retain the frozen, sequence-free terminal-tail observable from records with an explicit
+    /// integer `NH=1` tag in forward-stranded 10x 3′ cDNA: trailing A on forward alignments and
+    /// leading T on reverse alignments. This is not a chemistry-generic tail detector. Inspected
+    /// clipped sequence is never stored.
+    #[arg(long)]
+    pub terminal_tails: bool,
+    /// Declare how splice junctions were supplied or learned for this alignment. Gravlax records
+    /// this declaration verbatim and does not infer it from an aligner command line.
+    #[arg(long, value_enum, default_value_t = JunctionDiscoveryArg::Unspecified)]
+    pub junction_discovery: JunctionDiscoveryArg,
+    /// Exact STAR-style junction table supplied to pass 2. For per-library two-pass, this is the
+    /// pass-1 output (for STAR Basic, `_STARpass1/SJ.out.tab`), not pass 2's final `SJ.out.tab`.
+    /// Required for per-library-two-pass and frozen-catalogue declarations; the file's role is
+    /// caller-declared, while its exact bytes and parsed data-row count are archived.
+    #[arg(long)]
+    pub junction_catalogue: Option<PathBuf>,
+    /// Annotation supplied while building the alignment index or injecting splice junctions.
+    /// Its exact-byte identity and locator are recorded; omission means no such file was declared.
+    #[arg(long)]
+    pub alignment_annotation: Option<PathBuf>,
+    /// Caller-declared content identity or reproducible locator for the aligner index.
+    #[arg(long)]
+    pub alignment_index_identity: Option<String>,
+    /// Ordered source-read or other files supplied to the aligner. Repeat in original argument
+    /// order. Gravlax verifies each file's current bytes; their aligner role is caller-declared.
+    #[arg(long = "alignment-input")]
+    pub alignment_inputs: Vec<PathBuf>,
+    /// Aligner log containing resolved defaults, if available.
+    #[arg(long)]
+    pub alignment_log: Option<PathBuf>,
+    /// Caller-declared library chemistry used for alignment and strand interpretation.
+    #[arg(long)]
+    pub alignment_chemistry: Option<String>,
     #[command(flatten)]
     pub report: UniformArchiveReportArgs,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum JunctionDiscoveryArg {
+    Unspecified,
+    OnePass,
+    PerLibraryTwoPass,
+    FrozenCatalogue,
+}
+
+impl From<JunctionDiscoveryArg> for JunctionDiscoveryMode {
+    fn from(value: JunctionDiscoveryArg) -> Self {
+        match value {
+            JunctionDiscoveryArg::Unspecified => Self::Unspecified,
+            JunctionDiscoveryArg::OnePass => Self::OnePass,
+            JunctionDiscoveryArg::PerLibraryTwoPass => Self::PerLibraryTwoPass,
+            JunctionDiscoveryArg::FrozenCatalogue => Self::FrozenCatalogue,
+        }
+    }
+}
+
+fn junction_discovery_name(value: JunctionDiscoveryArg) -> &'static str {
+    match value {
+        JunctionDiscoveryArg::Unspecified => "unspecified",
+        JunctionDiscoveryArg::OnePass => "one-pass",
+        JunctionDiscoveryArg::PerLibraryTwoPass => "per-library-two-pass",
+        JunctionDiscoveryArg::FrozenCatalogue => "frozen-catalogue",
+    }
 }
 
 #[derive(Parser)]
@@ -143,6 +215,10 @@ impl From<SoloStrandArg> for anno::assign::SoloStrand {
     }
 }
 
+/// Legacy/test archive writer. Production ingest uses [`write_archive_sections`] with a logical
+/// v2 provenance manifest; this helper intentionally preserves the prior core-only byte contract
+/// for compatibility fixtures.
+#[allow(dead_code)]
 pub fn write_archive(
     x: &Extracted,
     out: &Path,
@@ -156,8 +232,134 @@ pub fn write_archive(
         level,
         chunk_bp,
         genome_sig,
+        ArchiveExtensions::default(),
     )?
     .finish()
+}
+
+struct PreparedTerminalTails {
+    metadata: TerminalTailMetadata,
+    routes: Vec<TerminalTailRoute>,
+    sections: Vec<(String, Vec<u8>)>,
+}
+
+fn prepare_terminal_tails(
+    x: &Extracted,
+    tails: &ExtractedTerminalTails,
+    chunk_bp: u32,
+) -> Result<PreparedTerminalTails> {
+    let mut sections = Vec::new();
+    let mut routes = Vec::new();
+    let mut tail_cursor = 0usize;
+    let mut molecule_start = 0usize;
+    let mut chunk = 0u32;
+    while molecule_start < x.mols.len() {
+        let chrom = x.mols[molecule_start].chrom;
+        let bin_start = (x.mols[molecule_start].anchor() / chunk_bp) * chunk_bp;
+        let bin_end = bin_start
+            .checked_add(chunk_bp)
+            .context("terminal-tail molecule chunk boundary overflow")?;
+        let mut molecule_end = molecule_start;
+        while molecule_end < x.mols.len()
+            && x.mols[molecule_end].chrom == chrom
+            && x.mols[molecule_end].anchor() < bin_end
+        {
+            molecule_end += 1;
+        }
+        if tail_cursor < tails.molecules.len()
+            && tails.molecules[tail_cursor].molecule_ordinal < molecule_start as u64
+        {
+            bail!("terminal-tail attachments are not in molecule order");
+        }
+        let selected_start = tail_cursor;
+        while tail_cursor < tails.molecules.len()
+            && tails.molecules[tail_cursor].molecule_ordinal < molecule_end as u64
+        {
+            tail_cursor += 1;
+        }
+        if selected_start != tail_cursor {
+            let selected = &tails.molecules[selected_start..tail_cursor];
+            let mut encoded = Vec::with_capacity(selected.len());
+            let mut min_anchor = u32::MAX;
+            let mut max_anchor = 0u32;
+            let mut event_count = 0usize;
+            for molecule_events in selected {
+                let ordinal = usize::try_from(molecule_events.molecule_ordinal)
+                    .context("terminal-tail molecule ordinal exceeds usize")?;
+                let molecule = x
+                    .mols
+                    .get(ordinal)
+                    .context("terminal-tail attachment references an absent molecule")?;
+                if molecule.chrom != chrom {
+                    bail!("terminal-tail attachment chromosome differs from its molecule");
+                }
+                let mut events = Vec::with_capacity(molecule_events.events.len());
+                for &(anchor, signal) in &molecule_events.events {
+                    let anchor_delta = i64::from(anchor) - i64::from(molecule.anchor());
+                    events.push(EncodedTerminalTailEvent {
+                        anchor_delta,
+                        reverse: molecule.strand_rev,
+                        signal,
+                    });
+                    min_anchor = min_anchor.min(anchor);
+                    max_anchor = max_anchor.max(anchor);
+                    event_count += 1;
+                }
+                encoded.push(EncodedTerminalTailMolecule {
+                    local_ordinal: u32::try_from(ordinal - molecule_start)
+                        .context("terminal-tail local molecule ordinal exceeds u32")?,
+                    events,
+                });
+            }
+            let molecule_count = u32::try_from(molecule_end - molecule_start)
+                .context("terminal-tail ordinary chunk size exceeds u32")?;
+            sections.push((
+                format!("tail.c{chunk}"),
+                terminal_tail::encode_chunk(molecule_count, &encoded)?,
+            ));
+            routes.push(TerminalTailRoute {
+                chunk,
+                chrom,
+                min_anchor,
+                max_anchor,
+                selected_molecules: u32::try_from(selected.len())
+                    .context("terminal-tail selected count exceeds u32")?,
+                events: u32::try_from(event_count)
+                    .context("terminal-tail event count exceeds u32")?,
+            });
+        }
+        molecule_start = molecule_end;
+        chunk = chunk
+            .checked_add(1)
+            .context("terminal-tail chunk id overflow")?;
+    }
+    if tail_cursor != tails.molecules.len() {
+        bail!("terminal-tail attachment references an absent molecule");
+    }
+    let selected_molecules = tails.molecules.len() as u64;
+    let events = tails.molecules.iter().try_fold(0u64, |sum, molecule| {
+        sum.checked_add(molecule.events.len() as u64)
+            .context("terminal-tail event total overflow")
+    })?;
+    let metadata = TerminalTailMetadata::new(
+        selected_molecules,
+        events,
+        u32::try_from(routes.len()).context("terminal-tail route count exceeds u32")?,
+    );
+    metadata.validate()?;
+    Ok(PreparedTerminalTails {
+        metadata,
+        routes,
+        sections,
+    })
+}
+
+#[derive(Clone, Copy, Default)]
+struct ArchiveExtensions<'a> {
+    alignment_provenance: Option<&'a AlignmentProvenanceManifest>,
+    junction_catalogue_bytes: Option<&'a [u8]>,
+    terminal_tails: Option<&'a ExtractedTerminalTails>,
+    genome_reference_binding: Option<&'a GenomeReferenceBinding>,
 }
 
 fn write_archive_sections(
@@ -166,10 +368,54 @@ fn write_archive_sections(
     level: i32,
     chunk_bp: u32,
     genome_sig: Option<&evidence_io::genome::GenomeSig>,
+    extensions: ArchiveExtensions<'_>,
 ) -> Result<SectionWriter> {
     // Sections are built first and compressed in one rayon pass at the end — zstd-19 over the
     // chunk payloads is the ingest wall-clock, and it parallelizes embarrassingly.
     let mut sections: Vec<(String, Vec<u8>)> = Vec::new();
+
+    if chunk_bp == 0 {
+        bail!("archive chunk size must be positive");
+    }
+    if extensions.terminal_tails.is_some() && extensions.alignment_provenance.is_none() {
+        bail!("terminal-tail evidence requires a logical v2 alignment-provenance manifest");
+    }
+    if let Some(manifest) = extensions.alignment_provenance {
+        let rule_declared = manifest.ingest.terminal_tail_rule.as_deref()
+            == Some(terminal_tail::TERMINAL_TAIL_RULE);
+        if rule_declared != extensions.terminal_tails.is_some() {
+            bail!("terminal-tail capability and provenance extraction rule disagree");
+        }
+    }
+    match (
+        extensions
+            .alignment_provenance
+            .and_then(|manifest| manifest.alignment.junction_catalogue.as_ref()),
+        extensions.junction_catalogue_bytes,
+    ) {
+        (Some(catalogue), Some(bytes)) => {
+            if catalogue.identity.bytes != bytes.len() as u64
+                || catalogue.identity.blake3 != blake3::hash(bytes).to_hex().as_str()
+            {
+                bail!("junction catalogue bytes disagree with their provenance identity");
+            }
+        }
+        (None, None) => {}
+        _ => bail!("junction catalogue manifest and exact-byte section must occur together"),
+    }
+    if extensions.alignment_provenance.is_some() {
+        match (genome_sig, extensions.genome_reference_binding) {
+            (Some(signature), Some(binding)) if &binding.signature == signature => {
+                binding.validate()?;
+            }
+            (None, None) => {}
+            _ => bail!("logical-v2 genome signature and reference binding must occur together"),
+        }
+    }
+    let prepared_tails = extensions
+        .terminal_tails
+        .map(|tails| prepare_terminal_tails(x, tails, chunk_bp))
+        .transpose()?;
 
     let mut meta = serde_json::Map::new();
     meta.insert("mols".into(), serde_json::json!(x.mols.len()));
@@ -185,7 +431,38 @@ fn write_archive_sections(
     if let Some(sig) = genome_sig {
         meta.insert("genome_sig".into(), serde_json::to_value(sig)?);
     }
+    if let Some(binding) = extensions.genome_reference_binding {
+        meta.insert(
+            "genome_reference_binding".into(),
+            serde_json::to_value(binding)?,
+        );
+    }
+    if extensions.alignment_provenance.is_some() {
+        meta.insert(
+            "evidence_schema".into(),
+            serde_json::json!(MOLECULAR_EVIDENCE_SCHEMA),
+        );
+        meta.insert(
+            "alignment_provenance".into(),
+            serde_json::json!(ALIGNMENT_PROVENANCE_SCHEMA),
+        );
+    }
+    if let Some(prepared) = &prepared_tails {
+        meta.insert(
+            "terminal_tail".into(),
+            serde_json::to_value(&prepared.metadata)?,
+        );
+    }
     sections.push(("meta".into(), serde_json::to_string(&meta)?.into_bytes()));
+    if let Some(manifest) = extensions.alignment_provenance {
+        sections.push((
+            ALIGNMENT_PROVENANCE_SECTION.into(),
+            manifest.to_canonical_json()?,
+        ));
+    }
+    if let Some(bytes) = extensions.junction_catalogue_bytes {
+        sections.push((JUNCTION_CATALOGUE_SECTION.into(), bytes.to_vec()));
+    }
     sections.push(("chroms".into(), x.chrom_names.join("\n").into_bytes()));
 
     let mut cells = Vec::with_capacity(x.cells.len() * 4);
@@ -436,6 +713,13 @@ fn write_archive_sections(
     }
     sections.push(("index.chunks".into(), cm));
     sections.extend(coc_blocks);
+    if let Some(prepared) = prepared_tails {
+        sections.push((
+            terminal_tail::TERMINAL_TAIL_INDEX_SECTION.into(),
+            terminal_tail::encode_index(&prepared.routes)?,
+        ));
+        sections.extend(prepared.sections);
+    }
 
     // Junction catalogue + postings, sorted by coordinate for range-friendly lookup.
     {
@@ -570,6 +854,37 @@ fn check_layout(meta: &serde_json::Value) -> Result<()> {
     let codec = meta["codec"].as_str().unwrap_or("varint");
     if codec != "rans2" {
         bail!("archive stream codec is {codec}; this reader expects rans2 — re-ingest with the current binary");
+    }
+    Ok(())
+}
+
+/// Fields repeated in `meta` and the root-bound ingest manifest describe the same physical
+/// layout. Validate both copies so a re-rooted archive cannot retain decodable payloads while
+/// making a false construction claim in its provenance manifest.
+fn check_provenance_layout(meta: &serde_json::Value, ingest: &IngestProvenance) -> Result<()> {
+    let chunk_bp = required_meta_u32(meta, "chunk_bp")?;
+    if chunk_bp != ingest.chunk_bp {
+        bail!(
+            "alignment provenance ingest layout disagrees with archive metadata: ingest.chunk_bp={} but meta.chunk_bp={chunk_bp}",
+            ingest.chunk_bp
+        );
+    }
+    let chunk_streams = required_meta_u32(meta, "chunk_streams")?;
+    if chunk_streams != ingest.molecule_chunk_streams {
+        bail!(
+            "alignment provenance ingest layout disagrees with archive metadata: ingest.molecule_chunk_streams={} but meta.chunk_streams={chunk_streams}",
+            ingest.molecule_chunk_streams
+        );
+    }
+    let codec = meta
+        .get("codec")
+        .and_then(serde_json::Value::as_str)
+        .context("archive meta.codec is missing or is not a string")?;
+    if codec != ingest.molecule_codec {
+        bail!(
+            "alignment provenance ingest layout disagrees with archive metadata: ingest.molecule_codec={} but meta.codec={codec}",
+            ingest.molecule_codec
+        );
     }
     Ok(())
 }
@@ -758,6 +1073,22 @@ pub struct ChunkInfo {
     pub class_base: u32,
     pub max_anchor: u32,
     pub n_cells: u32,
+}
+
+/// One decoded terminal-tail event attached to a stable serialized molecule record.
+/// `molecule_ordinal` is global within the archive; `(chunk, local_molecule_ordinal)` is the
+/// equivalent routing key for bounded readers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalTailRecord {
+    pub molecule_ordinal: u64,
+    pub chunk: u32,
+    pub local_molecule_ordinal: u32,
+    pub cell: u32,
+    pub umi_class: u32,
+    pub chrom: u32,
+    pub strand_rev: bool,
+    pub anchor: u32,
+    pub signal: TerminalTailSignal,
 }
 
 pub fn read_chunk_index(r: &mut SectionReader) -> Result<Vec<ChunkInfo>> {
@@ -986,6 +1317,232 @@ pub struct LazyArchive {
     shapes: Option<std::sync::Arc<Vec<Shape>>>,
     /// Loaded only for queries that expand multimapper alternatives.
     patterns: Option<std::sync::Arc<Vec<Vec<PatAlt>>>>,
+    /// `None` means the extraction rule was not run and callers must report unavailable, never
+    /// biological zero. An empty, present capability is represented by zero metadata counts.
+    terminal_tail: Option<TerminalTailMetadata>,
+    terminal_tail_routes: Option<Vec<TerminalTailRoute>>,
+}
+
+fn archive_capabilities(
+    reader: &mut SectionReader,
+    meta: &serde_json::Value,
+    verify_declared_payloads: bool,
+) -> Result<(
+    Option<AlignmentProvenanceManifest>,
+    Option<TerminalTailMetadata>,
+    Option<GenomeReferenceBinding>,
+)> {
+    let has_provenance_section = reader.has(ALIGNMENT_PROVENANCE_SECTION);
+    let has_catalogue_section = reader.has(JUNCTION_CATALOGUE_SECTION);
+    let has_tail_index = reader.has(terminal_tail::TERMINAL_TAIL_INDEX_SECTION);
+    let tail_section_count = reader
+        .names()
+        .filter(|name| name.starts_with("tail.c"))
+        .count();
+    let evidence_schema = meta.get("evidence_schema");
+    let provenance_schema = meta.get("alignment_provenance");
+    let tail_value = meta.get("terminal_tail");
+
+    let alignment_provenance = match evidence_schema {
+        None => {
+            if provenance_schema.is_some()
+                || has_provenance_section
+                || has_catalogue_section
+                || tail_value.is_some()
+                || meta.get("genome_reference_binding").is_some()
+                || has_tail_index
+                || tail_section_count != 0
+            {
+                bail!("archive has partial logical-v2 capability sections without an evidence_schema declaration");
+            }
+            None
+        }
+        Some(value) if value.as_str() == Some(MOLECULAR_EVIDENCE_SCHEMA) => {
+            if reader.content_commitment().is_none() {
+                bail!("logical molecular-evidence v2 requires a root-committed archive container");
+            }
+            check_layout(meta)?;
+            if provenance_schema.and_then(serde_json::Value::as_str)
+                != Some(ALIGNMENT_PROVENANCE_SCHEMA)
+                || !has_provenance_section
+            {
+                bail!("logical molecular-evidence v2 lacks its declared alignment provenance");
+            }
+            let raw = reader.read(ALIGNMENT_PROVENANCE_SECTION)?;
+            let manifest = AlignmentProvenanceManifest::from_json(&raw)?;
+            check_provenance_layout(meta, &manifest.ingest)?;
+            match manifest.alignment.junction_catalogue.as_ref() {
+                Some(catalogue) => {
+                    if !has_catalogue_section {
+                        bail!("alignment provenance declares a junction catalogue whose exact-byte section is absent");
+                    }
+                    let raw_len = reader
+                        .section_metadata()
+                        .find(|section| section.name == JUNCTION_CATALOGUE_SECTION)
+                        .map(|section| section.raw_len)
+                        .expect("catalogue section presence was checked");
+                    if raw_len != catalogue.identity.bytes {
+                        bail!("junction catalogue section length disagrees with its provenance identity");
+                    }
+                    if verify_declared_payloads {
+                        let catalogue_bytes = reader.read(JUNCTION_CATALOGUE_SECTION)?;
+                        if blake3::hash(&catalogue_bytes).to_hex().as_str()
+                            != catalogue.identity.blake3
+                        {
+                            bail!("junction catalogue section digest disagrees with its provenance identity");
+                        }
+                        let rows = junction_catalogue_data_rows(
+                            &catalogue_bytes,
+                            JUNCTION_CATALOGUE_SECTION,
+                        )?;
+                        if rows != catalogue.data_rows {
+                            bail!("junction catalogue parsed row count disagrees with its provenance manifest");
+                        }
+                    }
+                }
+                None if has_catalogue_section => {
+                    bail!("archive contains an undeclared alignment junction catalogue section")
+                }
+                None => {}
+            }
+            Some(manifest)
+        }
+        Some(value) => bail!(
+            "unsupported molecular-evidence schema {}",
+            value.as_str().unwrap_or("<non-string>")
+        ),
+    };
+
+    let terminal_tail = match tail_value {
+        Some(value) => {
+            if alignment_provenance.is_none() || !has_tail_index {
+                bail!("terminal-tail capability lacks its logical-v2 manifest or sparse index");
+            }
+            let metadata: TerminalTailMetadata = serde_json::from_value(value.clone())?;
+            metadata.validate()?;
+            if tail_section_count != metadata.chunks as usize {
+                bail!(
+                    "terminal-tail metadata declares {} routed chunks but archive contains {tail_section_count}",
+                    metadata.chunks
+                );
+            }
+            Some(metadata)
+        }
+        None => {
+            if has_tail_index || tail_section_count != 0 {
+                bail!("archive has terminal-tail sections without a capability declaration");
+            }
+            None
+        }
+    };
+    if let Some(manifest) = &alignment_provenance {
+        let rule_declared = manifest.ingest.terminal_tail_rule.as_deref()
+            == Some(terminal_tail::TERMINAL_TAIL_RULE);
+        if rule_declared != terminal_tail.is_some() {
+            bail!("terminal-tail capability and provenance extraction rule disagree");
+        }
+    }
+    if verify_declared_payloads {
+        if let Some(metadata) = &terminal_tail {
+            let chunks = read_chunk_index(reader)?;
+            let routes = terminal_tail::decode_index(
+                &reader.read(terminal_tail::TERMINAL_TAIL_INDEX_SECTION)?,
+                chunks.len(),
+            )?;
+            let selected_molecules = routes.iter().try_fold(0u64, |sum, route| {
+                sum.checked_add(u64::from(route.selected_molecules))
+                    .context("terminal-tail selected-molecule total overflow")
+            })?;
+            let events = routes.iter().try_fold(0u64, |sum, route| {
+                sum.checked_add(u64::from(route.events))
+                    .context("terminal-tail event total overflow")
+            })?;
+            if routes.len() != metadata.chunks as usize
+                || selected_molecules != metadata.selected_molecules
+                || events != metadata.events
+            {
+                bail!("terminal-tail index cardinalities disagree with capability metadata");
+            }
+            let routed_sections: BTreeSet<String> = routes
+                .iter()
+                .map(|route| format!("tail.c{}", route.chunk))
+                .collect();
+            let actual_sections: BTreeSet<String> = reader
+                .names()
+                .filter(|name| name.starts_with("tail.c"))
+                .map(str::to_owned)
+                .collect();
+            if routed_sections != actual_sections {
+                bail!("terminal-tail sparse index and routed sections disagree");
+            }
+            for route in routes {
+                let info = chunks
+                    .get(route.chunk as usize)
+                    .context("terminal-tail route references an absent molecule chunk")?;
+                if route.chrom != info.chrom {
+                    bail!("terminal-tail route chromosome disagrees with its molecule chunk");
+                }
+                let decoded = terminal_tail::decode_chunk(
+                    &reader.read(&format!("tail.c{}", route.chunk))?,
+                    info.n_mols,
+                )?;
+                let decoded_events = decoded.iter().try_fold(0u32, |sum, molecule| {
+                    sum.checked_add(u32::try_from(molecule.events.len()).map_err(|_| {
+                        anyhow::anyhow!("terminal-tail per-molecule event count exceeds u32")
+                    })?)
+                    .context("terminal-tail routed event count overflow")
+                })?;
+                if decoded.len() != route.selected_molecules as usize
+                    || decoded_events != route.events
+                {
+                    bail!("terminal-tail routed section cardinalities disagree with its index");
+                }
+            }
+        }
+    }
+    let meta_genome_signature = meta
+        .get("genome_sig")
+        .map(|value| serde_json::from_value::<evidence_io::genome::GenomeSig>(value.clone()))
+        .transpose()?;
+    let genome_reference_binding = match meta.get("genome_reference_binding") {
+        Some(value) => {
+            let binding: GenomeReferenceBinding = serde_json::from_value(value.clone())?;
+            binding.validate()?;
+            if alignment_provenance.is_none()
+                || meta_genome_signature.as_ref() != Some(&binding.signature)
+            {
+                bail!("genome reference binding lacks matching logical-v2 metadata");
+            }
+            if binding.bound_by == GenomeBindingAction::IngestArchive {
+                let manifest = alignment_provenance
+                    .as_ref()
+                    .expect("logical-v2 binding checked above");
+                if manifest.inputs.genome_fasta.as_ref() != Some(&binding.identity)
+                    || manifest.inputs.genome_signature.as_ref() != Some(&binding.signature)
+                {
+                    bail!("ingest-time genome binding disagrees with alignment provenance");
+                }
+            }
+            Some(binding)
+        }
+        None => {
+            if alignment_provenance.is_some() && meta_genome_signature.is_some() {
+                bail!("logical-v2 genome signature lacks its reference-binding declaration");
+            }
+            if alignment_provenance
+                .as_ref()
+                .is_some_and(|manifest| manifest.inputs.genome_signature.is_some())
+            {
+                bail!("alignment provenance contains an ingest genome but no current reference binding");
+            }
+            None
+        }
+    };
+    Ok((
+        alignment_provenance,
+        terminal_tail,
+        genome_reference_binding,
+    ))
 }
 
 impl LazyArchive {
@@ -993,6 +1550,7 @@ impl LazyArchive {
         let mut r = SectionReader::open(path)?;
         let meta: serde_json::Value = serde_json::from_slice(&r.read("meta")?)?;
         check_layout(&meta)?;
+        let (_, terminal_tail, _) = archive_capabilities(&mut r, &meta, false)?;
         let chrom_bytes = r.read("chroms")?;
         let chrom_text = std::str::from_utf8(&chrom_bytes)
             .context("archive chromosome dictionary is not UTF-8")?;
@@ -1013,7 +1571,129 @@ impl LazyArchive {
             cells: None,
             shapes: None,
             patterns: None,
+            terminal_tail,
+            terminal_tail_routes: None,
         })
+    }
+
+    /// Whether the terminal-tail extraction rule was evaluated. `Some` with zero events is a
+    /// measured zero; `None` is unavailable evidence and must fail a requested tail predicate.
+    pub fn terminal_tail_capability(&self) -> Option<&TerminalTailMetadata> {
+        self.terminal_tail.as_ref()
+    }
+
+    /// Sparse terminal-tail routes, decoded only when requested.
+    pub fn terminal_tail_routes(&mut self) -> Result<Option<&[TerminalTailRoute]>> {
+        let Some(metadata) = self.terminal_tail.as_ref() else {
+            return Ok(None);
+        };
+        if self.terminal_tail_routes.is_none() {
+            let chunks = read_chunk_index(&mut self.r)?;
+            let raw = self.r.read(terminal_tail::TERMINAL_TAIL_INDEX_SECTION)?;
+            let routes = terminal_tail::decode_index(&raw, chunks.len())?;
+            let selected = routes.iter().try_fold(0u64, |sum, route| {
+                sum.checked_add(u64::from(route.selected_molecules))
+                    .context("terminal-tail selected-molecule total overflow")
+            })?;
+            let events = routes.iter().try_fold(0u64, |sum, route| {
+                sum.checked_add(u64::from(route.events))
+                    .context("terminal-tail event total overflow")
+            })?;
+            if routes.len() != metadata.chunks as usize
+                || selected != metadata.selected_molecules
+                || events != metadata.events
+            {
+                bail!("terminal-tail index cardinalities disagree with capability metadata");
+            }
+            let routed_sections: BTreeSet<String> = routes
+                .iter()
+                .map(|route| format!("tail.c{}", route.chunk))
+                .collect();
+            let actual_sections: BTreeSet<String> = self
+                .r
+                .names()
+                .filter(|name| name.starts_with("tail.c"))
+                .map(str::to_owned)
+                .collect();
+            if routed_sections != actual_sections {
+                bail!("terminal-tail sparse index and routed sections disagree");
+            }
+            self.terminal_tail_routes = Some(routes);
+        }
+        Ok(self.terminal_tail_routes.as_deref())
+    }
+
+    /// Decode one routed tail section and attach it to its already-decoded ordinary molecule
+    /// chunk. This validates chromosome, strand, route envelope, counts, and local identity before
+    /// returning query-friendly records; corrupt or mismatched side evidence therefore fails
+    /// closed rather than being silently detached from its molecule.
+    pub fn terminal_tail_records(
+        &mut self,
+        route: TerminalTailRoute,
+        info: &ChunkInfo,
+        molecule_base: u64,
+        molecules: &[MolRec],
+    ) -> Result<Vec<TerminalTailRecord>> {
+        let known_route = self
+            .terminal_tail_routes()?
+            .context("terminal-tail capability is unavailable")?
+            .contains(&route);
+        if !known_route {
+            bail!("terminal-tail route is not present in the archive index");
+        }
+        if route.chrom != info.chrom || molecules.len() != info.n_mols as usize {
+            bail!("terminal-tail route does not match its ordinary molecule chunk");
+        }
+        let raw = self.r.read(&format!("tail.c{}", route.chunk))?;
+        let decoded = terminal_tail::decode_chunk(&raw, info.n_mols)?;
+        if decoded.len() != route.selected_molecules as usize {
+            bail!("terminal-tail routed selected-molecule count mismatch");
+        }
+        let mut records = Vec::with_capacity(route.events as usize);
+        let mut min_anchor = u32::MAX;
+        let mut max_anchor = 0u32;
+        for selected in decoded {
+            let molecule = &molecules[selected.local_ordinal as usize];
+            if molecule.chrom != info.chrom {
+                bail!("terminal-tail event is attached to a molecule on another chromosome");
+            }
+            let cell = if molecule.cell == u32::MAX {
+                self.cell_of(molecule.umi_class)?
+            } else {
+                molecule.cell
+            };
+            for event in selected.events {
+                if event.reverse != molecule.strand_rev {
+                    bail!("terminal-tail event strand disagrees with its attached molecule");
+                }
+                let anchor = i64::from(molecule.anchor())
+                    .checked_add(event.anchor_delta)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .context("terminal-tail anchor is outside the u32 coordinate range")?;
+                min_anchor = min_anchor.min(anchor);
+                max_anchor = max_anchor.max(anchor);
+                records.push(TerminalTailRecord {
+                    molecule_ordinal: molecule_base
+                        .checked_add(u64::from(selected.local_ordinal))
+                        .context("terminal-tail global molecule ordinal overflow")?,
+                    chunk: route.chunk,
+                    local_molecule_ordinal: selected.local_ordinal,
+                    cell,
+                    umi_class: molecule.umi_class,
+                    chrom: molecule.chrom,
+                    strand_rev: molecule.strand_rev,
+                    anchor,
+                    signal: event.signal,
+                });
+            }
+        }
+        if records.len() != route.events as usize
+            || min_anchor != route.min_anchor
+            || max_anchor != route.max_anchor
+        {
+            bail!("terminal-tail route envelope or event count disagrees with its section");
+        }
+        Ok(records)
     }
 
     pub fn reader(&mut self) -> &mut SectionReader {
@@ -1436,9 +2116,16 @@ fn read_em_groups(path: &PathBuf, cells: &[u32], collapse: bool) -> Result<crate
             );
         }
         let barcode = fields[0].strip_suffix("-1").unwrap_or(fields[0]);
+        if barcode.len() != 16 {
+            bail!(
+                "{}:{}: barcode must contain exactly 16 A/C/G/T bases",
+                path.display(),
+                line_no + 1
+            );
+        }
         let packed = umi::pack(barcode.as_bytes()).with_context(|| {
             format!(
-                "{}:{}: barcode must contain at most 16 A/C/G/T bases",
+                "{}:{}: barcode must contain exactly 16 A/C/G/T bases",
                 path.display(),
                 line_no + 1
             )
@@ -2232,6 +2919,11 @@ fn push_u32(s: &mut String, mut v: u32) {
 }
 
 pub fn run_ingest(args: IngestArgs) -> Result<()> {
+    validate_alignment_args(&args)?;
+    let chunk_bp = args
+        .chunk_mb
+        .checked_mul(1_000_000)
+        .context("--chunk-mb exceeds the supported coordinate range")?;
     let reporting = preflight_artifact_report(&args.report, &[&args.out])?;
     if reporting {
         path_parameter(&args.bam)?;
@@ -2241,34 +2933,25 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         }
     }
     let t0 = std::time::Instant::now();
-    let whitelist_snapshot = reporting
-        .then(|| stable_utf8_file(&args.whitelist))
-        .transpose()?;
-    let genome_input_thread = if reporting {
-        args.genome
-            .as_deref()
-            .map(start_genome_input)
-            .transpose()?
-    } else {
-        None
-    };
+    // Every newly ingested archive is logical molecular-evidence v2. Snapshot the whitelist and
+    // derive the BAM identity from the same held file that supplies both extraction passes so the
+    // root-bound manifest never describes a path reopened after the evidence was produced.
+    let whitelist_snapshot = stable_utf8_file(&args.whitelist)?;
+    let genome_input_thread = args.genome.as_deref().map(start_genome_input).transpose()?;
     // Genome hashing overlaps BAM extraction; joined (and validated) before the meta is written.
-    let sig_thread = if reporting {
-        None
-    } else {
-        args.genome
-            .clone()
-            .map(|g| std::thread::spawn(move || evidence_io::genome::sig_from_fasta(&g)))
-    };
-    let (x, bam_identity) = if let Some((whitelist_text, _)) = &whitelist_snapshot {
-        let (extracted, identity) =
-            extract_rows_with_identity(&args.bam, whitelist_text, args.locus_gap)?;
-        (extracted, Some(report_file_identity(identity)))
-    } else {
-        (
-            extract_rows(&args.bam, &args.whitelist, args.locus_gap)?,
-            None,
-        )
+    let archive_extraction = extract_rows_for_archive(
+        &args.bam,
+        &whitelist_snapshot.0,
+        args.locus_gap,
+        args.terminal_tails,
+    )?;
+    let x = archive_extraction.evidence;
+    let terminal_tails = archive_extraction.terminal_tails;
+    let bam_programs = archive_extraction.bam_programs;
+    let bam_identity = FileContentIdentity {
+        scheme: "full-file-blake3-v1",
+        blake3: archive_extraction.bam_identity.blake3,
+        bytes: archive_extraction.bam_identity.bytes,
     };
     eprintln!(
         "extracted: {} molecules, {} edges, {} cells, {} shapes, {} patterns, {} classes ({:.1}s)",
@@ -2279,21 +2962,15 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         pattern_stats(&x);
     }
     let mut genome_file_identity = None;
-    let genome_sig = match (genome_input_thread, sig_thread) {
-        (Some(thread), None) => {
+    let genome_sig = match genome_input_thread {
+        Some(thread) => {
             let (sig, identity) = thread
                 .join()
                 .map_err(|_| anyhow::anyhow!("genome input thread panicked"))??;
             genome_file_identity = Some(identity);
             Some(sig)
         }
-        (None, Some(thread)) => Some(
-            thread
-                .join()
-                .map_err(|_| anyhow::anyhow!("genome hashing thread panicked"))??,
-        ),
-        (None, None) => None,
-        (Some(_), Some(_)) => unreachable!("genome uses exactly one read path"),
+        None => None,
     };
     let genome_sig = match genome_sig {
         Some(sig) => {
@@ -2315,6 +2992,112 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         }
         None => None,
     };
+
+    let catalogue_role = match args.junction_discovery {
+        JunctionDiscoveryArg::PerLibraryTwoPass => Some(JunctionCatalogueRole::PerLibraryPass1),
+        JunctionDiscoveryArg::FrozenCatalogue => Some(JunctionCatalogueRole::FrozenExternal),
+        JunctionDiscoveryArg::OnePass | JunctionDiscoveryArg::Unspecified => None,
+    };
+    let (catalogue, junction_catalogue_bytes) = match (&args.junction_catalogue, catalogue_role) {
+        (Some(path), Some(role)) => {
+            let (catalogue, bytes) = junction_catalogue(path, role)?;
+            (Some(catalogue), Some(bytes))
+        }
+        (None, None) => (None, None),
+        _ => unreachable!("alignment argument validation enforces catalogue mode"),
+    };
+    let alignment_annotation = args
+        .alignment_annotation
+        .as_deref()
+        .map(declared_alignment_file)
+        .transpose()?;
+    let ordered_inputs = args
+        .alignment_inputs
+        .iter()
+        .map(|path| declared_alignment_file(path))
+        .collect::<Result<Vec<_>>>()?;
+    let alignment_log = args
+        .alignment_log
+        .as_deref()
+        .map(declared_alignment_file)
+        .transpose()?;
+    let junction_discovery = args.junction_discovery.into();
+    let genome_reference_binding = match (&genome_file_identity, &genome_sig) {
+        (Some(identity), Some(signature)) => Some(GenomeReferenceBinding::new(
+            GenomeBindingAction::IngestArchive,
+            verified_identity(identity),
+            signature.clone(),
+        )),
+        (None, None) => None,
+        _ => unreachable!("genome signature and exact identity are produced together"),
+    };
+    let manifest = AlignmentProvenanceManifest {
+        schema: ALIGNMENT_PROVENANCE_SCHEMA.into(),
+        molecular_evidence_schema: MOLECULAR_EVIDENCE_SCHEMA.into(),
+        alignment: AlignmentDeclaration {
+            status: if junction_discovery == JunctionDiscoveryMode::Unspecified {
+                ProvenanceStatus::Unspecified
+            } else {
+                ProvenanceStatus::DeclaredByCaller
+            },
+            junction_discovery,
+            programs: bam_programs,
+            junction_catalogue: catalogue,
+            alignment_annotation,
+            ordered_inputs,
+            alignment_log,
+            chemistry: args.alignment_chemistry.clone(),
+            chemistry_status: if args.alignment_chemistry.is_some() {
+                ProvenanceStatus::DeclaredByCaller
+            } else {
+                ProvenanceStatus::Unspecified
+            },
+            index_identity: args.alignment_index_identity.clone(),
+            index_identity_status: if args.alignment_index_identity.is_some() {
+                ProvenanceStatus::DeclaredByCaller
+            } else {
+                ProvenanceStatus::Unspecified
+            },
+        },
+        inputs: AlignmentInputs {
+            bam: verified_identity(&bam_identity),
+            whitelist: verified_identity(&whitelist_snapshot.1),
+            genome_fasta: genome_file_identity.as_ref().map(verified_identity),
+            genome_signature: genome_sig.clone(),
+            genome_relationship_status: if genome_sig.is_some() {
+                ProvenanceStatus::DeclaredByCaller
+            } else {
+                ProvenanceStatus::Unspecified
+            },
+        },
+        ingest: IngestProvenance {
+            program: "aie".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            locus_gap: args.locus_gap,
+            chunk_bp,
+            zstd_level: args.zstd_level,
+            molecule_chunk_streams: 10,
+            molecule_codec: "rans2".into(),
+            barcode_correction: "unique-hamming1-quality-pseudocount-v1".into(),
+            umi_classes: "global-cell-umi-equivalence-with-1mm-edges-v1".into(),
+            unique_chain_reduction: "junction-chain-span-extremes-v1".into(),
+            multimapper_reduction: "primary-relative-placement-pattern-v1".into(),
+            terminal_tail_rule: args
+                .terminal_tails
+                .then(|| terminal_tail::TERMINAL_TAIL_RULE.into()),
+        },
+    };
+    manifest.validate()?;
+    let terminal_tail_summary = if reporting {
+        terminal_tails
+            .as_ref()
+            .map(|tails| {
+                prepare_terminal_tails(&x, tails, chunk_bp).map(|prepared| prepared.metadata)
+            })
+            .transpose()?
+    } else {
+        None
+    };
     let (acct, output_identity) = if reporting {
         let (temporary, writer) = temporary_ingest_writer(&args.out, args.zstd_level)?;
         let staging_guard = writer.try_clone_file()?;
@@ -2323,8 +3106,14 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
                 &x,
                 writer,
                 args.zstd_level,
-                args.chunk_mb * 1_000_000,
+                chunk_bp,
                 genome_sig.as_ref(),
+                ArchiveExtensions {
+                    alignment_provenance: Some(&manifest),
+                    junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
+                    terminal_tails: terminal_tails.as_ref(),
+                    genome_reference_binding: genome_reference_binding.as_ref(),
+                },
             )?;
             let (accounting, output_file, commitment) = writer.finish_with_file()?;
             let output_reader = SectionReader::from_file(output_file.try_clone()?)?;
@@ -2349,16 +3138,20 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         let (accounting, identity) = result?;
         (accounting, Some(identity))
     } else {
-        (
-            write_archive(
-                &x,
-                &args.out,
-                args.zstd_level,
-                args.chunk_mb * 1_000_000,
-                genome_sig.as_ref(),
-            )?,
-            None,
-        )
+        let writer = write_archive_sections(
+            &x,
+            SectionWriter::create(&args.out, args.zstd_level)?,
+            args.zstd_level,
+            chunk_bp,
+            genome_sig.as_ref(),
+            ArchiveExtensions {
+                alignment_provenance: Some(&manifest),
+                junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
+                terminal_tails: terminal_tails.as_ref(),
+                genome_reference_binding: genome_reference_binding.as_ref(),
+            },
+        )?;
+        (writer.finish()?, None)
     };
     let total: u64 = acct.iter().map(|(_, _, c)| *c).sum();
     if !reporting {
@@ -2384,16 +3177,8 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
 
     let output_identity = output_identity.expect("reporting ingest captured held output identity");
     let mut inputs = BTreeMap::new();
-    inputs.insert(
-        "bam",
-        bam_identity.expect("reporting ingest captured its consumed BAM identity"),
-    );
-    inputs.insert(
-        "whitelist",
-        whitelist_snapshot
-            .expect("reporting ingest captured its whitelist snapshot")
-            .1,
-    );
+    inputs.insert("bam", bam_identity);
+    inputs.insert("whitelist", whitelist_snapshot.1);
     if let Some(identity) = genome_file_identity {
         inputs.insert("genome", identity);
     }
@@ -2416,6 +3201,11 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         compressed_payload_bytes: u64,
         bits_per_molecule: f64,
         genome_signature: Option<&'a evidence_io::genome::GenomeSig>,
+        molecular_evidence_schema: &'static str,
+        alignment_provenance: &'a AlignmentProvenanceManifest,
+        terminal_tail_status: &'static str,
+        terminal_tail: Option<&'a TerminalTailMetadata>,
+        genome_reference_binding: Option<&'a GenomeReferenceBinding>,
     }
     let summary = IngestSummary {
         inputs: &inputs,
@@ -2431,6 +3221,15 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         compressed_payload_bytes: total,
         bits_per_molecule: 8.0 * total as f64 / x.mols.len().max(1) as f64,
         genome_signature: genome_sig.as_ref(),
+        molecular_evidence_schema: MOLECULAR_EVIDENCE_SCHEMA,
+        alignment_provenance: &manifest,
+        terminal_tail_status: if terminal_tail_summary.is_some() {
+            "available"
+        } else {
+            "unavailable"
+        },
+        terminal_tail: terminal_tail_summary.as_ref(),
+        genome_reference_binding: genome_reference_binding.as_ref(),
     };
     let mut parameters = BTreeMap::new();
     parameters.insert("bam".into(), path_parameter(&args.bam)?);
@@ -2439,8 +3238,42 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
     parameters.insert("locus_gap".into(), serde_json::json!(args.locus_gap));
     parameters.insert("zstd_level".into(), serde_json::json!(args.zstd_level));
     parameters.insert("chunk_mb".into(), serde_json::json!(args.chunk_mb));
+    parameters.insert(
+        "terminal_tails".into(),
+        serde_json::json!(args.terminal_tails),
+    );
+    parameters.insert(
+        "junction_discovery".into(),
+        serde_json::json!(junction_discovery_name(args.junction_discovery)),
+    );
     if let Some(genome) = &args.genome {
         parameters.insert("genome".into(), path_parameter(genome)?);
+    }
+    if let Some(catalogue) = &args.junction_catalogue {
+        parameters.insert("junction_catalogue".into(), path_parameter(catalogue)?);
+    }
+    if let Some(annotation) = &args.alignment_annotation {
+        parameters.insert("alignment_annotation".into(), path_parameter(annotation)?);
+    }
+    if let Some(identity) = &args.alignment_index_identity {
+        parameters.insert(
+            "alignment_index_identity".into(),
+            serde_json::json!(identity),
+        );
+    }
+    if !args.alignment_inputs.is_empty() {
+        let inputs = args
+            .alignment_inputs
+            .iter()
+            .map(|path| path_parameter(path))
+            .collect::<Result<Vec<_>>>()?;
+        parameters.insert("alignment_inputs".into(), serde_json::Value::Array(inputs));
+    }
+    if let Some(log) = &args.alignment_log {
+        parameters.insert("alignment_log".into(), path_parameter(log)?);
+    }
+    if let Some(chemistry) = &args.alignment_chemistry {
+        parameters.insert("alignment_chemistry".into(), serde_json::json!(chemistry));
     }
     let context = report_context(
         vec![output_identity.provenance_identity()],
@@ -3137,6 +3970,123 @@ fn stable_utf8_file(path: &Path) -> Result<(String, FileContentIdentity)> {
     let text = String::from_utf8(bytes)
         .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
     Ok((text, identity))
+}
+
+fn verified_identity(identity: &FileContentIdentity) -> VerifiedFileIdentity {
+    VerifiedFileIdentity::full_file_blake3(identity.blake3.clone(), identity.bytes)
+}
+
+fn stable_verified_file(path: &Path) -> Result<VerifiedFileIdentity> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("opening {} for content identity", path.display()))?;
+    let before = file.metadata()?;
+    if !before.is_file() {
+        bail!(
+            "alignment provenance input is not a regular file: {}",
+            path.display()
+        );
+    }
+    let identity = identity_of_consumed_file(file, before, path)?;
+    Ok(VerifiedFileIdentity::full_file_blake3(
+        identity.blake3,
+        identity.bytes,
+    ))
+}
+
+fn declared_alignment_file(path: &Path) -> Result<DeclaredAlignmentFile> {
+    let locator = path
+        .to_str()
+        .with_context(|| format!("alignment provenance path is not UTF-8: {}", path.display()))?
+        .to_owned();
+    Ok(DeclaredAlignmentFile {
+        relationship_status: ProvenanceStatus::DeclaredByCaller,
+        locator,
+        identity: stable_verified_file(path)?,
+    })
+}
+
+fn junction_catalogue_data_rows(bytes: &[u8], label: &str) -> Result<u64> {
+    let text = std::str::from_utf8(bytes)
+        .with_context(|| format!("junction catalogue {label} is not valid UTF-8"))?;
+    let mut data_rows = 0u64;
+    for line in text.lines() {
+        let row = line.trim_end_matches('\r');
+        if row.trim().is_empty() || row.trim_start().starts_with('#') {
+            continue;
+        }
+        if row.split('\t').count() < 4 {
+            bail!("junction catalogue {label} contains a non-tabular data row");
+        }
+        data_rows = data_rows
+            .checked_add(1)
+            .context("junction catalogue row count overflow")?;
+    }
+    Ok(data_rows)
+}
+
+fn junction_catalogue(
+    path: &Path,
+    role: JunctionCatalogueRole,
+) -> Result<(JunctionCatalogue, Vec<u8>)> {
+    let mut file = std::fs::File::open(path)
+        .with_context(|| format!("opening junction catalogue {}", path.display()))?;
+    let before = file.metadata()?;
+    if !before.is_file() {
+        bail!(
+            "junction catalogue is not a regular file: {}",
+            path.display()
+        );
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let data_rows = junction_catalogue_data_rows(&bytes, &path.display().to_string())?;
+    let identity = identity_of_consumed_file(file, before, path)?;
+    Ok((
+        JunctionCatalogue {
+            relationship_status: ProvenanceStatus::DeclaredByCaller,
+            role,
+            section: JUNCTION_CATALOGUE_SECTION.into(),
+            identity: VerifiedFileIdentity::full_file_blake3(identity.blake3, identity.bytes),
+            data_rows,
+        },
+        bytes,
+    ))
+}
+
+fn validate_alignment_args(args: &IngestArgs) -> Result<()> {
+    match (args.junction_discovery, args.junction_catalogue.as_ref()) {
+        (JunctionDiscoveryArg::PerLibraryTwoPass | JunctionDiscoveryArg::FrozenCatalogue, None) => {
+            bail!(
+                "--junction-discovery {} requires --junction-catalogue",
+                match args.junction_discovery {
+                    JunctionDiscoveryArg::PerLibraryTwoPass => "per-library-two-pass",
+                    JunctionDiscoveryArg::FrozenCatalogue => "frozen-catalogue",
+                    _ => unreachable!(),
+                }
+            )
+        }
+        (JunctionDiscoveryArg::OnePass | JunctionDiscoveryArg::Unspecified, Some(_)) => {
+            bail!(
+                "--junction-catalogue requires per-library-two-pass or frozen-catalogue discovery"
+            )
+        }
+        _ => {}
+    }
+    if args
+        .alignment_index_identity
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        bail!("--alignment-index-identity must not be empty");
+    }
+    if args
+        .alignment_chemistry
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        bail!("--alignment-chemistry must not be empty");
+    }
+    Ok(())
 }
 
 fn preflight_replay_metadata(
@@ -3921,6 +4871,37 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
                 scan.bytes_read,
             )
         };
+    // `inspect-archive` also serves as the generic container inspector used for sealed legacy
+    // section archives. Those archives need not carry Gravlax's application-level `meta`
+    // section. Treat its absence as having no declared molecular-evidence capabilities; the
+    // capability validator below still rejects any partial logical-v2 sections or declarations.
+    let meta: serde_json::Value = if reader.has("meta") {
+        serde_json::from_slice(&reader.read("meta")?)?
+    } else {
+        serde_json::json!({})
+    };
+    let (alignment_provenance, terminal_tail, genome_reference_binding) =
+        archive_capabilities(&mut reader, &meta, true)?;
+    let molecular_evidence_schema = meta
+        .get("evidence_schema")
+        .and_then(serde_json::Value::as_str);
+    let alignment_provenance_status = if alignment_provenance.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
+    let terminal_tail_status = if terminal_tail.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
+    let genome_reference_binding_status = if genome_reference_binding.is_some() {
+        "available"
+    } else if molecular_evidence_schema.is_some() {
+        "unavailable"
+    } else {
+        "legacy_unattributed"
+    };
     if args.verify_content || version == evidence_io::format::SEEKABLE_VERSION {
         let after = reader.file_metadata()?;
         if !archive_metadata_matches(&inspection_before, &after)? {
@@ -3943,6 +4924,15 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
             "all_payloads": args.verify_content,
             "identity_content_bytes_read": identity_content_bytes_read,
             "ordinary_reads_verify_selected_payloads_only": version == evidence_io::format::VERSION,
+        },
+        "molecular_evidence": {
+            "schema": molecular_evidence_schema,
+            "alignment_provenance_status": alignment_provenance_status,
+            "alignment_provenance": alignment_provenance,
+            "terminal_tail_status": terminal_tail_status,
+            "terminal_tail": terminal_tail,
+            "genome_reference_binding_status": genome_reference_binding_status,
+            "genome_reference_binding": genome_reference_binding,
         },
         "elapsed_seconds": started.elapsed().as_secs_f64(),
     });
@@ -3968,6 +4958,13 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
             all_payloads_verified: bool,
             identity_content_bytes_read: u64,
             ordinary_reads_verify_selected_payloads_only: bool,
+            molecular_evidence_schema: Option<&'a str>,
+            alignment_provenance_status: &'static str,
+            alignment_provenance: Option<&'a AlignmentProvenanceManifest>,
+            terminal_tail_status: &'static str,
+            terminal_tail: Option<&'a TerminalTailMetadata>,
+            genome_reference_binding_status: &'static str,
+            genome_reference_binding: Option<&'a GenomeReferenceBinding>,
         }
         let summary = InspectSummary {
             archive: &archive_identity,
@@ -3977,6 +4974,13 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
             all_payloads_verified: args.verify_content,
             identity_content_bytes_read,
             ordinary_reads_verify_selected_payloads_only: version == evidence_io::format::VERSION,
+            molecular_evidence_schema,
+            alignment_provenance_status,
+            alignment_provenance: alignment_provenance.as_ref(),
+            terminal_tail_status,
+            terminal_tail: terminal_tail.as_ref(),
+            genome_reference_binding_status,
+            genome_reference_binding: genome_reference_binding.as_ref(),
         };
         let mut parameters = BTreeMap::new();
         parameters.insert("archive".into(), path_parameter(&args.archive)?);
@@ -4030,6 +5034,39 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
             "encoded sections: aie-encoded-sections-v1:{}",
             digest_hex(encoded_digest)
         );
+        match (&alignment_provenance, molecular_evidence_schema) {
+            (Some(provenance), Some(schema)) => {
+                println!("molecular evidence schema: {schema}");
+                println!(
+                    "alignment provenance: {} ({:?}, {:?})",
+                    ALIGNMENT_PROVENANCE_SCHEMA,
+                    provenance.alignment.junction_discovery,
+                    provenance.alignment.status
+                );
+            }
+            _ => {
+                println!("molecular evidence schema: unavailable (legacy archive)");
+                println!("alignment provenance: unavailable; junction discovery is unknown");
+            }
+        }
+        if let Some(tails) = &terminal_tail {
+            println!(
+                "terminal tails: available ({} events on {} molecules in {} routed chunks; {})",
+                tails.events, tails.selected_molecules, tails.chunks, tails.extraction_rule
+            );
+        } else {
+            println!("terminal tails: unavailable (extraction rule was not recorded as evaluated)");
+        }
+        if let Some(binding) = &genome_reference_binding {
+            println!(
+                "genome reference binding: available ({:?}; caller-declared relationship)",
+                binding.bound_by
+            );
+        } else if molecular_evidence_schema.is_some() {
+            println!("genome reference binding: unavailable");
+        } else {
+            println!("genome reference binding: legacy/unattributed");
+        }
         if args.verify_content {
             if version == evidence_io::format::VERSION {
                 println!(
@@ -4049,10 +5086,9 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
     Ok(())
 }
 
-
-/// Retrofit a genome signature into an existing archive. Sections are copied compressed —
-/// byte-for-byte — and only `meta` is rewritten, so the operation is I/O-bound and cannot
-/// perturb the evidence streams.
+/// Retrofit a genome signature into an existing archive. Evidence sections are copied compressed
+/// byte-for-byte. Logical-v2 archives record a separate current-reference binding in `meta`;
+/// original alignment provenance is never rewritten by a later stamp.
 pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
     preflight_stamp_output(&args)?;
     let destination = args.out.as_deref().unwrap_or(&args.archive);
@@ -4062,22 +5098,39 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
         path_parameter(&args.genome)?;
     }
     let t0 = std::time::Instant::now();
-    let (sig, genome_identity) = if reporting {
-        let thread = start_genome_input(&args.genome)?;
-        let (signature, identity) = thread
-            .join()
-            .map_err(|_| anyhow::anyhow!("genome input thread panicked"))??;
-        (signature, Some(identity))
-    } else {
-        (evidence_io::genome::sig_from_fasta(&args.genome)?, None)
-    };
+    let genome_thread = start_genome_input(&args.genome)?;
+    let (sig, genome_identity) = genome_thread
+        .join()
+        .map_err(|_| anyhow::anyhow!("genome input thread panicked"))??;
     let mut r = SectionReader::open(&args.archive)?;
     let source_before = r.file_metadata()?;
     let source_identity = reporting.then(|| archive_identity(&r)).transpose()?;
     let mut meta: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&r.read("meta")?)?;
-    let chroms: Vec<String> =
-        String::from_utf8_lossy(&r.read("chroms")?).lines().map(|s| s.to_string()).collect();
+    let logical_v2 = meta
+        .get("evidence_schema")
+        .and_then(serde_json::Value::as_str)
+        == Some(MOLECULAR_EVIDENCE_SCHEMA);
+    let (_, _, previous_binding) =
+        archive_capabilities(&mut r, &serde_json::Value::Object(meta.clone()), false)?;
+    let target_binding = logical_v2.then(|| {
+        GenomeReferenceBinding::new(
+            GenomeBindingAction::StampGenome,
+            verified_identity(&genome_identity),
+            sig.clone(),
+        )
+    });
+    let binding_changed = match (&previous_binding, &target_binding) {
+        (Some(previous), Some(target)) => {
+            previous.identity != target.identity || previous.signature != target.signature
+        }
+        (None, None) => false,
+        _ => true,
+    };
+    let chroms: Vec<String> = String::from_utf8_lossy(&r.read("chroms")?)
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
     let missing: Vec<&String> = chroms.iter().filter(|n| sig.contig(n).is_none()).collect();
     if !missing.is_empty() {
         bail!(
@@ -4089,7 +5142,7 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
     }
     if let Some(prev) = meta.get("genome_sig") {
         let prev: evidence_io::genome::GenomeSig = serde_json::from_value(prev.clone())?;
-        if prev.digest == sig.digest {
+        if prev.digest == sig.digest && !binding_changed {
             let sections = r.entries().to_vec();
             if let Some(out) = args.out.as_deref() {
                 let mut source = r.try_clone_file()?;
@@ -4124,9 +5177,7 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
                     false,
                     source_identity,
                     source_identity,
-                    genome_identity
-                        .as_ref()
-                        .expect("reporting stamp captured genome identity"),
+                    &genome_identity,
                     &sig,
                     &sections,
                 )?;
@@ -4147,6 +5198,12 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
         eprintln!("replacing existing genome signature (digest {} -> {})", &prev.digest[..16], &sig.digest[..16]);
     }
     meta.insert("genome_sig".into(), serde_json::to_value(&sig)?);
+    if let Some(binding) = &target_binding {
+        meta.insert(
+            "genome_reference_binding".into(),
+            serde_json::to_value(binding)?,
+        );
+    }
     let out = args.out.clone().unwrap_or_else(|| args.archive.clone());
     let (tmp, mut w) = temporary_stamp_writer(&out)?;
     let staging_guard = w.try_clone_file()?;
@@ -4234,9 +5291,7 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
             output_identity
                 .as_ref()
                 .expect("reporting stamp captured output identity"),
-            genome_identity
-                .as_ref()
-                .expect("reporting stamp captured genome identity"),
+            &genome_identity,
             &sig,
             sections
                 .as_ref()
@@ -4256,7 +5311,31 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
 
 #[cfg(all(test, unix))]
 mod archive_input_stability_tests {
-    use super::{validate_archive_input, SectionReader, SectionWriter};
+    use super::{read_em_groups, validate_archive_input, SectionReader, SectionWriter};
+
+    #[test]
+    fn strict_em_group_barcodes_cannot_alias_a_short_packed_value() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "gravlax-em-group-short-barcode-{}-{nonce}.tsv",
+            std::process::id()
+        ));
+        std::fs::write(&path, "A\tgroup\n").unwrap();
+        // `umi::pack("A")` and `umi::pack("AAAAAAAAAAAAAAAA")` have the same integer value;
+        // external cell scopes must validate the barcode width before packing.
+        let cells = [evidence_io::umi::pack(b"AAAAAAAAAAAAAAAA").unwrap()];
+        let error = match read_em_groups(&path, &cells, false) {
+            Ok(_) => panic!("short barcode unexpectedly entered the EM group scope"),
+            Err(error) => error,
+        };
+        assert!(error
+            .to_string()
+            .contains("barcode must contain exactly 16 A/C/G/T bases"));
+        std::fs::remove_file(path).ok();
+    }
 
     #[test]
     fn held_archive_reader_rejects_path_replacement() {

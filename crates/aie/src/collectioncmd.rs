@@ -8,6 +8,8 @@
 //! shapes, archives, and chunks, then the ordinary archive decoder recomputes exact molecule-class
 //! counts.
 
+mod search;
+
 use crate::archivecmd::{
     decode_chunk, read_chunk_index, remove_staging_if_owned, ChunkInfo, LazyArchive,
 };
@@ -188,6 +190,8 @@ enum What {
         #[command(flatten)]
         uniform_output: CollectionOutputArgs,
     },
+    /// Search genome-wide for recurrent junctions, splice events, and terminal-tail evidence.
+    FindEvents(Box<search::Args>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -6452,6 +6456,7 @@ fn validate_collection_args(what: &What) -> Result<()> {
         | What::Junction { uniform_output, .. }
         | What::Region { uniform_output, .. }
         | What::Jset { uniform_output, .. } => uniform_output,
+        What::FindEvents(args) => &args.uniform_output,
     };
     preflight_uniform_collection_output(output)?;
     if output.format.is_some() {
@@ -6479,6 +6484,9 @@ fn validate_collection_args(what: &What) -> Result<()> {
             | What::Region { collection, .. }
             | What::Jset { collection, .. } => {
                 uniform_path(collection, "collection")?;
+            }
+            What::FindEvents(args) => {
+                uniform_path(&args.collection, "collection")?;
             }
         }
     }
@@ -6570,6 +6578,7 @@ pub fn run(args: Args) -> Result<()> {
             json_output: json,
             uniform_output,
         }),
+        What::FindEvents(args) => search::run(*args),
     }
 }
 

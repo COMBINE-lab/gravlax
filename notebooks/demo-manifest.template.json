@@ -1,0 +1,75 @@
+{
+  "schema": "gravlax.demo-capsule.v1",
+  "software": {
+    "version": null,
+    "aie": {"url": null, "sha256": null, "filename": null, "member": null},
+    "python_wheel": {"url": null, "sha256": null, "filename": null}
+  },
+  "resources": {
+    "archive_a": {"url": null, "sha256": null, "filename": null, "archive_root": null},
+    "archive_b": {"url": null, "sha256": null, "filename": null, "archive_root": null},
+    "annotation_before": {"url": null, "sha256": null, "filename": null},
+    "annotation_after": {"url": null, "sha256": null, "filename": null},
+    "groups": {"url": null, "sha256": null, "filename": null},
+    "design": {"url": null, "sha256": null, "filename": null}
+  },
+  "stories": {
+    "annotation_reinterpretation": {
+      "archive": "archive_a",
+      "annotation_before": "annotation_before",
+      "annotation_after": "annotation_after",
+      "assembly": null,
+      "before_label": null,
+      "after_label": null
+    },
+    "event_discovery": {
+      "archives": {"donor-a": "archive_a", "donor-b": "archive_b"},
+      "shape_routes": true,
+      "allow_unstamped": false,
+      "groups": "groups",
+      "design": "design",
+      "annotation": "annotation_after",
+      "assembly": "GRCh38",
+      "annotation_label": "GENCODE 49",
+      "kinds": ["junction", "alt-acceptor", "alt-donor", "cassette", "terminal-tail"],
+      "require_groups": [],
+      "min_group_umi_classes": 1,
+      "min_donors": 1,
+      "min_samples": 1,
+      "min_umi_classes": 1,
+      "min_side_umi_classes": 1,
+      "min_support": 2,
+      "terminal_cluster_bp": 25,
+      "max_terminal_events": 10000000,
+      "novel_only": false,
+      "solo_strand": "forward",
+      "max_candidates": 100000,
+      "max_candidates_considered": 1000000,
+      "max_routed_entries": 10000000,
+      "max_exact_match_attempts": 25000000,
+      "max_annotation_comparisons": 10000000
+    },
+    "junction_drilldown": {
+      "archives": {"donor-a": "archive_a", "donor-b": "archive_b"},
+      "archive_sample": "donor-a",
+      "shape_routes": true,
+      "allow_unstamped": false,
+      "groups": "groups",
+      "junction": null,
+      "predicates": {},
+      "expression": null,
+      "universe": null,
+      "unit": "molecule-record",
+      "region_match": "anchor",
+      "placements": "unique",
+      "allow_full_scan": false,
+      "aggregation": "group",
+      "emit_membership": false,
+      "max_memberships": 1000000,
+      "max_pattern_rows": 1000000,
+      "max_chunks": 100000,
+      "max_evidence_records": 10000000,
+      "max_terminal_events": 10000000
+    }
+  }
+}

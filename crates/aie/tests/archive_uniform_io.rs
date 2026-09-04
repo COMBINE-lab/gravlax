@@ -172,6 +172,10 @@ fn inspect_and_seal_reports_are_typed_atomic_and_legacy_exact() {
             "{}: archive v2 with 3 sections and {} bytes\n\
 native identity: aie-directory-root-v2:{root}\n\
 encoded sections: aie-encoded-sections-v1:{encoded}\n\
+molecular evidence schema: unavailable (legacy archive)\n\
+alignment provenance: unavailable; junction discovery is unknown\n\
+terminal tails: unavailable (extraction rule was not recorded as evaluated)\n\
+genome reference binding: legacy/unattributed\n\
 verified directory/root; payloads will be verified when selected\n",
             rooted.display(),
             std::fs::metadata(&rooted).unwrap().len(),
