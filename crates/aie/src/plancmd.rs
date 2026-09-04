@@ -1517,6 +1517,10 @@ impl<'a> Resolver<'a> {
         Ok(output.path.clone())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the arguments preserve the distinct source-resource provenance fields"
+    )]
     fn embedded_resource(
         &mut self,
         key: String,
@@ -1605,7 +1609,7 @@ fn inspect_coordinate_compatibility(
     let mut genome_digest = None;
     let mut locus_checked = false;
     if kind == ResourceKind::Archive && path.is_file() {
-        if let Ok(archive) = crate::archivecmd::LazyArchive::open(&path.to_path_buf()) {
+        if let Ok(archive) = crate::archivecmd::LazyArchive::open(path) {
             if !archive
                 .chrom_names
                 .iter()
@@ -1671,7 +1675,7 @@ fn inspect_declared_assembly_compatibility(
     let mut chromosome_digest = None;
     let mut genome_digest = None;
     if kind == ResourceKind::Archive && path.is_file() {
-        if let Ok(archive) = crate::archivecmd::LazyArchive::open(&path.to_path_buf()) {
+        if let Ok(archive) = crate::archivecmd::LazyArchive::open(path) {
             chromosome_digest = Some(format!("blake3:{}", archive.chrom_digest));
             genome_digest = archive.genome_sig.map(|signature| signature.digest);
         }
@@ -5822,11 +5826,11 @@ fn prepare_staged_output<'a>(
                         output.staging_path.display()
                     );
                 }
-                return Ok(PreparedStagedOutput {
+                Ok(PreparedStagedOutput {
                     output,
                     held: Some(held),
                     metadata: Some(held_metadata),
-                });
+                })
             }
             #[cfg(not(target_os = "linux"))]
             Ok(PreparedStagedOutput {

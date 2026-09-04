@@ -40,7 +40,7 @@ pub fn run(args: Args) -> Result<()> {
         .map(|(i, g)| (g.as_str(), i as u32))
         .collect();
 
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     let header = reader.read_header()?;
@@ -73,7 +73,7 @@ pub fn run(args: Args) -> Result<()> {
                         Value::Int8(x) => x as u16,
                         Value::UInt8(x) => x as u16,
                         Value::Int16(x) => x as u16,
-                        Value::UInt16(x) => x as u16,
+                        Value::UInt16(x) => x,
                         Value::Int32(x) => x as u16,
                         Value::UInt32(x) => x as u16,
                         _ => 1,
@@ -87,7 +87,7 @@ pub fn run(args: Args) -> Result<()> {
         }
         n += 1;
 
-        let chrom_bam = rec.reference_sequence_id().transpose()?.unwrap_or(0) as usize;
+        let chrom_bam = rec.reference_sequence_id().transpose()?.unwrap_or(0);
         let pos = rec.alignment_start().transpose()?.map(|p| usize::from(p) as u32 - 1).unwrap_or(0);
         let mut ops = Vec::new();
         for op in rec.cigar().iter() {

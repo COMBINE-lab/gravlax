@@ -101,6 +101,10 @@ pub struct IdentifierQuery {
     pub value: String,
 }
 
+#[expect(
+    clippy::result_large_err,
+    reason = "resolution errors retain the complete query and annotation identity for callers"
+)]
 impl IdentifierQuery {
     pub fn new(kind: QueryKind, value: impl Into<String>) -> Result<Self, ResolutionError> {
         let value = value.into();
@@ -445,6 +449,10 @@ pub struct IntentResolver {
     exon_metadata_available: bool,
 }
 
+#[expect(
+    clippy::result_large_err,
+    reason = "resolution errors retain structured candidates and annotation identity for callers"
+)]
 impl IntentResolver {
     pub fn from_path(
         path: &Path,

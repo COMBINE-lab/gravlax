@@ -41,6 +41,12 @@ pub struct ArchiveCommitment {
     pub digest: [u8; 32],
 }
 
+/// Per-section `(name, raw bytes, compressed bytes)` accounting returned by archive writers.
+pub type SectionAccounting = Vec<(String, u64, u64)>;
+
+/// A finished archive together with its still-open file and rooted content commitment.
+pub type FinishedArchive = (SectionAccounting, std::fs::File, ArchiveCommitment);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LegacyIdentityScan {
     pub full_file_blake3: [u8; 32],
@@ -199,16 +205,14 @@ impl SectionWriter {
     /// Finish a canonical v2 file: terminator, authenticated physical-order directory, and fixed
     /// 44-byte footer `(directory_offset, root, "AIED")`. Returns the historical three-column
     /// section accounting used by ingest reports.
-    pub fn finish(self) -> Result<Vec<(String, u64, u64)>> {
+    pub fn finish(self) -> Result<SectionAccounting> {
         let (accounting, _file, _commitment) = self.finish_with_file()?;
         Ok(accounting)
     }
 
     /// Finish while retaining the exact open file description and its computed root commitment.
     /// This supports publication and provenance without reopening a replaceable staging path.
-    pub fn finish_with_file(
-        mut self,
-    ) -> Result<(Vec<(String, u64, u64)>, std::fs::File, ArchiveCommitment)> {
+    pub fn finish_with_file(mut self) -> Result<FinishedArchive> {
         use std::io::Seek;
         self.out.write_all(&0u8.to_le_bytes())?; // terminator for linear readers
         let dir_offset = self.out.stream_position()?;

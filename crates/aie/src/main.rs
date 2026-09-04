@@ -181,7 +181,7 @@ struct CompileAnnotationSummary {
 }
 
 fn compile_annotation_artifact_schema() -> Result<TableSchema, OutputError> {
-    Ok(TableSchema::new(
+    TableSchema::new(
         "gravlax.annotation.compile.artifacts.v1",
         vec![
             Field::new("artifact_kind", DataType::String),
@@ -190,7 +190,7 @@ fn compile_annotation_artifact_schema() -> Result<TableSchema, OutputError> {
             Field::new("identity", DataType::String),
         ],
     )?
-    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["artifact_kind", "path"]))?)
+    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["artifact_kind", "path"]))
 }
 
 fn write_compile_annotation_report<W: Write>(

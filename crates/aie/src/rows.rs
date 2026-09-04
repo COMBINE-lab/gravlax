@@ -35,8 +35,6 @@ use std::io::{BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const EDGE_WINDOW: u32 = 3_000_000;
-
 /// Full-file identity captured from the same held file that supplied a raw replay/ingest parse.
 /// Keeping this dependency-neutral lets the archive command wrap it in its report schema without
 /// making the hot row representation depend on the output crate.
@@ -177,6 +175,16 @@ pub struct PatAlt {
 
 pub const SAME_SHAPE: u32 = u32::MAX;
 
+type CellClass = (u32, u32);
+type TranscriptEvidence = Vec<(u32, u8)>;
+type VelocityMoleculeEvidence = (u32, u32, TranscriptEvidence, bool);
+type VelocityClassEvidence = (Option<TranscriptEvidence>, bool);
+type MultigeneClassEvidence = (bool, Option<Vec<u32>>);
+type EmRowEvidence = (u32, u32, SmallVec<[u32; 4]>, u32);
+
+pub type VelocityCounts = FxHashMap<(u32, u32), ([u32; 3], bool)>;
+pub type EmCalibrationRow = (String, [[u64; 2]; 10], f64, u64);
+
 /// One junction chain of a molecule: its read count and one or two span-extreme representatives.
 /// `reps` is inline (never more than 2 entries by construction), so a chain costs no heap.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,14 +289,14 @@ pub fn velocity_rows_stranded(
     x: &Extracted,
     anno: &anno::Annotation,
     solo_strand: anno::assign::SoloStrand,
-) -> (FxHashMap<(u32, u32), ([u32; 3], bool)>, u64) {
+) -> (VelocityCounts, u64) {
     let bam2anno: Vec<Option<u32>> =
         x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
 
     // Per molecule: the rep-intersected (transcript, bits) list, sorted by transcript, plus a
     // completeness flag — a chain storing 2 extremes for >2 reads has missing middles, everything
     // else carries every read (1 rep = identical placements at any weight). VELO-2's stratifier.
-    let per_mol: Vec<Option<(u32, u32, Vec<(u32, u8)>, bool)>> = x
+    let per_mol: Vec<Option<VelocityMoleculeEvidence>> = x
         .mols
         .par_iter()
         .map(|m| {
@@ -332,7 +340,7 @@ pub fn velocity_rows_stranded(
         .collect();
 
     // Class-level intersection across molecules (cell-scoped by construction of classes).
-    let mut per_class: FxHashMap<(u32, u32), (Option<Vec<(u32, u8)>>, bool)> = FxHashMap::default();
+    let mut per_class: FxHashMap<CellClass, VelocityClassEvidence> = FxHashMap::default();
     for e in per_mol.into_iter().flatten() {
         let (cell, cls, trs, complete) = e;
         per_class
@@ -353,7 +361,7 @@ pub fn velocity_rows_stranded(
     // UMIs were never in Gene's collapse and stay uncorrected (the first cut merged them too and
     // lost 10% of unspliced mass; the second cut skipped merging and over-counted spliced).
     let canon = gene_canon_map_stranded(x, anno, solo_strand);
-    let mut merged: FxHashMap<(u32, u32), (Option<Vec<(u32, u8)>>, bool)> = FxHashMap::default();
+    let mut merged: FxHashMap<CellClass, VelocityClassEvidence> = FxHashMap::default();
     for ((cell, cls), (trs, complete)) in per_class {
         let Some(trs) = trs else { continue };
         let cls_eff = canon.get(&(cell, cls)).copied().unwrap_or(cls);
@@ -370,7 +378,7 @@ pub fn velocity_rows_stranded(
             .or_insert((Some(trs), complete));
     }
 
-    let mut counts: FxHashMap<(u32, u32), ([u32; 3], bool)> = FxHashMap::default();
+    let mut counts: VelocityCounts = FxHashMap::default();
     let mut n_counted = 0u64;
     for ((cell, _cls), (trs, complete)) in merged {
         let trs = trs.unwrap_or_default();
@@ -434,7 +442,7 @@ pub fn em_star_matrix(x: &Extracted, anno: &anno::Annotation) -> FxHashMap<(u32,
         .collect();
 
     // Per (cell, class): has_single kills the UMI for the mult side; else intersect gene sets.
-    let mut per_class: FxHashMap<(u32, u32), (bool, Option<Vec<u32>>)> = FxHashMap::default();
+    let mut per_class: FxHashMap<CellClass, MultigeneClassEvidence> = FxHashMap::default();
     for e in per_row.into_iter().flatten() {
         let (cell, cls, mut genes) = e;
         genes.sort_unstable();
@@ -618,7 +626,7 @@ pub fn multigene_audit_summary_stranded(
     let mut cls_single = 0u64; // counted today
     let mut cls_multi_only = 0u64; // gene-informative, fully discarded — the EM pool
     let mut cls_mixed = 0u64; // counted, but multi-gene evidence ignored
-    for (_, (s, m)) in &class_state {
+    for (s, m) in class_state.values() {
         match (s, m) {
             (true, false) => cls_single += 1,
             (false, true) => cls_multi_only += 1,
@@ -944,7 +952,9 @@ impl EmSupportSpill {
             );
         }
         Ok(bytes
-            .chunks_exact(8)
+            .as_chunks::<8>()
+            .0
+            .iter()
             .map(|record| EmSupport {
                 class: u32::from_le_bytes(record[..4].try_into().unwrap()),
                 gene_flags: u32::from_le_bytes(record[4..].try_into().unwrap()),
@@ -1194,6 +1204,10 @@ fn em_masked(seed: u64, cell: u32, class: u32, frac: f64) -> bool {
     u < frac
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parallel CSR output buffers are kept explicit to preserve their lockstep updates"
+)]
 fn push_packed_target(
     cell: u32,
     genes: impl Iterator<Item = u32>,
@@ -1411,6 +1425,10 @@ fn packed_weight(mode: u8, alpha: f64, total_unique_global: f64, local: f64, glo
 }
 
 #[inline]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the scalar terms mirror the hierarchical weighting equation at its call sites"
+)]
 fn packed_hierarchical_weight(
     mode: u8,
     group_alpha: f64,
@@ -1650,6 +1668,10 @@ impl PackedEm {
     /// sorted class order, so
     /// f64 accumulation is reproducible across worker counts. Responsibilities are recomputed from
     /// the previous iteration's fixed state and never stored as one allocation per target.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the experimental EM modes and their optional result sinks are intentionally explicit"
+    )]
     pub(crate) fn run(
         &self,
         anno: &anno::Annotation,
@@ -1663,7 +1685,7 @@ impl PackedEm {
         dirichlet_only: bool,
         hybrid: DepthHybridParams,
         hybrid_only: bool,
-        cal_out: Option<&mut Vec<(String, [[u64; 2]; 10], f64, u64)>>,
+        cal_out: Option<&mut Vec<EmCalibrationRow>>,
         metrics_out: Option<&mut Vec<PackedModeMetrics>>,
         paired_metrics_out: Option<&mut Vec<PackedPairedMetrics>>,
     ) -> Option<FxHashMap<(u32, u32), f64>> {
@@ -2155,9 +2177,11 @@ impl PackedEm {
                 }
             }
         }
-        let mut genes: Vec<String> = used.into_iter()
+        let mut genes: Vec<String> = used
+            .into_iter()
             .zip(&anno.gene_ids)
-            .filter_map(|(used, gene)| used.then(|| gene.clone()))
+            .filter(|(used, _)| *used)
+            .map(|(_, gene)| gene.clone())
             .collect();
         genes.sort_unstable();
         genes
@@ -2561,7 +2585,7 @@ pub fn em_experiment(
     mask_frac: f64,
     seed: u64,
     alpha: f64,
-    cal_out: Option<&mut Vec<(String, [[u64; 2]; 10], f64, u64)>>,
+    cal_out: Option<&mut Vec<EmCalibrationRow>>,
 ) -> Option<FxHashMap<(u32, u32), f64>> {
     let bam2anno: Vec<Option<u32>> =
         x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
@@ -2569,7 +2593,7 @@ pub fn em_experiment(
     // Per row: candidate genes + weight, tagged unique(1 gene) / multi(>1). DropRow preserves the
     // historical semantics: an mm alternative on an unannotated chromosome discards the row.
     // SmallVec: candidate lists are 1–2 genes for the overwhelming majority of rows — inline.
-    let per_row: Vec<Option<(u32, u32, SmallVec<[u32; 4]>, u32)>> = rows
+    let per_row: Vec<Option<EmRowEvidence>> = rows
         .par_iter()
         .map_init(RowScratch::default, |s, r| {
             row_genes(r, x, anno, &bam2anno, MmMissing::DropRow, s)?;
@@ -3242,6 +3266,10 @@ fn extract_rows_inner(
 
     let mut ureads: Vec<URead> = Vec::new();
     type MmEntry = (Option<(u32, u32)>, Option<usize>, Vec<(u32, u32, bool, u32)>); // (cb,umi), prim idx, alts (chrom,pos,rev,shape)
+    type ChainKey = (u32, u64);
+    type ChainExtrema = (usize, usize, u32);
+    type MultimapSignature = (u32, u32, u32, u32);
+    type UmiMultimapSignatures = (u32, Vec<MultimapSignature>);
     let mut mm: FxHashMap<u64, MmEntry> = FxHashMap::default();
 
     let mut rec = bam::Record::default();
@@ -3267,7 +3295,7 @@ fn extract_rows_inner(
                             Value::Int8(x) => x as u16,
                             Value::UInt8(x) => x as u16,
                             Value::Int16(x) => x as u16,
-                            Value::UInt16(x) => x as u16,
+                            Value::UInt16(x) => x,
                             Value::Int32(x) => x as u16,
                             Value::UInt32(x) => x as u16,
                             _ => 1,
@@ -3454,7 +3482,7 @@ fn extract_rows_inner(
         let ugroup = &ureads[ustart..i];
         let mgroup = &mreads[mstart..mread_cursor];
 
-        let mut class_of = |u: u32,
+        let class_of = |u: u32,
                             _pos: u32,
                             global_classes: &mut FxHashMap<(u32, u32), u32>,
                             cell_values: &mut FxHashMap<u32, Vec<u32>>,
@@ -3482,7 +3510,7 @@ fn extract_rows_inner(
             let locus = &ugroup[ls..k];
             ls = k;
             // (umi, chain) -> (contained idx, extended idx, count)
-            let mut chains: FxHashMap<(u32, u64), (usize, usize, u32)> = FxHashMap::default();
+            let mut chains: FxHashMap<ChainKey, ChainExtrema> = FxHashMap::default();
             for (li, r) in locus.iter().enumerate() {
                 let sh = &shapes[r.shape as usize];
                 let ch = chain_hash(r.pos, sh);
@@ -3501,7 +3529,7 @@ fn extract_rows_inner(
             }
             // One MolRec per UMI in this locus, gathering all its chains.
             let mut per_umi: FxHashMap<u32, SmallVec<[MolChain; 1]>> = FxHashMap::default();
-            let mut items: Vec<((u32, u64), (usize, usize, u32))> = chains.into_iter().collect();
+            let mut items: Vec<(ChainKey, ChainExtrema)> = chains.into_iter().collect();
             items.sort_unstable_by_key(|((u, ch), _)| (*u, *ch));
             for ((u, _ch), (ci, ei, w)) in items {
                 // Span-minimum (extended) rep first: with chains position-sorted below, the
@@ -3527,17 +3555,17 @@ fn extract_rows_inner(
         }
 
         // Multimapper signatures: aggregate identical (umi, anchor, pattern) tuples.
-        let mut agg: FxHashMap<(u32, u32, u32, u32), u32> = FxHashMap::default();
+        let mut agg: FxHashMap<MultimapSignature, u32> = FxHashMap::default();
         for r in mgroup {
             *agg.entry((r.umi, r.pos, r.shape, r.pattern)).or_insert(0) += 1;
         }
-        let mut magg: Vec<((u32, u32, u32, u32), u32)> = agg.into_iter().collect();
+        let mut magg: Vec<(MultimapSignature, u32)> = agg.into_iter().collect();
         magg.sort_unstable();
-        let mut per_umi_mm: FxHashMap<u32, Vec<(u32, u32, u32, u32)>> = FxHashMap::default();
+        let mut per_umi_mm: FxHashMap<u32, Vec<MultimapSignature>> = FxHashMap::default();
         for ((u, pos, shape, pattern), w) in magg {
             per_umi_mm.entry(u).or_default().push((pos, shape, pattern, w));
         }
-        let mut mm_umis: Vec<(u32, Vec<(u32, u32, u32, u32)>)> = per_umi_mm.into_iter().collect();
+        let mut mm_umis: Vec<UmiMultimapSignatures> = per_umi_mm.into_iter().collect();
         mm_umis.sort_unstable_by_key(|(u, _)| *u);
         for (u, mms) in mm_umis {
             let anchor = mms.iter().map(|m| m.0).min().unwrap_or(0);

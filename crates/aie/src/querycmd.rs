@@ -894,7 +894,7 @@ const JUNCTION_UNIFORM_RESULT_SCHEMA: &str = "gravlax.query.junction.result.v1";
 const JUNCTION_UNIFORM_COUNTS_SCHEMA: &str = "gravlax.query.junction.counts.v1";
 
 fn uniform_count_schema(id: &'static str) -> std::result::Result<TableSchema, OutputError> {
-    Ok(TableSchema::new(
+    TableSchema::new(
         id,
         vec![
             Field::new("aggregation", DataType::String),
@@ -904,7 +904,7 @@ fn uniform_count_schema(id: &'static str) -> std::result::Result<TableSchema, Ou
             Field::new("selected_cells", DataType::UInt64).nullable(),
         ],
     )?
-    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["aggregation", "entity"]))?)
+    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["aggregation", "entity"]))
 }
 
 fn unpack_cell_bytes(packed: u32) -> [u8; 16] {
@@ -995,7 +995,7 @@ where
         }
         Ok(())
     })?;
-    Ok(bundle.finish()?)
+    bundle.finish()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1277,18 +1277,32 @@ pub(crate) fn region_selects_chunk(
             && chunk.bin_start.saturating_add(8_000_000) < start)
 }
 
-fn run_batch(
-    archive: &Path,
-    la: &mut LazyArchive,
-    chunks: &[crate::archivecmd::ChunkInfo],
-    chrom_names: &[String],
-    plan_path: &std::path::Path,
+struct BatchRun<'a> {
+    archive: &'a Path,
+    la: &'a mut LazyArchive,
+    chunks: &'a [crate::archivecmd::ChunkInfo],
+    chrom_names: &'a [String],
+    plan_path: &'a Path,
     top: usize,
-    uniform_output: &UniformQueryOutputArgs,
-    scope_args: &QueryScopeArgs,
+    uniform_output: &'a UniformQueryOutputArgs,
+    scope_args: &'a QueryScopeArgs,
     t0: std::time::Instant,
     t_open: f32,
-) -> Result<()> {
+}
+
+fn run_batch(args: BatchRun<'_>) -> Result<()> {
+    let BatchRun {
+        archive,
+        la,
+        chunks,
+        chrom_names,
+        plan_path,
+        top,
+        uniform_output,
+        scope_args,
+        t0,
+        t_open,
+    } = args;
     let mut scope = load_query_scope(la, scope_args)?;
     if uniform_output.format.is_some() {
         scope.ensure_resolved_mapping_digest()?;
@@ -1950,7 +1964,7 @@ fn discovery_unclaimed(
     anno_of: &[Option<u32>],
     mode: DiscoveryClaimMode,
     solo_strand: anno::assign::SoloStrand,
-) -> Vec<(u32, u32, u32, bool, u32, Option<u32>)> {
+) -> Vec<DiscoveryUnclaimed> {
     let mut out = Vec::new();
     let mut txbuf = Vec::new();
     let mut genes = Vec::new();
@@ -2038,6 +2052,8 @@ fn discovery_unclaimed(
     }
     out
 }
+
+type DiscoveryUnclaimed = (u32, u32, u32, bool, u32, Option<u32>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct JunctionMeta {
@@ -2930,6 +2946,10 @@ fn selected_event_types(requested: &[EventTypeArg]) -> BTreeSet<EventTypeArg> {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "event discovery keeps genomic bounds, catalogue input, and hard scientific thresholds explicit"
+)]
 fn discover_event_keys(
     chrom: &str,
     chrom_id: u32,
@@ -3071,6 +3091,8 @@ struct EventDefinition {
     catalogue_present: bool,
 }
 
+type EventComponentTargets = FxHashMap<(u32, u32), Vec<(u32, u8)>>;
+
 fn prepare_event_definitions(
     keys: &[EventKey],
     chrom_names: &[String],
@@ -3149,7 +3171,7 @@ fn event_packed_hits(
     events: &[EventDefinition],
 ) -> Result<(Vec<u64>, usize, usize)> {
     let shapes = la.shapes()?;
-    let mut chunk_wanted: Vec<FxHashMap<(u32, u32), Vec<(u32, u8)>>> =
+    let mut chunk_wanted: Vec<EventComponentTargets> =
         (0..chunks.len()).map(|_| FxHashMap::default()).collect();
     let mut independent_chunk_decodes = 0usize;
     for (event_index, event) in events.iter().enumerate() {
@@ -3270,6 +3292,7 @@ struct EventResult {
     groups: Vec<(JunctionSetCounts, usize)>,
 }
 
+#[cfg(test)]
 fn reduce_event_results_with<F>(
     class_masks: Vec<Vec<(u32, u8)>>,
     scope: &QueryScope,
@@ -4241,6 +4264,8 @@ struct GraphPathReduction {
     independent_chunk_decodes: usize,
 }
 
+type GraphPathHit = (u32, bool, Vec<(u32, u32)>);
+
 fn reduce_graph_paths(
     la: &mut LazyArchive,
     chunks: &[crate::archivecmd::ChunkInfo],
@@ -4275,13 +4300,13 @@ fn reduce_graph_paths(
     }
     let selected_chunks: Vec<usize> = selected_chunks.into_iter().collect();
     let shapes = la.shapes()?;
-    let chunk_hits: Vec<Vec<(u32, bool, Vec<(u32, u32)>)>> = {
+    let chunk_hits: Vec<Vec<GraphPathHit>> = {
         let (reader, tables) = la.reader_and_tables();
         let reader = &*reader;
         selected_chunks
             .par_iter()
             .map(
-                |&chunk_index| -> Result<Vec<(u32, bool, Vec<(u32, u32)>)>> {
+                |&chunk_index| -> Result<Vec<GraphPathHit>> {
                     let (compressed, raw_len) =
                         reader.read_compressed_at(&format!("c{chunk_index}"))?;
                     let raw = evidence_io::format::decompress(&compressed, raw_len)?;
@@ -4318,9 +4343,9 @@ fn reduce_graph_paths(
             .collect::<Result<_>>()?
     };
 
-    let mut hits: Vec<(u32, bool, Vec<(u32, u32)>)> = chunk_hits.into_iter().flatten().collect();
+    let mut hits: Vec<GraphPathHit> = chunk_hits.into_iter().flatten().collect();
     hits.sort_unstable_by_key(|(class, strand_rev, _)| (*class, *strand_rev));
-    let mut merged_hits: Vec<(u32, bool, Vec<(u32, u32)>)> = Vec::with_capacity(hits.len());
+    let mut merged_hits: Vec<GraphPathHit> = Vec::with_capacity(hits.len());
     for (class, strand_rev, junctions) in hits {
         match merged_hits.last_mut() {
             Some((previous_class, previous_strand, previous_junctions))
@@ -5176,9 +5201,8 @@ fn resolve_transcript_ec_selection(
                 .transcripts
                 .iter()
                 .enumerate()
-                .filter_map(|(index, transcript)| {
-                    (transcript.gene == gene_index).then(|| u32::try_from(index))
-                })
+                .filter(|(_, transcript)| transcript.gene == gene_index)
+                .map(|(index, _)| u32::try_from(index))
                 .collect::<std::result::Result<BTreeSet<_>, _>>()
                 .context("selected transcript index exceeds u32")?;
             let selector_loci = resolved
@@ -5470,6 +5494,10 @@ fn transcript_ec_membership_table(rows: Vec<TranscriptEcMembershipRow>) -> Resul
     Ok(TypedTable::new(schema, typed_rows)?)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the envelope constructor keeps archive provenance, annotation identity, scope, and output limits explicit"
+)]
 fn build_transcript_ec_envelope(
     report: TranscriptEquivalenceReport,
     archive_path: &Path,
@@ -6282,18 +6310,18 @@ pub fn run(args: Args) -> Result<()> {
             uniform_output,
             scope,
         } => {
-            run_batch(
-                &archive,
-                &mut la,
-                &chunks,
-                &chrom_names,
-                &plan,
+            run_batch(BatchRun {
+                archive: &archive,
+                la: &mut la,
+                chunks: &chunks,
+                chrom_names: &chrom_names,
+                plan_path: &plan,
                 top,
-                &uniform_output,
-                &scope,
+                uniform_output: &uniform_output,
+                scope_args: &scope,
                 t0,
                 t_open,
-            )?;
+            })?;
         }
         What::Jset {
             include,
@@ -7166,7 +7194,7 @@ pub fn run(args: Args) -> Result<()> {
             // input order, so no whole-archive molecule table is retained.
             let mut runbuf: Vec<(u32, u32, u32, bool, u32, u32)> = Vec::new(); // chrom,s,e,rev,cell,class
             let mut sitebuf: Vec<(u32, u32, u32, bool, u32, u32, u32)> = Vec::new(); // + site
-            let mut flush_runs =
+            let flush_runs =
                 |buf: &mut Vec<(u32, u32, u32, bool, u32, u32)>,
                  candidates: &mut Vec<(u32, u32, u32, bool, usize, usize)>| {
                     for rev in [false, true] {
@@ -7247,7 +7275,7 @@ pub fn run(args: Args) -> Result<()> {
                     end += 1;
                 }
                 let batch = &chunks[first..end];
-                let unclaimed: Vec<Vec<(u32, u32, u32, bool, u32, Option<u32>)>> = {
+                let unclaimed: Vec<Vec<DiscoveryUnclaimed>> = {
                     let (reader, tables) = la.reader_and_tables();
                     let reader = &*reader;
                     batch.par_iter().enumerate().map(|(j, info)| {
@@ -8116,6 +8144,9 @@ pub fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
+/// Exact junction support, decoded chunk count, and per-cell molecule classes.
+pub type JunctionCountResult = (u64, usize, FxHashMap<u32, FxHashSet<u32>>);
+
 /// The junction query core, shared by `query junction` and `federate`: catalogue lookup,
 /// postings walk, chunk decode, per-cell class-deduplicated counts. None if the junction is not
 /// in this archive's catalogue.
@@ -8125,7 +8156,7 @@ pub fn junction_counts(
     cid: u32,
     donor: u32,
     acceptor: u32,
-) -> Result<Option<(u64, usize, FxHashMap<u32, FxHashSet<u32>>)>> {
+) -> Result<Option<JunctionCountResult>> {
     let cat = la.reader().read("index.junctions")?;
     let mut c = Cursor::new(&cat);
     let mut jid = 0u32;
@@ -8182,7 +8213,7 @@ pub(crate) fn junction_counts_routed(
     acceptor: u32,
     total_support: u64,
     posts: &[u32],
-) -> Result<(u64, usize, FxHashMap<u32, FxHashSet<u32>>)> {
+) -> Result<JunctionCountResult> {
     junction_counts_routed_with_shape_route(
         la,
         chunks,
@@ -8199,6 +8230,10 @@ pub(crate) fn junction_counts_routed(
 /// source archive's complete shape dictionary, but never replaces the source molecule records or
 /// their class-to-cell mapping. Every candidate placement is checked against both requested
 /// genomic boundaries by [`crate::shaperoute::SpanRoute::matches`].
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the routed junction kernel keeps exact coordinates, support, postings, and optional shape routing explicit"
+)]
 pub(crate) fn junction_counts_routed_with_shape_route(
     la: &mut LazyArchive,
     chunks: &[crate::archivecmd::ChunkInfo],
@@ -8208,7 +8243,7 @@ pub(crate) fn junction_counts_routed_with_shape_route(
     total_support: u64,
     posts: &[u32],
     shape_route: Option<(&crate::shaperoute::SpanRoute, u32)>,
-) -> Result<(u64, usize, FxHashMap<u32, FxHashSet<u32>>)> {
+) -> Result<JunctionCountResult> {
     if let Some(&bad) = posts.iter().find(|&&post| post as usize >= chunks.len()) {
         bail!("junction posting references missing chunk {bad}");
     }
@@ -11395,7 +11430,7 @@ fn apa_test(
         p_perm: Option<f64>,
     }
     let mut rows: Vec<Row> = Vec::new();
-    let mut process = |gene: u32,
+    let process = |gene: u32,
                        pts: &mut Vec<(u32, bool, u32, u32)>,
                        seq: Option<&[u8]>,
                        rows: &mut Vec<Row>| {
@@ -11662,7 +11697,7 @@ fn apa_test(
 
 /// Gene spans overlapping the window, for the --plot underlay.
 fn gene_underlay(
-    gtf: &PathBuf,
+    gtf: &Path,
     chrom: &str,
     start: u32,
     end: u32,
@@ -11698,7 +11733,7 @@ fn gene_underlay(
 
 /// IGV-ready exports: per-strand molecule-coverage bedGraph + TopHat-style BED12 junctions.
 fn export_igv(
-    prefix: &PathBuf,
+    prefix: &Path,
     chrom: &str,
     start: u32,
     cov: &[Vec<u32>],

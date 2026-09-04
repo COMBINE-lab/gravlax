@@ -16,9 +16,12 @@ use evidence_io::{Block, Junction, Placement, Strand};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
 use std::fs::{self, OpenOptions};
+#[cfg(test)]
 use std::io::{BufWriter, Write};
 use std::path::Path;
+#[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const REPORT_SCHEMA: &str = "gravlax.annotation-comparison.v1";
@@ -122,13 +125,17 @@ pub struct ClassState {
 impl ClassState {
     fn final_contribution(&self) -> Option<&str> {
         self.counted
-            .then(|| self.selected_comparison_gene_id.as_deref())
+            .then_some(self.selected_comparison_gene_id.as_deref())
             .flatten()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "the full variant names are part of the serialized annotation-comparison schema"
+)]
 pub enum TransitionCause {
     CandidateSetChanged,
     RowAssignmentChanged,
@@ -338,13 +345,14 @@ pub fn compare_archive(
     // Validate the join before opening/decoding the archive: ambiguous identifiers are a policy
     // error, not something that should yield a partial scientific comparison.
     let gene_keys = ComparisonGeneKeys::new(before, after, options.gene_key_policy)?;
-    let stream = StreamingReplayArchive::open(&archive.to_path_buf())?;
+    let stream = StreamingReplayArchive::open(archive)?;
     compare_stream(&stream, before, after, &gene_keys, options)
 }
 
 /// Compute the complete report first, then publish JSON atomically without replacing a path that
 /// already exists.  A replay, validation, serialization, or publication error leaves no partial
 /// destination file.
+#[cfg(test)]
 pub fn write_comparison_json_noclobber(
     archive: &Path,
     before: &anno::Annotation,
@@ -667,7 +675,6 @@ fn compare_stream(
                     before,
                     after,
                     gene_keys,
-                    options.solo_strand,
                     mols,
                     chunk_ordinals[first + j],
                     options,
@@ -738,12 +745,11 @@ fn classify_chunk(
     before: &anno::Annotation,
     after: &anno::Annotation,
     gene_keys: &ComparisonGeneKeys,
-    strand: SoloStrand,
     mols: &[MolRec],
     ordinal_base: u64,
     options: CompareOptions,
 ) -> Result<BatchPart> {
-    let mut classifier = PairClassifier::new(x, before, after, strand);
+    let mut classifier = PairClassifier::new(x, before, after, options.solo_strand);
     let mut part = BatchPart::default();
     for (molecule_offset, mol) in mols.iter().enumerate() {
         if mol.umi_class >= x.n_classes {
@@ -909,7 +915,7 @@ fn classify_chunk(
 fn witness_is_better(candidate: &MoleculeDraft, current: &MoleculeDraft) -> bool {
     let candidate_direct = candidate.changed_rows_total > 0;
     let current_direct = current.changed_rows_total > 0;
-    candidate_direct > current_direct
+    (candidate_direct && !current_direct)
         || (candidate_direct == current_direct && candidate.ordinal < current.ordinal)
 }
 
@@ -1184,7 +1190,7 @@ fn public_state(outcome: &InternalOutcome, gene_keys: &GeneKeyIndex) -> Result<C
         .collect();
     let selected_identity = outcome
         .selected_gene
-        .map(|gene| gene_keys.identity(gene).map(Clone::clone))
+        .map(|gene| gene_keys.identity(gene).cloned())
         .transpose()?;
     Ok(ClassState {
         gene_support,
@@ -1438,6 +1444,7 @@ fn build_report(
     })
 }
 
+#[cfg(test)]
 fn publish_json_noclobber(output: &Path, report: &AnnotationComparison) -> Result<()> {
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
     let parent = output

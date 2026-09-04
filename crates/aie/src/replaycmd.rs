@@ -112,7 +112,7 @@ pub fn run(args: Args) -> Result<()> {
     let corrector: Option<BcCorrector> = if !args.use_cb_tag && !args.simple_bc {
         let t = std::time::Instant::now();
         let mut counts: FxHashMap<u32, u32> = FxHashMap::default();
-        let mut r0 = bam::io::reader::Builder::default()
+        let mut r0 = bam::io::reader::Builder
             .build_from_path(&args.bam)
             .with_context(|| format!("opening {}", args.bam.display()))?;
         r0.read_header()?;
@@ -142,7 +142,7 @@ pub fn run(args: Args) -> Result<()> {
         None
     };
 
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     let header = reader.read_header()?;
@@ -176,7 +176,7 @@ pub fn run(args: Args) -> Result<()> {
         h.finish()
     }
 
-    let mut flush = |chrom: i32,
+    let flush = |chrom: i32,
                      buf: &mut Vec<Read>,
                      per_cg: &mut FxHashMap<(u32, u32), FxHashMap<u32, u32>>,
                      umi_genes: &mut FxHashMap<(u32, u32), FxHashMap<u32, u32>>,
@@ -305,8 +305,18 @@ pub fn run(args: Args) -> Result<()> {
                 continue;
             }
             *n_assigned += 1;
-            *per_cg.entry((cb, gene)).or_default().entry(u).and_modify(|r| *r += reads).or_insert(reads);
-            *umi_genes.entry((cb, u)).or_default().entry(gene).and_modify(|r| *r += reads).or_insert(reads);
+            per_cg
+                .entry((cb, gene))
+                .or_default()
+                .entry(u)
+                .and_modify(|r| *r += reads)
+                .or_insert(reads);
+            umi_genes
+                .entry((cb, u))
+                .or_default()
+                .entry(gene)
+                .and_modify(|r| *r += reads)
+                .or_insert(reads);
         }
         let _ = n_multimap;
         Ok(())
@@ -444,8 +454,18 @@ pub fn run(args: Args) -> Result<()> {
             continue;
         }
         n_mm_counted += 1;
-        *per_cg.entry((cb, gene)).or_default().entry(ur).and_modify(|r| *r += 1).or_insert(1);
-        *umi_genes.entry((cb, ur)).or_default().entry(gene).and_modify(|r| *r += 1).or_insert(1);
+        per_cg
+            .entry((cb, gene))
+            .or_default()
+            .entry(ur)
+            .and_modify(|r| *r += 1)
+            .or_insert(1);
+        umi_genes
+            .entry((cb, ur))
+            .or_default()
+            .entry(gene)
+            .and_modify(|r| *r += 1)
+            .or_insert(1);
     }
     eprintln!("multimapper reads counted (single-gene union): {n_mm_counted}");
     eprintln!(

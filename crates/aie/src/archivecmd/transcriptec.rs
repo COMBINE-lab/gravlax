@@ -118,6 +118,7 @@ impl TranscriptEquivalenceOptions {
         self
     }
 
+    #[cfg(test)]
     pub fn only_classes_with_compatible_evidence(mut self) -> Self {
         self.include_classes_without_compatible_evidence = false;
         self
@@ -224,12 +225,14 @@ pub struct TranscriptEquivalenceReport {
 
 impl TranscriptEquivalenceReport {
     /// Deterministic JSON: the result contains only sorted vectors and no serialized maps.
+    #[cfg(test)]
     pub fn to_pretty_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self).context("serializing transcript equivalence report")
     }
 }
 
 /// Load either an AIC or GTF and derive transcript equivalence classes from an `.aie` archive.
+#[cfg(test)]
 pub fn derive_transcript_equivalence_classes(
     archive: &Path,
     annotation: &Path,
@@ -266,8 +269,7 @@ pub fn derive_transcript_equivalence_classes_with_annotation(
 ) -> Result<TranscriptEquivalenceReport> {
     validate_transcript_identifiers(annotation)?;
     validate_options(annotation, options)?;
-    let archive_path = archive.to_path_buf();
-    let replay = StreamingReplayArchive::open(&archive_path).with_context(|| {
+    let replay = StreamingReplayArchive::open(archive).with_context(|| {
         format!(
             "opening transcript-equivalence archive {}",
             archive.display()
@@ -311,6 +313,7 @@ pub fn derive_transcript_equivalence_classes_with_annotation(
 }
 
 /// In-memory counterpart used by scientific callers and focused regression tests.
+#[cfg(test)]
 pub fn derive_transcript_equivalence_classes_from_extracted(
     extracted: &Extracted,
     annotation: &anno::Annotation,
@@ -651,7 +654,7 @@ impl CandidateReduction {
             None => candidates.to_vec(),
             Some(previous) => {
                 let intersection = intersect_sorted(&previous, candidates);
-                if previous.len() > 0 && intersection.is_empty() {
+                if !previous.is_empty() && intersection.is_empty() {
                     self.conflict = true;
                 }
                 intersection
@@ -1791,7 +1794,7 @@ mod tests {
 
     #[test]
     fn archive_scan_intersects_globally_across_chunks_and_aic_v1_fails_clearly() {
-        let records = vec![
+        let records = [
             exon("chr1", 1, 100, '+', "G1", "T1"),
             exon("chr1", 1, 100, '+', "G2", "T2"),
             exon("chr1", 201, 300, '+', "G2", "T2"),

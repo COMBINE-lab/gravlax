@@ -81,14 +81,15 @@ struct SRead {
 
 pub fn run(args: Args) -> Result<()> {
     let wl = load_whitelist(&args.whitelist)?;
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     reader.read_header()?;
 
     // Multimapper records arrive scattered (coordinate order), so they are collected by read name
     // and assembled after the scan. Primaries of unique reads stream straight into `reads`.
-    let mut mm: FxHashMap<u64, (Option<(u32, u32)>, Option<usize>, Vec<Placement>)> = FxHashMap::default();
+    type MultimapRead = (Option<(u32, u32)>, Option<usize>, Vec<Placement>);
+    let mut mm: FxHashMap<u64, MultimapRead> = FxHashMap::default();
     let mut reads: Vec<SRead> = Vec::new();
     let mut bc_cache: FxHashMap<u32, Option<u32>> = FxHashMap::default();
     let mut rec = bam::Record::default();
@@ -165,12 +166,10 @@ pub fn run(args: Args) -> Result<()> {
     }
     eprintln!("primaries {n_prim}, secondaries {n_sec}, mm reads {}", mm.len());
 
-    let mut n_mm_reads = 0u64;
     for (_k, (cb, prim_idx, mut alts)) in mm.drain() {
         let (Some((cell, u)), Some(pi)) = (cb, prim_idx) else { continue };
         let prim = alts[pi].clone();
         alts.sort_by_key(|p| (p.chrom, p.start()));
-        n_mm_reads += 1;
         reads.push(SRead { cell, umi: u, prim, alts: Some(alts) });
     }
 
@@ -199,7 +198,7 @@ pub fn run(args: Args) -> Result<()> {
     // Pattern dictionary for multimapper signatures: offsets from the read's own anchor.
     let mut patterns: FxHashMap<Vec<(u32, i64, bool)>, u32> = FxHashMap::default();
     let mut pattern_uses: Vec<(u32, u64)> = Vec::new(); // (pattern id, signature hash) per mm sig
-    let mut sig_of_read = |r: &SRead, patterns: &mut FxHashMap<Vec<(u32, i64, bool)>, u32>| -> (u64, bool, Option<u32>) {
+    let sig_of_read = |r: &SRead, patterns: &mut FxHashMap<Vec<(u32, i64, bool)>, u32>| -> (u64, bool, Option<u32>) {
         match &r.alts {
             None => (placement_key(&r.prim), false, None),
             Some(alts) => {

@@ -1339,8 +1339,8 @@ fn set_table_schema(
     fields: Vec<Field>,
     key: &[&str],
 ) -> std::result::Result<TableSchema, OutputError> {
-    Ok(TableSchema::new(id, fields)?
-        .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(key.iter().copied()))?)
+    TableSchema::new(id, fields)?
+        .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(key.iter().copied()))
 }
 
 fn sequence_table_schema(
@@ -1348,11 +1348,11 @@ fn sequence_table_schema(
     fields: Vec<Field>,
     key: &str,
 ) -> std::result::Result<TableSchema, OutputError> {
-    Ok(TableSchema::new(id, fields)?.with_semantics(
+    TableSchema::new(id, fields)?.with_semantics(
         TableSemantics::new(RowSemantics::Sequence)
             .with_key([key])
             .ordered_by([gravlax_output::OrderKey::ascending(key)]),
-    )?)
+    )
 }
 
 fn uniform_path<'a>(path: &'a Path, role: &str) -> Result<&'a str> {
@@ -1732,53 +1732,54 @@ fn write_collection(path: &Path, collection: &Collection) -> Result<CollectionWr
         let mut raw_bytes = 0u64;
         let mut shape_route_raw_bytes = 0u64;
         let mut shape_route_compressed_bytes = 0u64;
-        let mut write_section = |name: &str, raw: &[u8]| -> Result<()> {
-            let raw_len = u64::try_from(raw.len()).context("collection section exceeds u64")?;
-            let digest = *blake3::hash(&raw).as_bytes();
-            let compressed = evidence_io::format::compress(&raw, 9)?;
-            let compressed_len =
-                u64::try_from(compressed.len()).context("compressed section exceeds u64")?;
-            writer.write_all(&compressed)?;
-            raw_bytes = raw_bytes
-                .checked_add(raw_len)
-                .context("collection raw section byte count overflow")?;
-            if name.starts_with("s.") {
-                shape_route_raw_bytes = shape_route_raw_bytes
+        {
+            let mut write_section = |name: &str, raw: &[u8]| -> Result<()> {
+                let raw_len = u64::try_from(raw.len()).context("collection section exceeds u64")?;
+                let digest = *blake3::hash(raw).as_bytes();
+                let compressed = evidence_io::format::compress(raw, 9)?;
+                let compressed_len =
+                    u64::try_from(compressed.len()).context("compressed section exceeds u64")?;
+                writer.write_all(&compressed)?;
+                raw_bytes = raw_bytes
                     .checked_add(raw_len)
-                    .context("shape-route raw byte count overflow")?;
-                shape_route_compressed_bytes = shape_route_compressed_bytes
-                    .checked_add(compressed_len)
-                    .context("shape-route compressed byte count overflow")?;
+                    .context("collection raw section byte count overflow")?;
+                if name.starts_with("s.") {
+                    shape_route_raw_bytes = shape_route_raw_bytes
+                        .checked_add(raw_len)
+                        .context("shape-route raw byte count overflow")?;
+                    shape_route_compressed_bytes = shape_route_compressed_bytes
+                        .checked_add(compressed_len)
+                        .context("shape-route compressed byte count overflow")?;
+                }
+                directory_rows.push((name.to_owned(), raw_len, compressed_len, digest));
+                Ok(())
+            };
+            let manifest_raw = encode_manifest(collection)?;
+            write_section("manifest", &manifest_raw)?;
+            for (name, begin, end) in &junction_sections {
+                let raw = encode_junction_rows(
+                    &collection.junctions[*begin..*end],
+                    collection.archives.len(),
+                );
+                write_section(name, &raw)?;
             }
-            directory_rows.push((name.to_owned(), raw_len, compressed_len, digest));
-            Ok(())
-        };
-        let manifest_raw = encode_manifest(collection)?;
-        write_section("manifest", &manifest_raw)?;
-        for (name, begin, end) in &junction_sections {
-            let raw = encode_junction_rows(
-                &collection.junctions[*begin..*end],
-                collection.archives.len(),
-            );
-            write_section(name, &raw)?;
+            if collection.encoded_shape_route_blocks.is_empty() {
+                for ((_, descriptor), block) in expected_route_sections
+                    .iter()
+                    .zip(&collection.shape_route_blocks)
+                {
+                    let raw = shaperoute::encode_block(block)?;
+                    write_section(&descriptor.section_name, &raw)?;
+                }
+            } else {
+                for ((_, descriptor), block) in expected_route_sections
+                    .iter()
+                    .zip(&collection.encoded_shape_route_blocks)
+                {
+                    write_section(&descriptor.section_name, &block.raw)?;
+                }
+            }
         }
-        if collection.encoded_shape_route_blocks.is_empty() {
-            for ((_, descriptor), block) in expected_route_sections
-                .iter()
-                .zip(&collection.shape_route_blocks)
-            {
-                let raw = shaperoute::encode_block(block)?;
-                write_section(&descriptor.section_name, &raw)?;
-            }
-        } else {
-            for ((_, descriptor), block) in expected_route_sections
-                .iter()
-                .zip(&collection.encoded_shape_route_blocks)
-            {
-                write_section(&descriptor.section_name, &block.raw)?;
-            }
-        }
-        drop(write_section);
         let observed_names: Vec<&str> = directory_rows
             .iter()
             .map(|(name, _, _, _)| name.as_str())
@@ -2045,11 +2046,13 @@ fn lookup_chain_junctions(
         let mut bins: BTreeMap<(u32, u32), Vec<GlobalJunction>> = BTreeMap::new();
         for &(chrom, donor, _) in loci {
             let key = (chrom, donor / JUNCTION_BIN_BP);
-            if !bins.contains_key(&key) {
-                bins.insert(
-                    key,
-                    load_junction_segment(&layer.file, &layer.manifest, chrom, donor)?,
-                );
+            if let std::collections::btree_map::Entry::Vacant(entry) = bins.entry(key) {
+                entry.insert(load_junction_segment(
+                    &layer.file,
+                    &layer.manifest,
+                    chrom,
+                    donor,
+                )?);
             }
         }
         for (index, &(chrom, donor, acceptor)) in loci.iter().enumerate() {
@@ -3231,7 +3234,7 @@ fn stream_uniform_build(
     Ok(())
 }
 
-fn run_build(
+struct BuildRun {
     samples: Vec<String>,
     source_digests: Vec<String>,
     base: Option<PathBuf>,
@@ -3240,7 +3243,19 @@ fn run_build(
     build_shape_routes: bool,
     json_output: bool,
     uniform_output: CollectionOutputArgs,
-) -> Result<()> {
+}
+
+fn run_build(args: BuildRun) -> Result<()> {
+    let BuildRun {
+        samples,
+        source_digests,
+        base,
+        out,
+        allow_unstamped,
+        build_shape_routes,
+        json_output,
+        uniform_output,
+    } = args;
     let started = std::time::Instant::now();
     if base.is_some() && samples.is_empty() {
         bail!("an incremental build requires at least one new --sample");
@@ -3664,11 +3679,13 @@ fn unpack_barcode(packed: u32) -> String {
         .expect("packed barcode always decodes as ASCII")
 }
 
+type CountSummary = (usize, usize, Vec<(String, usize)>);
+
 fn summarize_counts(
     archive: &mut LazyArchive,
     per_cell: &FxHashMap<u32, FxHashSet<u32>>,
     top: usize,
-) -> Result<(usize, usize, Vec<(String, usize)>)> {
+) -> Result<CountSummary> {
     let mut cells: Vec<(u32, usize)> = per_cell
         .iter()
         .map(|(cell, classes)| (*cell, classes.len()))
@@ -3875,6 +3892,10 @@ fn collection_cell_schema(id: &'static str) -> std::result::Result<TableSchema, 
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the streaming serializer keeps each schema-bound input explicit at the output boundary"
+)]
 fn stream_uniform_junction(
     writer: &mut dyn Write,
     format: CollectionOutputFormat,
@@ -4097,7 +4118,7 @@ fn region_counts_routed(
     })
 }
 
-fn run_junction_query(
+struct JunctionQueryRun {
     path: PathBuf,
     locus: String,
     min_support: u64,
@@ -4106,7 +4127,19 @@ fn run_junction_query(
     verify_content: bool,
     json_output: bool,
     uniform_output: CollectionOutputArgs,
-) -> Result<()> {
+}
+
+fn run_junction_query(args: JunctionQueryRun) -> Result<()> {
+    let JunctionQueryRun {
+        path,
+        locus,
+        min_support,
+        top,
+        explain,
+        verify_content,
+        json_output,
+        uniform_output,
+    } = args;
     let started = std::time::Instant::now();
     let chain = open_collection_chain(&path)?;
     let collection = &chain.collection;
@@ -4870,6 +4903,10 @@ fn jset_cell_selection(
     SelectionSummary::selected(available, emitted)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the streaming serializer keeps request, routing, selection, and schema inputs explicit at the output boundary"
+)]
 fn stream_uniform_jset(
     writer: &mut dyn Write,
     format: CollectionOutputFormat,
@@ -5039,7 +5076,7 @@ fn stream_uniform_jset(
     Ok(())
 }
 
-fn run_jset_query(
+struct JsetQueryRun {
     path: PathBuf,
     includes: Vec<String>,
     excludes: Vec<String>,
@@ -5049,7 +5086,20 @@ fn run_jset_query(
     verify_content: bool,
     json_output: bool,
     uniform_output: CollectionOutputArgs,
-) -> Result<()> {
+}
+
+fn run_jset_query(args: JsetQueryRun) -> Result<()> {
+    let JsetQueryRun {
+        path,
+        includes,
+        excludes,
+        min_support,
+        top,
+        explain,
+        verify_content,
+        json_output,
+        uniform_output,
+    } = args;
     let started = std::time::Instant::now();
     let chain = open_collection_chain(&path)?;
     let collection = &chain.collection;
@@ -6447,16 +6497,16 @@ pub fn run(args: Args) -> Result<()> {
             shape_routes,
             json,
             uniform_output,
-        } => run_build(
+        } => run_build(BuildRun {
             samples,
             source_digests,
             base,
             out,
             allow_unstamped,
-            shape_routes,
-            json,
+            build_shape_routes: shape_routes,
+            json_output: json,
             uniform_output,
-        ),
+        }),
         What::Inspect {
             collection,
             verify_content,
@@ -6472,16 +6522,16 @@ pub fn run(args: Args) -> Result<()> {
             verify_content,
             json,
             uniform_output,
-        } => run_junction_query(
-            collection,
+        } => run_junction_query(JunctionQueryRun {
+            path: collection,
             locus,
             min_support,
             top,
             explain,
             verify_content,
-            json,
+            json_output: json,
             uniform_output,
-        ),
+        }),
         What::Region {
             collection,
             locus,
@@ -6509,17 +6559,17 @@ pub fn run(args: Args) -> Result<()> {
             verify_content,
             json,
             uniform_output,
-        } => run_jset_query(
-            collection,
-            include,
-            exclude,
+        } => run_jset_query(JsetQueryRun {
+            path: collection,
+            includes: include,
+            excludes: exclude,
             min_support,
             top,
             explain,
             verify_content,
-            json,
+            json_output: json,
             uniform_output,
-        ),
+        }),
     }
 }
 

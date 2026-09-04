@@ -758,17 +758,17 @@ pub fn run(args: Args) -> Result<()> {
             bail!("contig {missed} with candidate genes not found in {}", fasta.display());
         }
     } else {
-        for gi in 0..genes.len() {
-            if genes[gi].pts.is_empty() {
+        for (gi, gene) in genes.iter_mut().enumerate() {
+            if gene.pts.is_empty() {
                 continue;
             }
-            let mut g = std::mem::replace(&mut genes[gi], Gene {
+            let mut g = std::mem::replace(gene, Gene {
                 id: String::new(), name: String::new(), chrom: String::new(), rev: false,
                 start0: 0, end0: 0, cor_lo: 0, cor_hi: 0, clip_reason: "max",
                 pts: Vec::new(), cov: Vec::new(),
             });
             decide(gi, &mut g, None, &mut exts);
-            genes[gi] = g;
+            *gene = g;
         }
     }
 

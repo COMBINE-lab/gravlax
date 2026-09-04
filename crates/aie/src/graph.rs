@@ -173,7 +173,7 @@ pub fn run(args: Args) -> Result<()> {
         None => None,
     };
 
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     reader.read_header()?;
@@ -220,7 +220,7 @@ pub fn run(args: Args) -> Result<()> {
         let next = cell_ids.len() as u32;
         let cell = *cell_ids.entry(cell_key.clone()).or_insert_with(|| {
             cell_in_filter.push(
-                cells_filter.as_ref().map_or(true, |s| s.contains(&cell_key)),
+                cells_filter.as_ref().is_none_or(|s| s.contains(&cell_key)),
             );
             next
         });

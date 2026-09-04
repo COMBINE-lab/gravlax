@@ -307,8 +307,8 @@ fn alignment_fingerprint(record: &bam::Record, nh: u64) -> Option<[u64; 4]> {
     hasher.update(&nh.to_le_bytes());
     let digest = hasher.finalize();
     let mut fingerprint = [0u64; 4];
-    for (index, chunk) in digest.as_bytes().chunks_exact(8).enumerate() {
-        fingerprint[index] = u64::from_le_bytes(chunk.try_into().unwrap());
+    for (index, chunk) in digest.as_bytes().as_chunks::<8>().0.iter().enumerate() {
+        fingerprint[index] = u64::from_le_bytes(*chunk);
     }
     Some(fingerprint)
 }
@@ -531,7 +531,7 @@ fn tag_checks(stats: &TagStats, chemistry: Option<Chemistry>) -> Vec<Check> {
 }
 
 fn scan_bam(path: &Path, chemistry: Option<Chemistry>) -> Result<(ScanCounts, Vec<Check>)> {
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(path)
         .with_context(|| format!("opening BAM {}", path.display()))?;
     let header = reader

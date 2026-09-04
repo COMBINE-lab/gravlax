@@ -1,7 +1,7 @@
 use noodles_bam as bam;
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).unwrap();
-    let mut r = bam::io::reader::Builder::default().build_from_path(&path)?;
+    let mut r = bam::io::reader::Builder.build_from_path(&path)?;
     r.read_header()?;
     let mut rec = bam::Record::default();
     let mut n = 0;

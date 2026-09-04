@@ -118,7 +118,7 @@ fn next_primary(
 }
 
 fn open(path: &PathBuf) -> Result<BamReader> {
-    let mut r = bam::io::reader::Builder::default()
+    let mut r = bam::io::reader::Builder
         .build_from_path(path)
         .with_context(|| format!("opening {}", path.display()))?;
     r.read_header()?;

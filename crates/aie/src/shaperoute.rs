@@ -172,6 +172,7 @@ struct RouteTriple {
     donor_offset: u32,
 }
 
+#[cfg(test)]
 impl DerivedShapeRoutes {
     pub(crate) fn total_spans(&self) -> usize {
         self.blocks.iter().map(|block| block.spans.len()).sum()

@@ -1822,12 +1822,16 @@ mod tests {
             assembly: feature_view.then(|| "GRCh38.p14".to_owned()),
             annotation_label: feature_view.then(|| "TEST 1".to_owned()),
             junction: (view == PlannerView::Junction).then(|| "chr1:200-300".to_owned()),
-            include: (view == PlannerView::JunctionSet)
-                .then(|| vec!["chr1:200-300".to_owned()])
-                .unwrap_or_default(),
-            exclude: (view == PlannerView::JunctionSet)
-                .then(|| vec!["chr1:200-350".to_owned()])
-                .unwrap_or_default(),
+            include: if view == PlannerView::JunctionSet {
+                vec!["chr1:200-300".to_owned()]
+            } else {
+                Vec::new()
+            },
+            exclude: if view == PlannerView::JunctionSet {
+                vec!["chr1:200-350".to_owned()]
+            } else {
+                Vec::new()
+            },
             cells: None,
             groups: None,
             aggregation: crate::plancmd::QueryAggregation::Auto,

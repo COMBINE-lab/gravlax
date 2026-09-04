@@ -34,6 +34,12 @@ const PAS_MOTIFS: [&[u8; 6]; 12] = [
     b"AATATA", b"AATAGA", b"ACTAAA", b"AATGAA",
 ];
 
+type EndpointCountRow = (u64, [u32; 2]);
+type CollapsedEndpointRecords = (Vec<EndpointCountRow>, usize);
+type GroupMapLoad = (FxHashMap<u32, u8>, [usize; 2], [usize; 2], Option<String>);
+type PolyAsiteCatalogue = BTreeMap<(String, bool), Vec<u32>>;
+type PolyAsiteLoad = (PolyAsiteCatalogue, Option<String>);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum UniformEndReportFormat {
     Text,
@@ -237,7 +243,7 @@ struct SampleCounts {
     /// Sorted `(gene << 32 | endpoint, [group0, group1])` rows. A flat array is both smaller
     /// than a hash table and lets downstream gene fits borrow contiguous ranges without building
     /// a second sample-by-gene hierarchy.
-    counts: Vec<(u64, [u32; 2])>,
+    counts: Vec<EndpointCountRow>,
     reference_signature: Option<evidence_io::genome::GenomeSig>,
     chunks: usize,
     archive_format_version: Option<u32>,
@@ -245,7 +251,7 @@ struct SampleCounts {
     groups_identity: Option<String>,
 }
 
-fn gene_count_rows(sample: &SampleCounts, gene: usize) -> &[(u64, [u32; 2])] {
+fn gene_count_rows(sample: &SampleCounts, gene: usize) -> &[EndpointCountRow] {
     let lo = (gene as u64) << 32;
     let hi = ((gene as u64) + 1) << 32;
     let start = sample.counts.partition_point(|row| row.0 < lo);
@@ -256,7 +262,7 @@ fn gene_count_rows(sample: &SampleCounts, gene: usize) -> &[(u64, [u32; 2])] {
 fn collapse_endpoint_records(
     records: &mut Vec<EndpointRecord>,
     gene_rev: &[bool],
-) -> Result<(Vec<(u64, [u32; 2])>, usize)> {
+) -> Result<CollapsedEndpointRecords> {
     records.par_sort_unstable_by_key(|record| (record.gene, record.class, record.endpoint));
     let mut deduplicated_gene_umis = 0usize;
     let mut write = 0usize;
@@ -600,7 +606,7 @@ fn load_group_map(
     contrast: &[String; 2],
     shuffle_seed: Option<u64>,
     capture_identity: bool,
-) -> Result<(FxHashMap<u32, u8>, [usize; 2], [usize; 2], Option<String>)> {
+) -> Result<GroupMapLoad> {
     let packed_cells = archive.cells()?.to_vec();
     let packed_to_id: FxHashMap<u32, u32> = packed_cells
         .iter()
@@ -903,7 +909,7 @@ fn normalize_chrom(value: &str) -> String {
     }
 }
 
-fn polyasite_catalogue_identity(sites: &BTreeMap<(String, bool), Vec<u32>>) -> String {
+fn polyasite_catalogue_identity(sites: &PolyAsiteCatalogue) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"gravlax-polyasite-catalogue-v1\0");
     for ((chrom, reverse), positions) in sites {
@@ -924,8 +930,8 @@ fn polyasite_catalogue_identity(sites: &BTreeMap<(String, bool), Vec<u32>>) -> S
 fn load_polyasite(
     path: &Path,
     capture_identity: bool,
-) -> Result<(BTreeMap<(String, bool), Vec<u32>>, Option<String>)> {
-    let mut sites: BTreeMap<(String, bool), Vec<u32>> = BTreeMap::new();
+) -> Result<PolyAsiteLoad> {
+    let mut sites = PolyAsiteCatalogue::new();
     for (line_index, line) in open_maybe_gzip(path)?.lines().enumerate() {
         let line = line?;
         if line.is_empty() || line.starts_with('#') {
@@ -956,7 +962,7 @@ fn load_polyasite(
 
 fn external_catalogue_by_gene(
     index: &GeneIndex,
-    polyasite: &BTreeMap<(String, bool), Vec<u32>>,
+    polyasite: &PolyAsiteCatalogue,
     gene_count: usize,
     merge_gap: u32,
 ) -> Vec<Vec<u32>> {
@@ -1443,12 +1449,16 @@ fn site_catalogue(
     Ok(sites)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the explicit inputs make the audited sequence-scoring policy visible at its only call site"
+)]
 fn score_sites(
     sites: &mut [Site],
     annotation: &anno::Annotation,
     gene_rev: &[bool],
     genome: &Path,
-    polyasite: &BTreeMap<(String, bool), Vec<u32>>,
+    polyasite: &PolyAsiteCatalogue,
     reference_signature: Option<&evidence_io::genome::GenomeSig>,
     motif_min_samples: usize,
     capture_identity: bool,
@@ -1564,7 +1574,7 @@ fn fit_genes(
         let mut usages = vec![None; sample_count];
         let mut eligible_samples = Vec::new();
         let mut differences = Vec::new();
-        for sample in 0..sample_count {
+        for (sample, usage) in usages.iter_mut().enumerate() {
             let mut totals = [0u64; 2];
             let mut weighted = [0.0f64; 2];
             for (rank, &site_id) in site_ids.iter().enumerate() {
@@ -1579,7 +1589,7 @@ fn fit_genes(
                     weighted[0] / totals[0] as f64,
                     weighted[1] / totals[1] as f64,
                 ];
-                usages[sample] = Some(value);
+                *usage = Some(value);
                 eligible_samples.push(sample);
                 differences.push(value[1] - value[0]);
             }
@@ -1650,6 +1660,10 @@ fn polyasite_site(site: &Site) -> bool {
             .is_some_and(|distance| distance <= 50)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the explicit thresholds are the reviewed statistical-kernel interface"
+)]
 fn fit_polyasite_mixture(
     samples: &[SampleCounts],
     candidates: &[Vec<u32>],
@@ -1777,7 +1791,7 @@ fn fit_polyasite_mixture(
         let mut usages = vec![None; samples.len()];
         let mut eligible_samples = Vec::new();
         let mut differences = Vec::new();
-        for sample in 0..samples.len() {
+        for (sample, usage) in usages.iter_mut().enumerate() {
             let mut totals = [0.0; 2];
             let mut weighted = [0.0; 2];
             for (rank, &site) in site_ids.iter().enumerate() {
@@ -1792,7 +1806,7 @@ fn fit_polyasite_mixture(
                 .all(|&total| total >= min_group_gene_umis as f64)
             {
                 let value = [weighted[0] / totals[0], weighted[1] / totals[1]];
-                usages[sample] = Some(value);
+                *usage = Some(value);
                 eligible_samples.push(sample);
                 differences.push(value[1] - value[0]);
             }
@@ -2536,6 +2550,10 @@ fn write_artifacts<W: Write>(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "this stable table writer keeps each serialized input explicit"
+)]
 fn write_mixture_sites<W: Write>(
     bundle: &mut StreamingBundleWriter<W>,
     table_name: &str,
@@ -2873,6 +2891,10 @@ where
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "this stable multi-artifact writer keeps the byte-producing inputs explicit"
+)]
 fn write_outputs(
     args: &Args,
     annotation: &anno::Annotation,

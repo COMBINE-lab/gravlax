@@ -145,7 +145,7 @@ impl From<SoloStrandArg> for anno::assign::SoloStrand {
 
 pub fn write_archive(
     x: &Extracted,
-    out: &PathBuf,
+    out: &Path,
     level: i32,
     chunk_bp: u32,
     genome_sig: Option<&evidence_io::genome::GenomeSig>,
@@ -399,13 +399,13 @@ fn write_archive_sections(
         .par_iter()
         .map(|p| {
             let mut chunk = Vec::new();
-            let mut rans_seg = |vals: &[u64], t: &evidence_io::rans::Table, chunk: &mut Vec<u8>| {
+            let rans_seg = |vals: &[u64], t: &evidence_io::rans::Table, chunk: &mut Vec<u8>| {
                 let mut seg = Vec::new();
                 evidence_io::rans::encode(vals, t, &mut seg);
                 put_varint(chunk, seg.len() as u64);
                 chunk.extend_from_slice(&seg);
             };
-            let mut byte_seg = |bytes: &[u8], chunk: &mut Vec<u8>| {
+            let byte_seg = |bytes: &[u8], chunk: &mut Vec<u8>| {
                 put_varint(chunk, bytes.len() as u64);
                 chunk.extend_from_slice(bytes);
             };
@@ -455,8 +455,7 @@ fn write_archive_sections(
         }
         sections.push(("index.junctions".into(), jc));
         let mut jp = Vec::new();
-        for ((_k), old_id) in &cat {
-            let _ = _k;
+        for (_, old_id) in &cat {
             let posts = &j_postings[*old_id as usize];
             // Total supporting children (a cheap genome-wide support count served from the index
             // alone); chunk list deduplicated for the postings walk.
@@ -714,8 +713,10 @@ pub fn read_dicts(r: &mut SectionReader) -> Result<Dicts> {
         bail!("cells section has {} trailing byte(s)", cells_raw.len() % 4);
     }
     let cells: Vec<u32> = cells_raw
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&bytes| u32::from_le_bytes(bytes))
         .collect();
     let shapes = decode_shapes(&r.read("shapes")?)?;
     let patterns = decode_patterns(&r.read("patterns")?)?;
@@ -988,7 +989,7 @@ pub struct LazyArchive {
 }
 
 impl LazyArchive {
-    pub fn open(path: &PathBuf) -> Result<LazyArchive> {
+    pub fn open(path: &Path) -> Result<LazyArchive> {
         let mut r = SectionReader::open(path)?;
         let meta: serde_json::Value = serde_json::from_slice(&r.read("meta")?)?;
         check_layout(&meta)?;
@@ -1033,8 +1034,10 @@ impl LazyArchive {
                 bail!("cells section has {} trailing byte(s)", raw.len() % 4);
             }
             self.cells = Some(
-                raw.chunks_exact(4)
-                    .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+                raw.as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|&bytes| u32::from_le_bytes(bytes))
                     .collect(),
             );
         }
@@ -1147,8 +1150,10 @@ struct StreamingReplayArchive {
     n_mols: usize,
 }
 
+type StreamingReplayResult = (FxHashMap<(u32, u32), u32>, u64, u64);
+
 impl StreamingReplayArchive {
-    fn open(path: &PathBuf) -> Result<Self> {
+    fn open(path: &Path) -> Result<Self> {
         let mut reader = SectionReader::open(path)?;
         let d = read_dicts(&mut reader)?;
         let chunks = read_chunk_index(&mut reader)?;
@@ -1171,9 +1176,7 @@ impl StreamingReplayArchive {
         &self,
         anno: &anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
-    )
-        -> Result<(FxHashMap<(u32, u32), u32>, u64, u64)>
-    {
+    ) -> Result<StreamingReplayResult> {
         let mut replay = ReplayRowsAccumulator::with_strand(&self.x, anno, solo_strand);
         replay.reserve_assignments(self.n_mols);
         // Two access units per worker smooth decode density and amortize reducer barriers while
@@ -1240,7 +1243,7 @@ impl StreamingReplayArchive {
     }
 }
 
-pub fn read_archive(path: &PathBuf) -> Result<Extracted> {
+pub fn read_archive(path: &Path) -> Result<Extracted> {
     let mut r = SectionReader::open(path)?;
     read_archive_from_reader(&mut r)
 }
@@ -1248,7 +1251,7 @@ pub fn read_archive(path: &PathBuf) -> Result<Extracted> {
 /// Decode the complete archive and bind provenance to that exact open reader. Rooted v2 identity
 /// is directory-only; the additional legacy full-file scan occurs only on this opt-in path.
 pub(crate) fn read_archive_with_identity(
-    path: &PathBuf,
+    path: &Path,
 ) -> Result<(Extracted, ArchiveContentIdentity)> {
     let mut reader = SectionReader::open(path)?;
     let extracted = read_archive_from_reader(&mut reader)?;

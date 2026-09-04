@@ -118,6 +118,10 @@ fn artifact_schema() -> std::result::Result<TableSchema, OutputError> {
     .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["artifact_kind", "path"]))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the arguments map one-to-one onto the stable report provenance fields"
+)]
 fn write_export_report<W: IoWrite>(
     writer: W,
     format: OutputFormat,
@@ -685,16 +689,15 @@ fn finalize_molecule(
                     raw.id
                 );
             }
-            if entry.anchor {
-                if anchor
+            if entry.anchor
+                && anchor
                     .replace((entry.chrom, entry.pos, entry.strand_rev, entry.shape))
                     .is_some()
-                {
-                    bail!(
-                        "molecule {} multimapper {group} has multiple anchors",
-                        raw.id
-                    );
-                }
+            {
+                bail!(
+                    "molecule {} multimapper {group} has multiple anchors",
+                    raw.id
+                );
             }
         }
         let (achrom, apos, arev, ashape) = anchor
@@ -882,7 +885,7 @@ fn read_molecule_bam_inner(
             .transpose()?
             .context("placement has no alignment start")?;
         let pos = u32::try_from(usize::from(pos) - 1).context("alignment start exceeds u32")?;
-        if rec.sequence().len() != 0 || rec.quality_scores().len() != 0 {
+        if !rec.sequence().is_empty() || !rec.quality_scores().is_empty() {
             bail!("post-correction placement records must be sequence-free");
         }
         for op in rec.cigar().iter() {

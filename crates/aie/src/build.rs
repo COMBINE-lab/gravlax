@@ -147,7 +147,7 @@ impl BcCorrector {
             // One N: try the four bases there; whitelist membership decides the candidate set.
             let mut cands: Vec<(u32, f64)> = Vec::new();
             let mut fixed = raw.to_vec();
-            for b in [b'A', b'C', b'G', b'T'] {
+            for b in *b"ACGT" {
                 fixed[*npos] = b;
                 if let Some(p) = umi::pack(&fixed) {
                     if self.wl.contains(&p) {
@@ -344,7 +344,7 @@ pub fn run(args: Args) -> Result<()> {
     let wl = load_whitelist(&args.whitelist)?;
     eprintln!("whitelist: {} barcodes", wl.len());
 
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     reader.read_header()?;

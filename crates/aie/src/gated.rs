@@ -137,7 +137,7 @@ pub fn run(args: Args) -> Result<()> {
         None => None,
     };
 
-    let mut reader = bam::io::reader::Builder::default()
+    let mut reader = bam::io::reader::Builder
         .build_from_path(&args.bam)
         .with_context(|| format!("opening {}", args.bam.display()))?;
     reader.read_header()?;
@@ -262,7 +262,7 @@ pub fn run(args: Args) -> Result<()> {
 
     let mut rels: Vec<f64> = per_cell_g1
         .iter()
-        .filter(|(c, &t)| t > 0 && cells.as_ref().map_or(true, |s| s.contains(*c)))
+        .filter(|(c, &t)| t > 0 && cells.as_ref().is_none_or(|s| s.contains(*c)))
         .map(|(c, &t)| *per_cell_err.get(c).unwrap_or(&0) as f64 / t as f64)
         .collect();
     rels.sort_by(|x, y| x.partial_cmp(y).unwrap());
