@@ -5,253 +5,112 @@
   </picture>
 </p>
 
-**Align once and query forever — a compact molecular-evidence index for annotation replay in
-single-cell RNA-seq.**
+**Align once and query forever.** Gravlax turns a single-cell RNA-seq experiment into a compact, queryable archive of its molecules, so that quantification under any annotation, cohort-wide splicing queries, and discovery of unannotated features become fast queries rather than new pipelines.
 
-Gravlax's recommended workflow builds a compact, molecule-resolved evidence index (`.aie`) from
-raw 10x reads and a genome, without consulting a gene annotation during alignment or evidence
-extraction. `ingest-archive` can also consume other compatible tagged alignments; the archive's
-root-bound provenance records whether the caller declared an alignment annotation. Supplying a
-compatible GTF at query time replays Gene, GeneFull, and Velocyto-style quantification from fixed
-genome alignments and fixed barcode correction. Archive-sourced and BAM-sourced Gravlax replay are
-byte-identical; compared with a
-fresh annotation-aware STARsolo run, the archive's two-representative encoding differs by
-0.22–0.45% of UMI mass across the four evaluated datasets. It occupies 11–18 bits per input read
-and opens in ~10 ms. Against a function-matched CRAM containing the same post-correction molecule
-placements and UMI graph, it is 2.10–2.55× smaller and 6.64–13.69× faster to quantify across the
-four evaluated datasets. Tag-preserving BAM/CRAM retain additional read-level information and are
-reported separately.
+## Why Gravlax
 
-Because the evidence — not the interpretation — is what is stored, reanalysis becomes a query:
+The artifact of a single-cell RNA-seq experiment that gets stored, shared, and reanalyzed is almost always the count matrix. But a count matrix is not an observation. It is the output of a computation with two inputs, the sequenced molecules and a gene annotation, and the two age very differently. The molecules are fixed on the day of sequencing; the annotation is revised several times a year. Moving a routine PBMC dataset from GENCODE v32 to v49 relocates about 2.4% of all UMI mass and changes the count of one expressed gene in five by more than 10%; in brain nuclei the same change moves nearly 5%. Once the matrix has been produced, none of that can be revisited. The evidence has been thrown away.
 
-- **Fast, bounded annotation replay** — quantify compatible past or future GTFs in seconds,
-  without realignment or materializing the archive's molecule table.
-- **Indexed queries** — cell/group-scoped region, exact-junction, junction-set, automatic
-  splice-event, junction-enumeration, and Boolean same-record queries, plus 3′-site queries, from
-  milliseconds to chromosome-scale scans.
-- **Atlas-wide reverse search** — find recurrent molecule-supported junctions, splice patterns,
-  and optional terminal-tail events across donors and cell groups without supplying coordinates
-  or remapping reads; a supplied annotation classifies exact gaps by junction, boundary, strand,
-  and overlap.
-- **Compiled annotations and query panels** — compile a GTF once into a guarded `.aic`, then
-  share archive opens and chunk decodes across batched region/junction predicates.
-- **Paired annotation comparison** — replay two bound annotations independently and report exact
-  signed count changes, class transitions, non-exclusive causes, and bounded witnesses within the
-  retained archive quotient and fixed alignment/barcode policy.
-- **Experimental transcript compatibility** — derive deterministic annotation-conditional
-  transcript sets for archived UMI classes, with explicit ambiguity, conflict, and completeness;
-  these are not abundance estimates or full-transcript phasing.
-- **Discover → replay** — find unannotated loci from the index alone, then re-quantify them. A
-  bounded residual-site mode raises complete-denominator later-annotation recall from 44.7% to
-  72.5% at 2.16× the candidate volume.
-- **EM multimapper recovery** — packed, cell-sharded cross-cell EM over the stored paralog
-  evidence, with exact disk-backed support shards for large archives (3.67 GiB peak RSS and
-  35.86 s for the evaluated 10k-cell masked-evidence analysis).
-- **Federation** — discover one coordinate-defined splice-event catalogue and reduce it exactly
-  across named samples and groups, or build a common molecular splice graph with complete
-  per-sample matrices and replicate-aware path-usage contrasts.
-- **Content-addressed federation** — deterministic `.aicollection` layers bind each source by its
-  authenticated archive root. Optional local shape routes accelerate exact point-junction and
-  junction-set queries without copying molecule evidence; region queries use the collection's
-  interval routes. Source archives remain authoritative and immutable.
+The alternative, keeping raw reads or alignments, preserves everything but is rarely exercised. FASTQ and BAM files for a single experiment occupy tens of gigabytes and a cohort occupies terabytes, so they move to cold storage and are reprocessed only when someone can afford to. Most of what they contain (sequences, base qualities, read names) is never read by the procedures that produce counts. Those procedures consume *relations* among molecules: which reads share splice geometry, which share a placement, which cell they belong to, and whether two UMIs are equal or one mismatch apart.
 
-## Build
+Gravlax stores exactly those relations, and nothing else, in an archive that is typically 30 to 50 times smaller than FASTQ and 9 to 13 times smaller than tag-preserving CRAM, at 11 to 18 bits per read. Every annotation-dependent decision (gene assignment, UMI collapse, transcript compatibility) is deferred until the archive is read. The archive can be kept beside the matrix indefinitely and re-read whenever the annotation, the question, or the cohort changes.
+
+## What it does
+
+1. **Align once, without an annotation.** Reads are aligned to the genome and barcodes are corrected once. Gravlax extracts molecular evidence from those alignments into a `.aie` archive without consulting a gene model.
+2. **Replay any annotation.** Supplying a GTF at read time reproduces Gene, GeneFull, and Velocyto-style count matrices for that annotation. Replay takes seconds: 34 to 82 times faster than an annotation-aware STARsolo run at the same thread budget, and within 0.22 to 0.45% of UMI mass of it.
+3. **Query the molecules directly.** Region, junction, splice-event, splice-graph, and 3′-site queries return per-cell or per-group molecule counts from indexed chunks in milliseconds, with or without an annotation.
+4. **Federate across samples.** Archives compose into content-addressed collections that route a cohort query to the archives and chunks that can answer it. Answers are always computed from the source molecules; the collection is an index, never a second copy of the data.
+
+Archives are seekable and content-authenticated. A root digest commits every section, so an operation verifies only the bytes it reads, and two archives that encode the same evidence can be recognized as such regardless of how they were packed.
+
+## What it makes possible
+
+Because the molecules are retained rather than the counts, Gravlax supports analyses that a count matrix cannot express and that raw reads make impractically expensive.
+
+- **Requantify instead of reprocess.** Move a dataset, or a whole cohort, to a new GENCODE release in seconds. Replay two annotations side by side and get exact, signed count changes per gene and cell, with the molecular witnesses that caused them.
+- **Ask splicing questions across a cohort.** Define cell groups once, then ask the same coordinate-defined question of every archive: junction support, cassette inclusion, alternative donor and acceptor usage, and molecular splice-path fragments, with sample-level statistics that never treat cells or molecules as replicates.
+- **Find what the annotation misses.** Enumerate unannotated loci and splice events from the archive alone, then requantify them by ordinary replay. Atlas-wide reverse search finds junctions and splice patterns that recur across donors without supplying coordinates.
+- **Study 3′ ends with a model that fits the assay.** Retained fragment boundaries support terminal-site analysis, including a cross-fitted mixture model for fragmented 10x 3′ libraries.
+- **Recover ambiguous molecules.** Roughly 6% of countable molecules map to more than one gene and are dropped from conventional matrices. Pooling unambiguous evidence across cells recovers 91 to 98% of masked identities, emitted as an additive layer that leaves the base matrix untouched.
+- **Share evidence, not just matrices.** An archive is small enough to distribute with a paper and complete enough that a reader can requantify or query it under their own annotation and their own questions.
+
+## Install
 
 ```sh
 cargo build --release
 # binary: target/release/aie
 ```
 
-Requires Rust 1.98+. No system dependencies beyond a C toolchain (for zstd).
-
-Check the installation and create an optional portable workspace before a new
-analysis:
-
-```sh
-aie doctor
-aie project init my-analysis --name my-analysis
-cd my-analysis
-```
-
-Projects register stable input names in `aie-project.yaml`. Versioned YAML/JSON
-plans can then be validated with `aie plan check --explain`, resolved into an
-exact content-addressed snapshot, and run through the existing typed commands.
-`aie explore` provides a loopback-only, read-only scientific plan builder: it
-resolves gene, transcript, and exon identifiers against registered annotation
-identity, explains the evidence route and exclusions, and exports synchronized
-plan YAML/JSON, CLI, and Python forms. It also browses exact stored plans and
-results. Direct path-based commands remain fully supported.
-
-The [workflow and interfaces
-guide](docs/src/content/docs/workflow.md) is the consolidated entry point for
-projects, typed step-to-step dataflow, identity-checked resume, biological
-identifier resolution, Explorer, Python/AnnData, and the exact boundary of the
-shared result contract. The small
-[`examples/demo-project`](examples/demo-project/README.md) exercises the
-project, plan, resume, and Explorer paths without downloading a dataset.
+Requires Rust 1.98 or later and a C toolchain (for zstd). Run `aie doctor` to check the installation.
 
 ## Quick start
 
+Build an archive once from annotation-free alignments, then replay and query it as often as you like.
+
 ```sh
-# 1. Align annotation-free (STAR two-pass, no GTF, secondaries kept) → BAM
+# 1. Align without a GTF (STAR two-pass, secondaries kept). Print the recipe:
 aie ingest recipe --chemistry 10x-3p-v3
-# 2. Build the index once:
+
+# 2. Build the archive:
 aie ingest check align.bam --whitelist 3M-february-2018.txt --chemistry 10x-3p-v3
 aie ingest-archive align.bam --whitelist 3M-february-2018.txt --out sample.aie
-aie inspect-archive sample.aie --format json                               # typed content identity
 
-# 3. Query forever:
+# 3. Replay any annotation:
 aie compile-annotation gencode.v49.gtf --out gencode.v49.aic
-aie resolve gencode.v49.aic TP53 --assembly GRCh38.p14 \
-  --annotation "GENCODE 49" --format json                                # typed identifier result
 aie replay-rows sample.aie --gtf gencode.v49.aic \
-  --barcodes barcodes.tsv --out-dir counts/                                # replay matrices
+  --barcodes barcodes.tsv --out-dir counts/
+
+# 4. Compare two annotations exactly:
 aie compare-annotations sample.aie --annotation-a gencode.v44.gtf \
   --annotation-b gencode.v49.aic --assembly GRCh38.p14 \
-  --annotation-a-label "GENCODE 44" --annotation-b-label "GENCODE 49"      # exact archive counterfactual
-aie query sample.aie transcript-ecs --annotation-file gencode.v49.aic \
-  --assembly GRCh38.p14 --annotation-label "GENCODE 49" \
-  --feature gene:ENSG00000141510 --format json                             # experimental compatibility sets
-aie query sample.aie region chr1:1000000-2000000 --format json             # per-cell evidence
-aie query sample.aie junction chr2:1234567-1250000 --format json           # junction support
-aie query sample.aie junctions chr2:1200000-1300000 --with-cells --format tsv
+  --annotation-a-label "GENCODE 44" --annotation-b-label "GENCODE 49"
+
+# 5. Query the molecules:
+aie query sample.aie region chr1:1000000-2000000 --format json
+aie query sample.aie junction chr2:1234567-1250000 --format json
 aie query sample.aie jset --include chr2:1234567-1250000 \
-  --exclude chr2:1234567-1260000 --groups cell-types.tsv --format json     # group splice usage
+  --exclude chr2:1234567-1260000 --groups cell-types.tsv --format json
 aie query sample.aie events chr2:1200000-1300000 \
-  --groups cell-types.tsv --min-informative 10 --format json               # discover + reduce events
-aie query sample.aie splice-graph chr2:1200000-1300000 \
-  --groups cell-types.tsv --min-path-umis 2 --format json                  # molecular path fragments
-aie query sample.aie cooccur \
-  --predicate locus=region:chr2:1200000-1300000 \
-  --predicate splice=junction:chr2:1234567-1250000 \
-  --where 'locus & splice' --universe locus --format json                 # same-record witnesses
-aie query sample.aie batch --plan panel.tsv --top 20 \
-  --format json --output panel.json                                        # query panel
-aie federate a.aie b.aie c.aie chr2:1234567-1250000 --format json         # across samples
+  --groups cell-types.tsv --min-informative 10 --format json
+aie query sample.aie discover --gtf gencode.v32.gtf --emit-gtf novel-loci.gtf
+
+# 6. Work across samples:
+aie collection build --sample A=a.aie --sample B=b.aie \
+  --shape-routes --out atlas.aicollection
+aie collection junction atlas.aicollection chr2:1234567-1250000 --format json
 aie cohort events chr2:1200000-1300000 \
   --sample A=a.aie --sample B=b.aie --groups A=a-groups.tsv \
-  --min-row-informative 10 --format json                                   # exact cohort event table
-aie cohort events chr2:1200000-1300000 \
-  --sample A=a.aie --sample B=b.aie --min-row-informative 10 \
-  --sparse-dir cohort-events/                                              # zero-reconstructible tables
+  --min-row-informative 10 --format json
 aie cohort splice-graph chr2:1200000-1300000 \
-  --design experiment.tsv --contrast control:treated --format json        # sample-level path test
-aie collection build --sample A=a.aie --sample B=b.aie \
-  --shape-routes --out atlas.aicollection                                 # exact local-shape routes
-aie collection inspect atlas.aicollection --verify-routes --format json   # reconstruct routes
-aie collection junction atlas.aicollection chr2:1234567-1250000 \
-  --explain --format json --output junction.json                           # uniform bundle
-aie collection region atlas.aicollection chr2:1200000-1300000 --format tsv
-aie collection jset atlas.aicollection --include chr2:1234567-1250000 \
-  --exclude chr2:1234567-1260000 --format json
-aie collection find-events atlas.aicollection --kind junction --kind cassette \
-  --kind terminal-tail --terminal-cluster-bp 25 \
-  --design donors.tsv --groups cell-groups.tsv --min-donors 4 \
-  --min-umi-classes 20 --annotation gencode.v49.aic \
-  --assembly GRCh38.p14 --annotation-label GENCODE-v49 \
-  --novel-only --format json                                               # atlas-wide discovery
-aie dev em sample.aie --gtf gencode.v49.gtf                               # multimapper experiment
+  --design experiment.tsv --contrast control:treated --format json
 ```
 
-See the [annotation-comparison](docs/src/content/docs/cli/compare-annotations.md)
-and [transcript-equivalence-class](docs/src/content/docs/cli/transcript-ecs.md)
-references for their typed tables and scientific limits. The comparison is
-exact only for the archive's retained evidence quotient under the fixed
-alignment and barcode-correction policy. Transcript equivalence classes are
-derived from the representatives retained in the archive, not from every
-source read, and do not estimate abundance or phase complete isoforms. On direct
-path-based commands, `--assembly` is a caller assertion recorded in provenance;
-a project plan can additionally verify it against registered coordinate-resource
-compatibility.
+Run `aie <command> --help` for the full option set of any subcommand.
 
-At the direct CLI boundary, supported query, federation, cohort, and collection
-commands can emit the shared `gravlax.result-envelope.v1` contract.
-Result-streaming commands use `--format text|tsv|json` with atomic
-no-clobber `--output`; commands that advertise a separate operation report use
-the parallel `--report-format` and `--report-output` interface. This includes
-`ingest-archive`, `replay-rows`, `stamp-genome`, `seal-archive`,
-`compile-annotation`, `export-molecule-bam`, and `extend`; `inspect-archive` and
-artifact-producing `collection build` instead use `--format`, so the
-distinction is explicitly per command. Omitting these opt-in flags preserves
-each command's default output and primary-artifact behavior. Project plans
-expose the contract for the source-plan v1 step kinds they support, not every
-direct command. The `aie dev` subcommands and operational checks use their own
-machine-readable formats. The Python client distinguishes command-specific and
-shared result formats explicitly; native Arrow IPC is not yet a general CLI
-output and no R client is currently provided. See [Python and
-AnnData](docs/src/content/docs/python.md) and the [result-contract
-note](docs-notes/scientific-intent-and-output-contract.md).
+## Going further
 
-Ordinary archive-backed Gene replay streams bounded genomic chunk batches by default. The
-diagnostic `--eager` flag retains the full-materialization reference path for result comparison
-and profiling; both modes perform the same global UMI-class aggregation and emit identical bytes.
+- **Projects and plans.** `aie project init` creates a workspace that registers inputs by stable name; versioned YAML or JSON plans are validated with `aie plan check`, resolved to a content-addressed snapshot, and resumed exactly. `aie explore` is a local, read-only plan builder that resolves gene and transcript identifiers and exports the plan as YAML, a command line, or Python. See the [workflow guide](docs/src/content/docs/workflow.md) and the small [demo project](examples/demo-project/README.md), which needs no dataset download.
+- **Python and AnnData.** Query and cohort commands emit a shared JSON result contract that the Python client reads directly into AnnData. See [Python and AnnData](docs/src/content/docs/python.md).
+- **Interchange.** `aie export-molecule-bam` writes the post-correction molecule abstraction as a tagged BAM for tools that cannot read `.aie`; the tag contract is documented in [`docs-notes/molecule-bam.md`](docs-notes/molecule-bam.md).
+- **Formats.** The archive format is specified in [`docs-notes/format-spec.md`](docs-notes/format-spec.md) and the collection format in [`docs-notes/collection-index-spec.md`](docs-notes/collection-index-spec.md). Full command references live in [`docs/`](docs/src/content/docs/).
 
-Discovery uses conservative span claiming by default.
-For human 10x 3′ data, the evaluated higher-recall mode preserves those calls and adds bounded
-terminal-site clusters from span-overlapping evidence that is incompatible with every overlapping
-transcript:
+## Scope and limits
 
-```sh
-aie query sample.aie discover --gtf gencode.v32.gtf \
-  --claim-mode residual-sites --residual-min-umis 75 \
-  --emit-gtf novel-loci.gtf
-```
-
-The threshold is an evaluated operating point, not a universal default for other chemistries.
-
-For an explicit post-correction interchange form and a function-matched BAM/CRAM container
-comparison, export the molecule abstraction without inventing nucleotide UMI values:
-
-```sh
-aie export-molecule-bam sample.aie --fai GRCh38.fa.fai --out sample.molecules.bam
-aie replay-rows sample.molecules.bam --from-molecule-bam --gtf gencode.v49.gtf \
-  --barcodes barcodes.tsv --out-dir replay-from-molecule-bam
-```
-
-The custom-tag contract and its interoperability limits are documented in
-[`docs-notes/molecule-bam.md`](docs-notes/molecule-bam.md).
-
-New archives use the authenticated `.aie` v2 container. Its root commits the directory and the
-BLAKE3 digest of every compressed section, so ordinary operations authenticate the directory at
-open and verify only the payloads they select. A complete audit is available with
-`aie inspect-archive sample.aie --verify-content`. Legacy seekable v1 archives remain readable and
-can be converted without recompressing their section payloads:
-
-```sh
-aie seal-archive legacy.aie --out rooted.aie --json
-```
-
-A collection build reads archive metadata and indexes, but never molecule chunks. For rooted v2
-sources, identity comes directly from the authenticated directory; `--shape-routes` additionally
-reads the shape dictionary to derive exact, source-bound route blocks. Incremental builds write a
-new immutable layer rather than rewriting their parent. Collection support totals are pruning upper
-bounds, never substitutes for cell/group counts. Group maps and annotations stay query-time inputs;
-`collection find-events` uses them for atlas-wide exact recurrence and annotation-gap searches,
-while cohort commands provide locus-specific contrasts. Query JSON separates source identity,
-source execution, collection-sidecar, shape-route, and total logical bytes. The format, integrity
-guards, and deliberate limits are documented in
-the [`aie collection` reference](docs/src/content/docs/cli/collection.md) and
-[`docs-notes/collection-index-spec.md`](docs-notes/collection-index-spec.md).
-
-Run `aie <command> --help` for the full option set of each subcommand.
+Gravlax makes the annotation-dependent part of quantification revisable; it does not make everything revisable. Genome alignment and barcode correction are performed once at ingest and are fixed thereafter. Read sequence and base qualities are not retained, so allele-specific, editing, and sequence-search questions are out of scope. Within a UMI class, reads that share a junction chain are stored as a count plus two coordinate-extreme representatives; this is exact for gene counting in our evaluations and measurably lossy for saturation-sensitive quantities such as the ambiguous component of RNA velocity. Cohort queries are fast, but they are not statistics: a design with biological replicates must be supplied, and Gravlax will not treat cells or molecules as replicates on your behalf.
 
 ## Repository layout
 
 | Crate | Responsibility |
 |---|---|
-| `crates/evidence-io` | `.aie` container: chunked streams, static rANS + zstd coding, lazy open |
-| `crates/ingest` | annotation-free BAM → molecule evidence (UMI classes + edges, paralog patterns) |
-| `crates/anno` | GTF parsing and annotation compilation (exon models, junction sets) |
-| `crates/replay` | Reserved library boundary (current replay implementation is in `crates/aie`) |
-| `crates/eval` | Reserved library boundary (current evaluation commands are in `crates/aie`) |
-| `crates/aie` | the `aie` CLI |
-
-`docs-notes/format-spec.md` documents the on-disk `.aie` format; the optional derived collection
-format is documented separately in `docs-notes/collection-index-spec.md`.
+| `crates/evidence-io` | the `.aie` container: chunked streams, rANS and zstd coding, lazy open |
+| `crates/ingest` | annotation-free BAM to molecular evidence: UMI classes and edges, shapes, placement patterns |
+| `crates/anno` | GTF parsing and annotation compilation |
+| `crates/aie` | the `aie` command-line tool: replay, query, cohort, and collection commands |
 
 ## Citation
 
-Manuscript in preparation. This repository is the reference implementation.
+A manuscript describing Gravlax is in preparation. This repository is the reference implementation.
 
 ## License
 
