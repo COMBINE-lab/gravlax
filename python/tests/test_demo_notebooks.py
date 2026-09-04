@@ -8,6 +8,13 @@ from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 NOTEBOOKS = REPOSITORY / "notebooks"
+PUBLISHED_MANIFEST_URL = (
+    "https://github.com/COMBINE-lab/gravlax/releases/download/"
+    "demo-data-v1/demo-manifest.json"
+)
+PUBLISHED_MANIFEST_SHA256 = (
+    "82c34aad442d478f1cb1243a6ccfe8ad9f937b81d9e1f946a8eb2cfc498214fd"
+)
 
 
 def code_source(name: str) -> str:
@@ -58,15 +65,24 @@ class DemoNotebookTests(unittest.TestCase):
             self.assertIn("--sample=", source)
             self.assertNotRegex(source, r"fetch\([^\n]*\.aicollection")
 
-    def test_manifest_setup_is_fail_closed(self):
+    def test_manifest_setup_is_pinned_and_fail_closed(self):
+        self.assertRegex(PUBLISHED_MANIFEST_SHA256, r"\A[0-9a-f]{64}\Z")
         for name in (
             "01_annotation_reinterpretation.ipynb",
             "02_multi_donor_event_discovery.ipynb",
             "03_federated_junction_cooccurrence.ipynb",
         ):
             source = code_source(name)
-            self.assertRegex(source, r"MANIFEST_URL = ['\"]{2}")
-            self.assertRegex(source, r"MANIFEST_SHA256 = ['\"]{2}")
+            self.assertEqual(
+                source.count(f'MANIFEST_URL = "{PUBLISHED_MANIFEST_URL}"'),
+                1,
+            )
+            self.assertEqual(
+                source.count(
+                    f'MANIFEST_SHA256 = "{PUBLISHED_MANIFEST_SHA256}"'
+                ),
+                1,
+            )
             self.assertIn("raise RuntimeError", source)
             self.assertIn("hashlib.sha256", source)
             self.assertIn("EXPECTED_VERSION", source)

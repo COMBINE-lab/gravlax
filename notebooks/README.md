@@ -7,13 +7,15 @@ These notebooks are executable Google Colab entry points for three claims:
 3. query one junction across a collection, then inspect same-record evidence
    predicates in one source archive.
 
-They intentionally contain no guessed data URLs and no saved scientific output. Before running a
-notebook, publish a demo capsule, instantiate `demo-manifest.template.json`, and set the first cell's
-`MANIFEST_URL` and `MANIFEST_SHA256`. Every downloaded byte (including the CLI and Python wheel) is
-checked against SHA-256 before execution. Source archives are downloaded individually and each
-notebook builds its path-bound `.aicollection` locally; a downloaded collection could not retain
-valid source paths in Colab. Missing locators, non-HTTPS URLs, malformed digests,
-and identity mismatches stop the notebook.
+The checked-in notebooks are one-click launchers pinned to the published `demo-data-v1`
+[`demo-manifest.json`](https://github.com/COMBINE-lab/gravlax/releases/download/demo-data-v1/demo-manifest.json),
+whose SHA-256 is
+`82c34aad442d478f1cb1243a6ccfe8ad9f937b81d9e1f946a8eb2cfc498214fd`. They contain no saved
+scientific output or fallback data address. Every downloaded byte (including the CLI and Python
+wheel) is checked against SHA-256 before execution. Source archives are downloaded individually
+and each notebook builds its path-bound `.aicollection` locally; a downloaded collection could not
+retain valid source paths in Colab. Missing locators, non-HTTPS URLs, malformed digests, and
+identity mismatches stop the notebook.
 The installed `aie` executable and Python package must both report the exact version declared by
 the manifest before any scientific command runs.
 
@@ -38,8 +40,8 @@ The v1 manifest and data assets must live under the exact
 roots reported by Gravlax remain the scientific content identities; transport SHA-256 protects
 downloads before the archive reader opens them.
 
-Do not publish the notebooks as one-click demonstrations until all required fields in the template
-manifest are populated with real assets and its digest has been recorded in the notebook links.
+The published v1 defaults satisfy this contract. To run a different capsule, replace both
+first-cell locator fields; clearing or altering only one continues to fail closed.
 
 ## Prepare the immutable demo capsule
 
@@ -144,11 +146,13 @@ python packaging/build_demo_capsule.py \
 
 Before filtering, the builder checks the declared STAR version and `--twopassMode Basic` against
 each exact `Log.out`, and requires the resolved `sjdbGTFfile` and `sjdbFileChrStartEnd` values to
-both be `-`. This verifies that no GTF or explicit junction list was supplied to these alignment
-runs. It treats the normalized public command and the STAR index manifest as caller declarations;
-the builder records but does not consume or independently verify the original index components. The
-sanitized BAM retains `@HD`/`@SQ` plus a truthful public scope comment and contains no manufactured
-STAR `@PG`, so the archive cannot mislabel a rewritten command as original header evidence. The
+both be `-`. This verifies that no external GTF or caller-supplied junction list seeded these
+alignment runs; it does not mean junction discovery was disabled. Each per-library STAR Basic run
+learned its own pass-1 junction catalogue and used that catalogue in pass 2. The builder treats the
+normalized public command and the STAR index manifest as caller declarations; it records but does
+not consume or independently verify the original index components. The sanitized BAM retains
+`@HD`/`@SQ` plus a truthful public scope comment and contains no manufactured STAR `@PG`, so the
+archive cannot mislabel a rewritten command as original header evidence. The
 builder filters complete alignment records to the selected windows, coordinate-sorts the retained
 records as required by archive ingest,
 and invokes ingest from a private temporary working directory using only public relative
@@ -315,7 +319,7 @@ gh release edit demo-data-v1 \
 ```
 
 Finally, record the SHA-256 of the published `demo-manifest.json`, place its immutable release URL
-and digest in the first cell of each notebook, run all three notebooks from a clean Colab runtime,
-and commit those locator-only notebook changes. A DOI-backed repository snapshot can mirror the
-same byte-identical flat capsule later; changing any byte requires a new capsule version and new
-manifest digest.
+and digest in the first cell of each notebook, and run all three notebooks from clean Colab
+runtimes. The checked-in `demo-data-v1` defaults above were activated through this procedure. A
+DOI-backed repository snapshot can mirror the same byte-identical flat capsule later; changing any
+byte requires a new capsule version and new manifest digest.

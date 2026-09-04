@@ -90,6 +90,7 @@ Run `aie <command> --help` for the full option set of any subcommand.
 
 ## Going further
 
+- **Run the live demonstrations.** Three one-click Google Colab notebooks reproduce annotation reinterpretation, coordinate-free multi-donor event discovery, and same-molecule evidence queries from the immutable [`demo-data-v1`](https://github.com/COMBINE-lab/gravlax/releases/tag/demo-data-v1) capsule. Start from the [demonstrations page](docs/src/content/docs/demos.md).
 - **Projects and plans.** `aie project init` creates a workspace that registers inputs by stable name; versioned YAML or JSON plans are validated with `aie plan check`, resolved to a content-addressed snapshot, and resumed exactly. `aie explore` is a local, read-only plan builder that resolves gene and transcript identifiers and exports the plan as YAML, a command line, or Python. See the [workflow guide](docs/src/content/docs/workflow.md) and the small [demo project](examples/demo-project/README.md), which needs no dataset download.
 - **Python and AnnData.** Query and cohort commands emit a shared JSON result contract that the Python client reads directly into AnnData. See [Python and AnnData](docs/src/content/docs/python.md).
 - **Interchange.** `aie export-molecule-bam` writes the post-correction molecule abstraction as a tagged BAM for tools that cannot read `.aie`; the tag contract is documented in [`docs-notes/molecule-bam.md`](docs-notes/molecule-bam.md).

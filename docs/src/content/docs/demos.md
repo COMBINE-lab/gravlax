@@ -4,11 +4,14 @@ description: Colab notebooks that execute Gravlax claims from an immutable, veri
 ---
 
 Three Google Colab notebooks exercise the preprint's central workflows. They
-contain no saved scientific output and no fallback data address. Each requires
-the HTTPS URL and SHA-256 of a published `gravlax.demo-capsule.v1` manifest,
-then verifies the CLI, Python wheel, archives, annotations, and design files
-before executing them. Both installed programs must report the exact version
-declared by the manifest. A collection embeds canonical source paths,
+contain no saved scientific output and no fallback data address. Their
+checked-in defaults pin the published `demo-data-v1`
+[`demo-manifest.json`](https://github.com/COMBINE-lab/gravlax/releases/download/demo-data-v1/demo-manifest.json)
+and its SHA-256,
+`82c34aad442d478f1cb1243a6ccfe8ad9f937b81d9e1f946a8eb2cfc498214fd`. Each notebook verifies the
+CLI, Python wheel, archives, annotations, and design files before executing
+them. Both installed programs must report the exact version declared by the manifest. A collection
+embeds canonical source paths,
 so the multi-archive notebooks download each rooted source archive and build a
 fresh collection inside Colab; they do not treat a detached `.aicollection` as
 a portable data bundle.
@@ -41,7 +44,7 @@ use immutable release or repository-record URLs, and contain lowercase SHA-256
 digests for every transport object. Archive assets should additionally declare
 their rooted `aie-directory-root-v2` identities.
 
-The notebooks become one-click demonstrations only after the data capsule and
-the release containing these command schemas have immutable public URLs. Until
-then, they are executable, fail-closed launchers for configured capsules—not
-simulated demonstrations.
+The notebooks are now one-click demonstrations pinned to the immutable
+`demo-data-v1` capsule and the v0.1.5 software it declares. Clearing a locator,
+using a mutable URL, or changing any downloaded byte still fails closed rather
+than selecting fallback or cached results.
