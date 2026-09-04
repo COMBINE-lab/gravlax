@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -43,6 +44,9 @@ class DemoNotebookTests(unittest.TestCase):
             "terminal_counts",
         ):
             self.assertIn(repr(table), source)
+        self.assertIn("comparison_annotation", source)
+        self.assertIn("comparison_result", source)
+        self.assertIn("expected_comparison_compatible_transcripts", source)
 
     def test_collection_notebooks_rebuild_from_downloaded_source_archives(self):
         for name in (
@@ -52,7 +56,7 @@ class DemoNotebookTests(unittest.TestCase):
             source = code_source(name)
             self.assertIn("['collection', 'build']", source)
             self.assertIn("--sample=", source)
-            self.assertNotIn(".aicollection'", source.split("fetch(")[0])
+            self.assertNotRegex(source, r"fetch\([^\n]*\.aicollection")
 
     def test_manifest_setup_is_fail_closed(self):
         for name in (
@@ -69,6 +73,23 @@ class DemoNotebookTests(unittest.TestCase):
             self.assertIn("CLI_VERSION != f'aie {EXPECTED_VERSION}'", source)
             self.assertIn("PYTHON_VERSION != EXPECTED_VERSION", source)
             self.assertIn("required_story_fields", source)
+            self.assertIn("RESERVED_ASSET_FILENAMES", source)
+            self.assertIn("duplicate asset filename", source)
+            self.assertIn("/latest/ is not allowed", source)
+            self.assertIn("'--force-reinstall', '--no-deps'", source)
+
+    def test_collection_and_drilldown_group_files_have_distinct_contracts(self):
+        event_source = code_source("02_multi_donor_event_discovery.ipynb")
+        drilldown_source = code_source(
+            "03_federated_junction_cooccurrence.ipynb"
+        )
+        self.assertIn("story['collection_groups']", event_source)
+        self.assertNotIn("story['drilldown_groups']", event_source)
+        self.assertIn("story['drilldown_groups']", drilldown_source)
+        self.assertNotIn("story['collection_groups']", drilldown_source)
+        self.assertIn("story['emit_membership']", drilldown_source)
+        self.assertIn("cooccurrence.table('memberships')", drilldown_source)
+        self.assertIn("selected-unit summary differs from membership witnesses", drilldown_source)
 
     def test_each_notebook_plots_only_live_typed_output(self):
         expected_columns = {
@@ -85,6 +106,7 @@ class DemoNotebookTests(unittest.TestCase):
             "03_federated_junction_cooccurrence.ipynb": (
                 "federated.table('samples')",
                 "cooccurrence.table('patterns')",
+                "cooccurrence.table('memberships')",
                 "evidence_units",
             ),
         }
@@ -117,6 +139,26 @@ class DemoNotebookTests(unittest.TestCase):
             self.assertFalse(definition["additionalProperties"])
             self.assertTrue(definition["required"])
         event_story = schema["$defs"]["event_story"]
+        self.assertIn("collection_groups", event_story["required"])
+        self.assertNotIn("groups", event_story["properties"])
+        self.assertIn(
+            "drilldown_groups",
+            schema["$defs"]["drilldown_story"]["properties"],
+        )
+        self.assertIn("emit_membership", schema["$defs"]["drilldown_story"]["required"])
+        self.assertIs(
+            schema["$defs"]["drilldown_story"]["properties"]["emit_membership"]["const"],
+            True,
+        )
+        asset = schema["$defs"]["asset"]
+        self.assertRegex(
+            "https://example.test/releases/latest/file",
+            re.compile(asset["properties"]["url"]["not"]["pattern"]),
+        )
+        self.assertIn(
+            "manifest.json",
+            asset["properties"]["filename"]["not"]["enum"],
+        )
         self.assertEqual(
             event_story["allOf"][0]["then"]["required"],
             ["assembly", "annotation_label"],

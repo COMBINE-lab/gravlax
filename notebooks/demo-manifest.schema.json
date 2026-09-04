@@ -39,9 +39,25 @@
       "additionalProperties": false,
       "required": ["url", "sha256", "filename"],
       "properties": {
-        "url": {"type": "string", "pattern": "^https://"},
+        "url": {
+          "type": "string",
+          "pattern": "^https://",
+          "not": {"pattern": "/[Ll][Aa][Tt][Ee][Ss][Tt](?:/|$)"}
+        },
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "filename": {"type": "string", "pattern": "^[^/\\\\]+$"},
+        "filename": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+$",
+          "not": {
+            "enum": [
+              ".",
+              "..",
+              "manifest.json",
+              "event-discovery.aicollection",
+              "junction-drilldown.aicollection"
+            ]
+          }
+        },
         "member": {"type": "string", "minLength": 1},
         "archive_root": {"type": "string", "pattern": "^aie-directory-root-v2:[0-9a-f]{64}$"}
       }
@@ -55,7 +71,7 @@
     "annotation_story": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["archive", "annotation_before", "annotation_after", "assembly", "before_label", "after_label"],
+      "required": ["archive", "annotation_before", "annotation_after", "assembly", "before_label", "after_label", "expected_gene_id", "expected_min_signed_delta"],
       "properties": {
         "archive": {"type": "string", "minLength": 1},
         "annotation_before": {"type": "string", "minLength": 1},
@@ -63,23 +79,28 @@
         "assembly": {"type": "string", "minLength": 1},
         "before_label": {"type": "string", "minLength": 1},
         "after_label": {"type": "string", "minLength": 1},
-        "max_molecule_witnesses": {"type": "integer", "minimum": 1}
+        "max_molecule_witnesses": {"type": "integer", "minimum": 1},
+        "expected_gene_id": {"type": "string", "minLength": 1},
+        "expected_min_signed_delta": {"type": "integer", "minimum": 1},
+        "expected_changed_molecule_records": {"type": "integer", "minimum": 0}
       }
     },
     "event_story": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["archives", "groups", "design"],
+      "required": ["archives", "collection_groups", "design", "annotation", "assembly", "annotation_label", "comparison_annotation", "comparison_annotation_label", "expected_entity_id", "expected_min_exact_umi_classes", "expected_min_exact_donors", "expected_gap_primary_class", "expected_annotation_incompatible", "expected_rank", "expected_comparison_compatible_transcripts"],
       "properties": {
         "archives": {"$ref": "#/$defs/archive_map"},
         "shape_routes": {"type": "boolean"},
         "allow_unstamped": {"type": "boolean"},
-        "groups": {"type": "string", "minLength": 1},
+        "collection_groups": {"type": "string", "minLength": 1},
         "design": {"type": "string", "minLength": 1},
         "annotation": {"type": "string", "minLength": 1},
         "assembly": {"type": "string", "minLength": 1},
         "annotation_label": {"type": "string", "minLength": 1},
         "annotation_digest": {"type": "string", "pattern": "^blake3:[0-9a-f]{64}$"},
+        "comparison_annotation": {"type": "string", "minLength": 1},
+        "comparison_annotation_label": {"type": "string", "minLength": 1},
         "kinds": {
           "type": "array",
           "uniqueItems": true,
@@ -100,7 +121,14 @@
         "max_candidates_considered": {"type": "integer", "minimum": 1},
         "max_routed_entries": {"type": "integer", "minimum": 1},
         "max_exact_match_attempts": {"type": "integer", "minimum": 1},
-        "max_annotation_comparisons": {"type": "integer", "minimum": 1}
+        "max_annotation_comparisons": {"type": "integer", "minimum": 1},
+        "expected_entity_id": {"type": "string", "minLength": 1},
+        "expected_min_exact_umi_classes": {"type": "integer", "minimum": 1},
+        "expected_min_exact_donors": {"type": "integer", "minimum": 1},
+        "expected_gap_primary_class": {"enum": ["missing_junction", "boundary", "strand", "overlap"]},
+        "expected_annotation_incompatible": {"type": "boolean"},
+        "expected_rank": {"type": "integer", "minimum": 1},
+        "expected_comparison_compatible_transcripts": {"type": "integer", "minimum": 1}
       },
       "allOf": [
         {
@@ -112,14 +140,17 @@
     "drilldown_story": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["archives", "archive_sample", "junction", "predicates", "expression", "universe"],
+      "required": ["archives", "archive_sample", "junction", "predicates", "expression", "universe", "emit_membership", "expected_min_selected_units", "required_true_predicates", "story_note"],
       "properties": {
         "archives": {"$ref": "#/$defs/archive_map"},
         "archive_sample": {"type": "string", "minLength": 1},
         "shape_routes": {"type": "boolean"},
         "allow_unstamped": {"type": "boolean"},
-        "groups": {"type": "string", "minLength": 1},
-        "junction": {"type": "string", "minLength": 1},
+        "drilldown_groups": {"type": "string", "minLength": 1},
+        "junction": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*:[0-9]+-[0-9]+$"
+        },
         "predicates": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}},
         "expression": {"type": "string", "minLength": 1},
         "universe": {"type": "string", "minLength": 1},
@@ -128,12 +159,20 @@
         "placements": {"enum": ["unique", "direct", "all"]},
         "allow_full_scan": {"type": "boolean"},
         "aggregation": {"enum": ["auto", "cell", "group", "bulk"]},
-        "emit_membership": {"type": "boolean"},
+        "emit_membership": {"const": true},
         "max_memberships": {"type": "integer", "minimum": 1},
         "max_pattern_rows": {"type": "integer", "minimum": 1},
         "max_chunks": {"type": "integer", "minimum": 1},
         "max_evidence_records": {"type": "integer", "minimum": 1},
-        "max_terminal_events": {"type": "integer", "minimum": 0}
+        "max_terminal_events": {"type": "integer", "minimum": 0},
+        "expected_min_selected_units": {"type": "integer", "minimum": 1},
+        "required_true_predicates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "story_note": {"type": "string", "minLength": 1}
       }
     }
   }
