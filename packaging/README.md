@@ -19,7 +19,7 @@ cargo-dist configuration, install exactly version 0.32.0 and run:
 ```sh
 dist generate --mode=ci
 dist generate --mode=ci --check
-dist plan --tag=v0.1.4
+dist plan --tag=v0.1.5
 ```
 
 The generated native assets are named `gravlax-TARGET.tar.gz` (or `.zip` on
@@ -119,15 +119,16 @@ registry, or creating a GitHub release because the checksum verifier rejected
 cargo-dist 0.32's trailing blank line in `sha256.sum`. Its annotated tag remains
 unchanged. The verifier now accepts blank lines only at the end of that file;
 interior blank lines and malformed checksum records remain errors. Version
-0.1.4 is the first complete native, source, and Python distribution. Work from
-a clean, up-to-date `main`. The preparation command validates version
-consistency, the publishable dependency graph, package contents, release notes,
-the public source policy, tests, and documentation. It creates only a local
-annotated tag:
+0.1.4 is the first complete native, source, and Python distribution. Version
+0.1.5 adds the molecular-event archive and query capabilities described in the
+changelog. Work from a clean, up-to-date `main`. The preparation command
+validates version consistency, the publishable dependency graph, package
+contents, release notes, the public source policy, tests, and documentation. It
+creates only a local annotated tag:
 
 ```sh
-./scripts/bump-and-publish 0.1.4 --dry-run --check-history
-./scripts/bump-and-publish 0.1.4 --prepare
+./scripts/bump-and-publish 0.1.5 --dry-run --check-history
+./scripts/bump-and-publish 0.1.5 --prepare
 ```
 
 The history check examines the tracked tree and `HEAD` ancestry for the
@@ -138,7 +139,7 @@ The five crates already have crates.io Trusted Publishers. Atomically push
 `main` and the tag:
 
 ```sh
-./scripts/bump-and-publish 0.1.4 --push
+./scripts/bump-and-publish 0.1.5 --push
 ```
 
 Do not push a release tag directly. The helper verifies the canonical remote,
@@ -146,13 +147,13 @@ clean history, protected release settings, branch ancestry, and annotated tag
 before it sends `main` and the tag together. CI independently rejects a
 lightweight tag or a tag whose commit differs from the workflow commit.
 
-The tag workflow publishes version 0.1.4 to crates.io and creates the immutable
+The tag workflow publishes version 0.1.5 to crates.io and creates the immutable
 GitHub release only after validation and artifact assembly succeed. After the
 entire tag workflow succeeds, dispatch the top-level Python workflow and
 approve its `pypi` environment deployment:
 
 ```sh
-./scripts/bump-and-publish 0.1.4 --dispatch-python
+./scripts/bump-and-publish 0.1.5 --dispatch-python
 ```
 
 It accepts only a stable, non-draft, non-prerelease, immutable release whose tag,
@@ -206,8 +207,8 @@ computed from those exact bytes:
 
 ```sh
 python packaging/bioconda/render_recipe.py \
-  --version 0.1.4 \
-  --source-archive dist/gravlax-0.1.4-source.tar.gz \
+  --version 0.1.5 \
+  --source-archive dist/gravlax-0.1.5-source.tar.gz \
   --output /tmp/bioconda-recipes/recipes/gravlax/meta.yaml
 conda render -c conda-forge -c bioconda /tmp/bioconda-recipes/recipes/gravlax
 bioconda-utils lint --packages gravlax /tmp/bioconda-recipes

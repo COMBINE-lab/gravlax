@@ -18,8 +18,9 @@ workflow also stopped before publication because its publisher jobs did not
 select the supported Python runtime. The 0.1.3 workflow built every release
 artifact but stopped before publication because its checksum verifier rejected
 the trailing blank line emitted by cargo-dist 0.32. Version 0.1.4 is the first
-complete distribution and is the recommended minimum version for packaged
-installations.
+complete distribution. Version 0.1.5 adds rooted alignment provenance, sparse
+terminal-tail evidence, coordinate-free atlas event discovery, and Boolean
+same-molecule queries, and is the recommended version for new installations.
 
 ## Install the `aie` command
 

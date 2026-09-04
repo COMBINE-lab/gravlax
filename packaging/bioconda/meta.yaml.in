@@ -12,6 +12,8 @@ source:
 
 build:
   number: 0
+  run_exports:
+    - {{ pin_subpackage(name, max_pin="x.x") }}
   script:
     - cargo-bundle-licenses --format yaml --output THIRDPARTY.yml
     - cargo install --locked --offline --no-track --path crates/aie --root "${PREFIX}"
@@ -57,11 +59,12 @@ about:
   dev_url: https://github.com/COMBINE-lab/gravlax
 
 extra:
+  additional-platforms:
+    - linux-aarch64
+    - osx-arm64
   skip-lints:
     # The Rust compiler activation package on the main conda-forge channel is
     # older than Gravlax's minimum Rust version. The native package is current.
     - should_use_compilers
-    # Gravlax is a standalone CLI and exposes no ABI for downstream packages.
-    - missing_run_exports
   recipe-maintainers:
     - rob-p

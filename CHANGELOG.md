@@ -2,24 +2,46 @@
 
 This file records user-visible changes in each Gravlax release.
 
-## Unreleased
+## [0.1.5] - 2026-09-04
+
+### Molecular evidence and provenance
 
 - Add logical molecular-evidence schema v2 within the authenticated `.aie` v2
-  container. New archives carry a root-bound alignment-provenance manifest,
-  including exact input identities and an optional embedded two-pass junction
-  catalogue.
+  container. New archives carry a root-bound alignment-provenance manifest
+  recording exact consumed-input identities, construction parameters, genome
+  binding, alignment metadata, and an optional exact two-pass junction
+  catalogue. Legacy archives remain readable and report unavailable provenance
+  rather than inventing it.
 - Add optional sparse terminal-tail evidence for uniquely mapped 10x 3′ cDNA
-  reads. The side section retains every qualifying deduplicated cleavage-anchor
-  key without adding sequence, qualities, or names to the archive.
+  reads. The side section retains every qualifying globally deduplicated
+  cleavage-anchor key without adding read sequence, qualities, or names, and
+  remains outside the unchanged core evidence streams when disabled.
+
+### Coordinate-free and same-molecule queries
+
 - Add `aie collection find-events` for coordinate-free junction, alternative
-  splice, cassette, and terminal-tail discovery across samples, donors, and
-  cell groups, with optional annotation-gap classification.
+  donor/acceptor, cassette, and terminal-tail discovery across samples, donors,
+  and cell groups. Queries can require recurrent exact UMI-class support and
+  classify evidence against a supplied annotation as missing-junction,
+  boundary, strand, or overlapping-model gaps.
 - Add `aie query … cooccur` for bounded Boolean region, junction, and terminal
-  predicates on the same retained molecule record, plus an explicit diagnostic
-  exact-UMI-class union mode.
-- Add typed Python wrappers and three fail-closed Colab demonstrations for
-  annotation reinterpretation, multi-donor event discovery, and federated
-  junction/co-occurrence analysis.
+  predicates on the same retained molecule record, with three-valued handling
+  of incomplete evidence and an explicit diagnostic exact-raw-UMI-class union
+  mode.
+- Add typed Python wrappers for collection event discovery and co-occurrence,
+  including streaming result files and the same explicit resource limits as the
+  native CLI.
+
+### Demonstrations and maintenance
+
+- Add three fail-closed Google Colab demonstrations for annotation
+  reinterpretation, multi-donor event discovery, and federated
+  junction/co-occurrence analysis. Add non-overwriting build, finalization, and
+  verification tools for an independently rooted, checksum-bound demo-data
+  capsule; the notebooks require immutable published locators and never fall
+  back to invented or cached results.
+- Resolve the existing workspace Clippy diagnostics and require the complete
+  workspace, all targets, and all features to pass with warnings denied.
 
 ## [0.1.4] - 2026-09-03
 
@@ -129,6 +151,7 @@ annotation be changed or compared without realigning the source reads.
 - Gravlax 0.1 is an initial public interface. Result and archive formats are
   versioned so readers can reject incompatible future changes explicitly.
 
+[0.1.5]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.5
 [0.1.4]: https://github.com/COMBINE-lab/gravlax/releases/tag/v0.1.4
 [0.1.3]: https://github.com/COMBINE-lab/gravlax/tree/v0.1.3
 [0.1.2]: https://github.com/COMBINE-lab/gravlax/tree/v0.1.2
