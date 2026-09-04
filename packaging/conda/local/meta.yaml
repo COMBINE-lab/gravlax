@@ -1,4 +1,4 @@
-{% set version = environ.get("GRAVLAX_VERSION", "0.1.4") %}
+{% set version = environ.get("GRAVLAX_VERSION", "0.1.5") %}
 
 package:
   name: gravlax

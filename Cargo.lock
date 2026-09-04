@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "eval"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "gravlax-evidence-io",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "gravlax"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "blake3",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "gravlax-anno"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "blake3",
@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "gravlax-evidence-io"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "blake3",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "gravlax-ingest"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "gravlax-evidence-io",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "gravlax-output"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "libc",
  "serde",
@@ -917,7 +917,7 @@ dependencies = [
 
 [[package]]
 name = "replay"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "gravlax-evidence-io",

@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 rust-version = "1.98"
 authors = ["Gravlax contributors"]
@@ -41,10 +41,10 @@ noodles-sam = "0.90"
 noodles-bgzf = "0.51"
 noodles-core = "0.20"
 noodles-gtf = "0.57"
-evidence-io = { package = "gravlax-evidence-io", version = "=0.1.4", path = "crates/evidence-io" }
-anno = { package = "gravlax-anno", version = "=0.1.4", path = "crates/anno" }
-ingest = { package = "gravlax-ingest", version = "=0.1.4", path = "crates/ingest" }
-gravlax-output = { version = "=0.1.4", path = "crates/gravlax-output" }
+evidence-io = { package = "gravlax-evidence-io", version = "=0.1.5", path = "crates/evidence-io" }
+anno = { package = "gravlax-anno", version = "=0.1.5", path = "crates/anno" }
+ingest = { package = "gravlax-ingest", version = "=0.1.5", path = "crates/ingest" }
+gravlax-output = { version = "=0.1.5", path = "crates/gravlax-output" }
 
 # cargo-dist owns the native archives and installers. Release-specific checks,
 # Python artifacts, the vendored source archive, and crates.io publication are
