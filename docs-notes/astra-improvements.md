@@ -2,6 +2,9 @@
 
 Branch: `astra-improvements`, baseline `ef94f220` (v0.1.6).
 
+Follow-up structural/fidelity-cost experiments are recorded in
+`astra-structural-compression.md`; they are not enabled production codecs.
+
 Implementation order:
 
 1. Faster selective access: byte-compatible section lookup/read and decoder improvements;

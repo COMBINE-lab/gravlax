@@ -1,0 +1,419 @@
+{
+  "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+  "chunks": 1,
+  "exact_restoration_verified": true,
+  "level": 19,
+  "limitations": "Read-only research transforms, not supported archive codecs. Projected file sizes retain existing dictionaries/tables/indexes and charge an experiment-envelope byte per changed chunk. Restore timing includes canonical stream reconstruction (including rANS re-encoding), not a native candidate reader or query/replay benchmark.",
+  "repeats": 7,
+  "schema": "gravlax.structural-experiment.v1",
+  "shapes": {
+    "additional_section_name_bytes": 18,
+    "factored_frame_bytes": 10254,
+    "ordinary_frame_bytes": 15689
+  },
+  "source_chunk_compressed_bytes": 213362,
+  "source_file_bytes": 340008,
+  "source_root": "ArchiveCommitment { version: 2, digest: [223, 216, 232, 102, 10, 147, 236, 193, 115, 130, 181, 135, 158, 139, 249, 136, 87, 158, 134, 25, 49, 108, 119, 147, 30, 147, 206, 163, 57, 97, 42, 208] }",
+  "variants": [
+    {
+      "chunk_compressed_bytes": 210079,
+      "encode_median_seconds": 0.066722456,
+      "encode_seconds": [
+        0.066722456,
+        0.067386877,
+        0.06604112,
+        0.065974951,
+        0.065856833,
+        0.066722717,
+        0.067148347
+      ],
+      "name": "position-deltas-local-rans",
+      "projected_archive_bytes": 336725,
+      "restore_and_decode_median_seconds": 0.005973344,
+      "restore_and_decode_seconds": [
+        0.006517634,
+        0.005973344,
+        0.005967536,
+        0.005984491,
+        0.005976369,
+        0.005965453,
+        0.005965112
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 220798,
+      "encode_median_seconds": 0.088835633,
+      "encode_seconds": [
+        0.088813049,
+        0.089002704,
+        0.088876024,
+        0.088835633,
+        0.088806669,
+        0.089462897,
+        0.086666367
+      ],
+      "name": "position-deltas-chain-flanks-local-rans",
+      "projected_archive_bytes": 347444,
+      "restore_and_decode_median_seconds": 0.010329914,
+      "restore_and_decode_seconds": [
+        0.01035396,
+        0.01032082,
+        0.010326078,
+        0.010329914,
+        0.01034673,
+        0.010385989,
+        0.01032754
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 223778,
+      "encode_median_seconds": 0.100604434,
+      "encode_seconds": [
+        0.099244636,
+        0.099797278,
+        0.100704955,
+        0.100604434,
+        0.100655871,
+        0.100608259,
+        0.100200655
+      ],
+      "name": "chain-flanks",
+      "projected_archive_bytes": 350424,
+      "restore_and_decode_median_seconds": 0.008169952,
+      "restore_and_decode_seconds": [
+        0.008197674,
+        0.008169952,
+        0.008158785,
+        0.008169742,
+        0.008192877,
+        0.0081692,
+        0.00818238
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 224117,
+      "encode_median_seconds": 0.092196193,
+      "encode_seconds": [
+        0.09162277,
+        0.092542975,
+        0.092024825,
+        0.092722455,
+        0.092196193,
+        0.09194188,
+        0.092418938
+      ],
+      "name": "position-deltas-plus-chain-flanks",
+      "projected_archive_bytes": 350763,
+      "restore_and_decode_median_seconds": 0.009984213,
+      "restore_and_decode_seconds": [
+        0.009989922,
+        0.009978966,
+        0.009984213,
+        0.009961399,
+        0.009993047,
+        0.009965165,
+        0.010009181
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 213862,
+      "encode_median_seconds": 0.085523896,
+      "encode_seconds": [
+        0.085717919,
+        0.085801144,
+        0.085523896,
+        0.085583626,
+        0.085183744,
+        0.082859945,
+        0.082215424
+      ],
+      "name": "representative-position-deltas",
+      "projected_archive_bytes": 340508,
+      "restore_and_decode_median_seconds": 0.005384247,
+      "restore_and_decode_seconds": [
+        0.005395354,
+        0.005384247,
+        0.005393351,
+        0.005395984,
+        0.005375293,
+        0.00537906,
+        0.005382655
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 213084,
+      "encode_median_seconds": 0.070708558,
+      "encode_seconds": [
+        0.068021482,
+        0.069318946,
+        0.070918114,
+        0.070708558,
+        0.07097509,
+        0.070687386,
+        0.070727077
+      ],
+      "name": "position-deltas-plus-layout",
+      "projected_archive_bytes": 339730,
+      "restore_and_decode_median_seconds": 0.005599922,
+      "restore_and_decode_seconds": [
+        0.005599922,
+        0.005610077,
+        0.005594744,
+        0.005623117,
+        0.005616307,
+        0.005595395,
+        0.005580363
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 213362,
+      "encode_median_seconds": 0.079032943,
+      "encode_seconds": [
+        0.079153154,
+        0.078503065,
+        0.079071271,
+        0.079032943,
+        0.078505017,
+        0.079086243,
+        0.078970479
+      ],
+      "name": "unchanged",
+      "projected_archive_bytes": 340008,
+      "restore_and_decode_median_seconds": 0.003759971,
+      "restore_and_decode_seconds": [
+        0.003756156,
+        0.003752851,
+        0.003761604,
+        0.003754113,
+        0.003767793,
+        0.003759971,
+        0.003760573
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 214962,
+      "encode_median_seconds": 0.079886918,
+      "encode_seconds": [
+        0.082092259,
+        0.079852226,
+        0.079932888,
+        0.079838175,
+        0.079867569,
+        0.079886918,
+        0.07988774
+      ],
+      "name": "class-varints",
+      "projected_archive_bytes": 341608,
+      "restore_and_decode_median_seconds": 0.004332824,
+      "restore_and_decode_seconds": [
+        0.004330341,
+        0.004332824,
+        0.004332694,
+        0.00433699,
+        0.004332393,
+        0.004335939,
+        0.004335929
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 214035,
+      "encode_median_seconds": 0.078007409,
+      "encode_seconds": [
+        0.078078816,
+        0.078157905,
+        0.077992406,
+        0.078060328,
+        0.078007409,
+        0.077753997,
+        0.077921249
+      ],
+      "name": "class-bitmap-backrefs",
+      "projected_archive_bytes": 340681,
+      "restore_and_decode_median_seconds": 0.004269449,
+      "restore_and_decode_seconds": [
+        0.004272343,
+        0.004273474,
+        0.004269449,
+        0.004268468,
+        0.004268437,
+        0.004265593,
+        0.004272884
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 213295,
+      "encode_median_seconds": 0.078261541,
+      "encode_seconds": [
+        0.077288396,
+        0.077320714,
+        0.077347535,
+        0.078261541,
+        0.079620157,
+        0.0787257,
+        0.078580721
+      ],
+      "name": "class-bitmap-repeat-deltas",
+      "projected_archive_bytes": 339941,
+      "restore_and_decode_median_seconds": 0.00424355,
+      "restore_and_decode_seconds": [
+        0.00426405,
+        0.00424355,
+        0.004242698,
+        0.004244541,
+        0.004241106,
+        0.004239483,
+        0.004245613
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 224437,
+      "encode_median_seconds": 0.081628311,
+      "encode_seconds": [
+        0.081551956,
+        0.08207938,
+        0.082192119,
+        0.082583259,
+        0.08140815,
+        0.081321248,
+        0.081628311
+      ],
+      "name": "local-shape-ids",
+      "projected_archive_bytes": 351083,
+      "restore_and_decode_median_seconds": 0.004305493,
+      "restore_and_decode_seconds": [
+        0.00430346,
+        0.00431023,
+        0.004305493,
+        0.004301557,
+        0.004307606,
+        0.004331642,
+        0.004303701
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 212608,
+      "encode_median_seconds": 0.064160559,
+      "encode_seconds": [
+        0.064211175,
+        0.064159086,
+        0.064311676,
+        0.064160559,
+        0.06395564,
+        0.064195702,
+        0.063857552
+      ],
+      "name": "layout-columns",
+      "projected_archive_bytes": 339254,
+      "restore_and_decode_median_seconds": 0.004012943,
+      "restore_and_decode_seconds": [
+        0.003998291,
+        0.004012943,
+        0.004019513,
+        0.004028095,
+        0.004011811,
+        0.004012031,
+        0.004017179
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 224081,
+      "encode_median_seconds": 0.069251554,
+      "encode_seconds": [
+        0.068404289,
+        0.069470885,
+        0.069251554,
+        0.070031118,
+        0.068642337,
+        0.068840215,
+        0.069326568
+      ],
+      "name": "combined",
+      "projected_archive_bytes": 350727,
+      "restore_and_decode_median_seconds": 0.005028562,
+      "restore_and_decode_seconds": [
+        0.005012507,
+        0.005025057,
+        0.005035171,
+        0.005028562,
+        0.00502704,
+        0.005035442,
+        0.00503379
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 212653,
+      "encode_median_seconds": 0.065442298,
+      "encode_seconds": [
+        0.065395068,
+        0.065752776,
+        0.066779612,
+        0.065394757,
+        0.065551493,
+        0.065357972,
+        0.065442298
+      ],
+      "name": "class-plus-layout",
+      "projected_archive_bytes": 339299,
+      "restore_and_decode_median_seconds": 0.004481508,
+      "restore_and_decode_seconds": [
+        0.004482749,
+        0.004481558,
+        0.004474557,
+        0.004480656,
+        0.004478033,
+        0.004490291,
+        0.004481508
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 279090,
+      "encode_median_seconds": 0.079935582,
+      "encode_seconds": [
+        0.081892368,
+        0.081981071,
+        0.078986323,
+        0.079720117,
+        0.080428965,
+        0.079935582,
+        0.079580537
+      ],
+      "name": "geometry-templates",
+      "projected_archive_bytes": 405736,
+      "restore_and_decode_median_seconds": 0.006101868,
+      "restore_and_decode_seconds": [
+        0.00668788,
+        0.006088949,
+        0.006107527,
+        0.006110371,
+        0.006101868,
+        0.006093355,
+        0.006101046
+      ]
+    },
+    {
+      "chunk_compressed_bytes": 279881,
+      "encode_median_seconds": 0.080839563,
+      "encode_seconds": [
+        0.080641165,
+        0.080639651,
+        0.080754464,
+        0.080839563,
+        0.081896434,
+        0.084127113,
+        0.083338075
+      ],
+      "name": "class-plus-geometry-templates",
+      "projected_archive_bytes": 406527,
+      "restore_and_decode_median_seconds": 0.00656796,
+      "restore_and_decode_seconds": [
+        0.006580949,
+        0.006575952,
+        0.006551154,
+        0.00656796,
+        0.006579066,
+        0.006565466,
+        0.006555792
+      ]
+    }
+  ]
+}
