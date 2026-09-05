@@ -1,0 +1,9 @@
+{
+  "baseline_commit": "ef94f220",
+  "benchmark": "cargo run -p gravlax-evidence-io --example access_benchmark --release --locked",
+  "scope": "warm-cache synthetic 4096-section container and one million mixed integers; not genome-wide query performance",
+  "baseline": {"open_median_seconds": 0.0044568654, "reads_20000_median_seconds": 0.043959545, "rans_median_seconds": 0.006301231},
+  "optimized": {"open_median_seconds": 0.0016974896, "reads_20000_median_seconds": 0.005628293, "rans_median_seconds": 0.004143148},
+  "encoded_rans_bytes_both": 1565307,
+  "validation": "52 evidence-io tests pass, including rooted integrity, corruption, boundedness and legacy compatibility"
+}

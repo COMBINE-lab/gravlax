@@ -332,6 +332,7 @@ pub fn read_sections(path: &Path) -> Result<Vec<(String, Vec<u8>)>> {
 pub struct SectionReader {
     file: std::fs::File,
     directory: Vec<(String, u64, u64, u64)>, // name, offset, raw_len, comp_len
+    by_name: std::collections::HashMap<String, usize>,
     payload_digests: Vec<Option<[u8; 32]>>,
     version: u32,
     root: Option<[u8; 32]>,
@@ -468,8 +469,10 @@ impl SectionReader {
                 .checked_add(1 + name.len() as u64 + 16)
                 .context("archive open byte accounting overflow")?;
         }
+        let by_name = directory.iter().enumerate().map(|(i, entry)| (entry.0.clone(), i)).collect();
         Ok(SectionReader {
             file,
+            by_name,
             payload_digests: vec![None; directory.len()],
             directory,
             version: SEEKABLE_VERSION,
@@ -498,6 +501,8 @@ impl SectionReader {
         let mut expected_root = [0u8; 32];
         expected_root.copy_from_slice(&footer[8..40]);
         file.seek(SeekFrom::Start(dir_offset))?;
+        // Buffer sequential directory fields; molecule payloads remain lazy.
+        let mut file = std::io::BufReader::new(file);
         let mut hasher = root_hasher(dir_offset);
         let mut n4 = [0u8; 4];
         file.read_exact(&mut n4)?;
@@ -568,6 +573,7 @@ impl SectionReader {
         if hasher.finalize().as_bytes() != &expected_root {
             bail!("v2 archive directory root mismatch");
         }
+        let mut file = file.into_inner();
         file.seek(SeekFrom::Start(dir_offset - 1))?;
         let mut terminator = [0u8; 1];
         file.read_exact(&mut terminator)?;
@@ -583,31 +589,30 @@ impl SectionReader {
             .context("v2 archive open byte accounting overflow")?;
         for (name, offset, raw_len, comp_len) in &directory {
             file.seek(SeekFrom::Start(*offset))?;
-            let mut nl = [0u8; 1];
-            file.read_exact(&mut nl)?;
-            if nl[0] as usize != name.len() {
+            let mut header = [0u8; 272];
+            let header = &mut header[..1 + name.len() + 16];
+            file.read_exact(header)?;
+            if header[0] as usize != name.len() {
                 bail!("v2 section {name} has inconsistent inline name length");
             }
-            let mut inline_name = vec![0u8; nl[0] as usize];
-            file.read_exact(&mut inline_name)?;
-            if inline_name != name.as_bytes() {
+            if &header[1..1 + name.len()] != name.as_bytes() {
                 bail!("v2 section {name} has inconsistent inline name");
             }
-            let mut u = [0u8; 8];
-            file.read_exact(&mut u)?;
-            if u64::from_le_bytes(u) != *raw_len {
+            let fields = &header[1 + name.len()..];
+            if u64::from_le_bytes(fields[..8].try_into().unwrap()) != *raw_len {
                 bail!("v2 section {name} has inconsistent raw length");
             }
-            file.read_exact(&mut u)?;
-            if u64::from_le_bytes(u) != *comp_len {
+            if u64::from_le_bytes(fields[8..].try_into().unwrap()) != *comp_len {
                 bail!("v2 section {name} has inconsistent compressed length");
             }
             bytes_read = bytes_read
                 .checked_add(1 + name.len() as u64 + 16)
                 .context("v2 archive open byte accounting overflow")?;
         }
+        let by_name = directory.iter().enumerate().map(|(i, entry)| (entry.0.clone(), i)).collect();
         Ok(Self {
             file,
+            by_name,
             directory,
             payload_digests,
             version: u32::from_le_bytes(head[4..8].try_into().unwrap()),
@@ -810,9 +815,7 @@ impl SectionReader {
     }
 
     fn entry_index(&self, name: &str) -> Result<usize> {
-        self.directory
-            .iter()
-            .position(|(candidate, _, _, _)| candidate == name)
+        self.by_name.get(name).copied()
             .with_context(|| format!("archive missing section {name}"))
     }
 
@@ -845,7 +848,7 @@ impl SectionReader {
     }
 
     pub fn has(&self, name: &str) -> bool {
-        self.directory.iter().any(|(n, _, _, _)| n == name)
+        self.by_name.contains_key(name)
     }
 
     /// Like [`Self::read_compressed`], but position-independent and `&self`, so many sections
