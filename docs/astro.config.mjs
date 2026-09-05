@@ -15,7 +15,7 @@ export default defineConfig({
       },
       title: 'Gravlax',
       description:
-        'Align once and query forever — a compact molecular-evidence index for annotation replay in single-cell RNA-seq.',
+        'Align once and query forever — an annotation-independent molecular evidence archive for single-cell RNA-seq.',
       social: [
         {
           icon: 'github',
