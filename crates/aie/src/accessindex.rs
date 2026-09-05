@@ -216,6 +216,22 @@ impl Index {
         self.posts.values().map(Vec::len).sum()
     }
 
+    /// Supplemental routes only; must be unioned with the root-bound base index.
+    pub fn supplement_to(&self, base:&Self) -> Result<Option<Vec<u8>>> {
+        if self.bases!=base.bases || self.chroms!=base.chroms {bail!("supplement index identities differ");}
+        for (key,posts) in &base.posts {
+            let full=self.posts.get(key).context("fidelity removes a base route")?;
+            if posts.iter().any(|p|full.binary_search(p).is_err()){bail!("fidelity removes a base posting");}
+        }
+        let mut extra=BTreeMap::new();
+        for (&key,posts) in &self.posts {
+            let row:Vec<_>=posts.iter().copied().filter(|p|base.posts.get(&key).is_none_or(|b|b.binary_search(p).is_err())).collect();
+            if !row.is_empty(){extra.insert(key,row);}
+        }
+        if extra.is_empty(){return Ok(None);}
+        Ok(Some(Self{bases:self.bases.clone(),chroms:self.chroms,posts:extra}.encode()))
+    }
+
     pub fn validate_bases(&self, bases: impl Iterator<Item = u32>) -> Result<()> {
         if !self.bases[..self.bases.len()-1].iter().copied().eq(bases) {
             bail!("access-index class bases differ from the chunk directory");
@@ -461,5 +477,20 @@ mod tests {
         index.posts.insert(key, saved);
         index.posts.insert([1,0,0,60000,0],vec![0]);
         assert_ne!(verify(&index).unwrap(),index.posting_count());
+    }
+
+    #[test]
+    fn supplemental_routes_reconstruct_full_index_union() {
+        let full=Index::build(&fixture(),[1,1,1,1].into_iter()).unwrap();
+        let mut base=Index::build(&fixture(),[1,1,1,1].into_iter()).unwrap();
+        assert!(full.supplement_to(&base).unwrap().is_none());
+        let key=*base.posts.keys().find(|k|k[0]==1).unwrap();
+        base.posts.remove(&key);
+        let raw=full.supplement_to(&base).unwrap().unwrap();
+        let extra=Index::decode(&raw,4,3,2).unwrap();
+        for (key,posts) in extra.posts {let row=base.posts.entry(key).or_default();row.extend(posts);row.sort_unstable();row.dedup();}
+        assert_eq!(base.encode(),full.encode());
+        base.posts.insert([1,0,0,60000,0],vec![0]);
+        assert!(full.supplement_to(&base).is_err());
     }
 }

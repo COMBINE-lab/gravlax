@@ -4,6 +4,7 @@ mod apastats;
 mod accessindex;
 mod shapecodec;
 mod structuralbench;
+mod sparsebench;
 mod archivecmd;
 mod assigndiff;
 mod build;

@@ -97,7 +97,11 @@ selection, offset by 18 extra section-name bytes.
 - This is one narrow-locus corpus. There is no genome-wide result or proof that
   16.2% is a lower bound. No new production encoding has been enabled.
 
-The next distinct experiment worth pursuing is a compact base plus sparse
+Follow-up: this experiment has now been performed; see `astra-sparse-fidelity.md`.
+The tested sparse capsules reconstruct exactly but are larger than the existing
+full-fidelity archive under both tested chunk layouts.
+
+The next distinct experiment proposed here was a compact base plus sparse
 geometry/multiplicity exceptions, with an explicit reconstruction contract.
 Simply labeling the current full-fidelity encoding sparse does not provide that
 contract. Such an exception codec must account for its routing, references and

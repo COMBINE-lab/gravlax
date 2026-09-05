@@ -1,0 +1,44 @@
+{
+  "base_access_index": true,
+  "base_bytes": 384486,
+  "full_fidelity_bytes": 466431,
+  "level": 19,
+  "limitation": "Experimental capsules, no production query adapter. Route by union of base and included supplemental postings; without an index use full scans.",
+  "schema": "gravlax.sparse-fidelity-benchmark.v1",
+  "supplemental_routing_required": false,
+  "variants": [
+    {
+      "base_plus_capsule_bytes": 484434,
+      "capsule_bytes": 99948,
+      "changed_chains": 23304,
+      "correction_chunks": 14,
+      "delta_shapes": false,
+      "entropy_columns": false,
+      "omitted_geometries": 52974,
+      "premium_percent": 25.995224793620572,
+      "reconstruction_verified": true
+    },
+    {
+      "base_plus_capsule_bytes": 481713,
+      "capsule_bytes": 97227,
+      "changed_chains": 23304,
+      "correction_chunks": 14,
+      "delta_shapes": true,
+      "entropy_columns": false,
+      "omitted_geometries": 52974,
+      "premium_percent": 25.28752672398995,
+      "reconstruction_verified": true
+    },
+    {
+      "base_plus_capsule_bytes": 480042,
+      "capsule_bytes": 95556,
+      "changed_chains": 23304,
+      "correction_chunks": 14,
+      "delta_shapes": true,
+      "entropy_columns": true,
+      "omitted_geometries": 52974,
+      "premium_percent": 24.852920522463755,
+      "reconstruction_verified": true
+    }
+  ]
+}

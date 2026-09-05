@@ -29,6 +29,8 @@ enum Command {
     Debug(crate::debugcmd::Args),
     /// Benchmark reversible structural compression candidates without changing an archive.
     StructuralBench(crate::structuralbench::Args),
+    /// Measure exact compact-base plus sparse geometry/count corrections.
+    SparseBench(crate::sparsebench::Args),
     /// Run multimapper-recovery modes and masked-evidence scoring.
     Em(crate::archivecmd::EmArgs),
 }
@@ -44,6 +46,7 @@ pub fn run(args: Args) -> Result<()> {
         Command::SigStats(args) => crate::sigstats::run(args),
         Command::Debug(args) => crate::debugcmd::run(args),
         Command::StructuralBench(args) => crate::structuralbench::run(args),
+        Command::SparseBench(args) => crate::sparsebench::run(args),
         Command::Em(args) => crate::archivecmd::run_em(args),
     }
 }
