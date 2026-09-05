@@ -68,8 +68,8 @@ among them:
   into loci (single-linkage, 2 kb gap) and, within a locus, into junction
   chains keyed by absolute junction coordinates. Each chain stores its two
   span-extreme reads — the most-contained and most-extended — plus the chain
-  read count. The extremes bracket the containment behaviour of every read in
-  between. Chains are position-sorted and the span-minimum representative
+  read count. These do not establish every intermediate aligned-block overlap;
+  negative overlap predicates can therefore remain indeterminate. Chains are position-sorted and the span-minimum representative
   comes first, so the anchor offset of the first representative is implied
   and never stored.
 - **UMI classes and edges, never values.** UMIs are stored as global
@@ -97,8 +97,8 @@ dictionaries   cells (packed corrected barcodes, frequency-ordered)
                rANS tables (global static tables for the memoryless streams)
 cell-of-class  one cell id per UMI class, in 65,536-class blocks,
                each block its own compressed frame with per-block codec choice
-chunks         per 4 Mb genomic bin: ten columnar streams, independently
-               compressed (anchor, class, layout, weight, rep.pos, rep.shape,
+chunks         per 4 Mb genomic bin: ten columnar streams in ONE compressed
+               frame per chunk (anchor, class, layout, weight, rep.pos, rep.shape,
                mm.pos, mm.shape, mm.pattern, mm.weight)
 graph          cell-scoped 1-mismatch edges among global UMI classes
 indexes        genomic range → chunk · junction id → chunk postings
@@ -106,6 +106,57 @@ indexes        genomic range → chunk · junction id → chunk postings
 optional tail  sparse tail route index · one event list per selected core chunk
 footer         section directory (name, offset, raw length, compressed length)
 ```
+
+### Experimental archive improvements
+
+The `astra-improvements` branch adds four opt-in ingest switches. Existing
+archives remain readable; omitting the switches preserves the default encoding.
+
+- `--access-index` embeds root-authenticated `index.access` postings for repeated
+  UMI classes, aligned-block tiles, and exact junctions in unique, direct and
+  all-alternative placement scopes. `cooccur` can use these to avoid its previous
+  mandatory whole-archive scan. Geometry postings select candidate chunks only;
+  decoded molecular evidence still decides matches. `doctor --verify-content`
+  reconstructs every posting and checks for omissions and extras. Construction
+  and decoding currently limit this experimental index to ten million postings.
+- `--chunk-records 4096` targets smaller access units within genomic bins.
+  Equal-anchor records stay together, so this is not a hard record limit.
+  More chunks cost space; the high-level compression pass uses at most four
+  workers for this option to bound concurrent compression contexts.
+- `--geometry-fidelity` stores each distinct accepted unique-read geometry once
+  with its exact read multiplicity, within its original cell/UMI/locus record.
+  A single-geometry chain needs no additional geometry; exceptional multi-geometry
+  chains become singleton geometry entries in the existing streams. This is a
+  sparse replacement of the reduction, **not a separate geometry sidecar**.
+  The provenance rule is `distinct-unique-geometries-v1`. It improves witnessed
+  overlap and completeness and can change annotation assignment or velocity
+  results. It does not recover sequences, qualities, corrected-away identities,
+  absent alignments, or biological absence. Older readers reject the unfamiliar
+  provenance rule. The direct-BAM replay reference accepts the same switch with
+  `replay-rows --from-bam`.
+- `--compression-tuning` compares final zstd frames, including repeated section
+  name overhead, instead of choosing cell-map encodings by intermediate length.
+  Candidates are delta, rANS and `(cell, run length)` coding (cell codec tag 2).
+  It also compares the ordinary shape dictionary with `shapes.factored`, magic
+  `SHPFACT1`: shared gap/internal-exon skeletons plus per-shape first offset and
+  first/last block lengths. Shape IDs and decoded geometry are unchanged. Exactly
+  one shape section is permitted. The reader bounds factored expansion to ten
+  million blocks. Existing encodings win ties; unsupported new encodings fail
+  closed in older readers. Compression tuning is experimental and adds ingest
+  work even when it cannot reduce an archive.
+
+For example, construct and fully validate an experimental archive with:
+
+```sh
+aie ingest-archive input.bam --whitelist barcodes.txt --out improved.aie \
+  --access-index --chunk-records 4096 --geometry-fidelity --compression-tuning
+aie doctor improved.aie --verify-content
+```
+
+These switches do not change the outer container version. Benchmark archive plus
+index bytes, ingest memory and latency, and actual query/replay workloads before
+adopting them. Smaller access units are not automatically smaller archives or
+faster whole-archive replay.
 
 ### Alignment provenance
 

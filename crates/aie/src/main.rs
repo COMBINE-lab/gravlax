@@ -1,6 +1,8 @@
 //! `aie` — annotation-independent evidence toolkit.
 
 mod apastats;
+mod accessindex;
+mod shapecodec;
 mod archivecmd;
 mod assigndiff;
 mod build;

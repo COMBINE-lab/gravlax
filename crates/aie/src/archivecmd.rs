@@ -86,6 +86,21 @@ pub struct IngestArgs {
     /// regional reads; the ingest report prints the resulting archive size.
     #[arg(long, default_value_t = 4)]
     pub chunk_mb: u32,
+    /// Add optional class, aligned-block and all-alternative junction chunk routes.
+    #[arg(long)]
+    pub access_index: bool,
+    /// Target records per access unit within a genomic bin (0 keeps legacy bins).
+    /// Equal-anchor records stay together, so a single pileup can exceed the target.
+    #[arg(long, default_value_t = 0)]
+    pub chunk_records: usize,
+    /// Preserve every distinct accepted unique-read geometry and its exact multiplicity.
+    /// This does not restore sequences, qualities or missing multimapper alignments.
+    #[arg(long)]
+    pub geometry_fidelity: bool,
+    /// Select cell-map and factored-shape encodings by final compressed frame size.
+    /// Experimental, opt-in; older readers may reject newly selected encodings.
+    #[arg(long)]
+    pub compression_tuning: bool,
     /// Reference FASTA (plain or gzipped) to bind for sequence-consulting queries. Gravlax hashes
     /// its exact bytes and normalized contigs; its relationship to the alignment is explicitly
     /// caller-declared rather than inferred. Hashing runs concurrently with extraction.
@@ -166,6 +181,9 @@ pub struct ReplayRowsArgs {
     /// Interpret `input` as a BAM and extract rows on the fly (the regression reference path).
     #[arg(long, conflicts_with = "from_molecule_bam")]
     pub from_bam: bool,
+    /// Retain distinct unique geometries in the direct-BAM regression reference.
+    #[arg(long, requires = "from_bam")]
+    pub geometry_fidelity: bool,
     /// Interpret input as `export-molecule-bam` output. This path consumes opaque UMI-class ids
     /// and explicit 1MM edges; no whitelist or unavailable nucleotide UMI value is invented.
     #[arg(long, conflicts_with = "from_bam")]
@@ -247,6 +265,7 @@ fn prepare_terminal_tails(
     x: &Extracted,
     tails: &ExtractedTerminalTails,
     chunk_bp: u32,
+    chunk_records: usize,
 ) -> Result<PreparedTerminalTails> {
     let mut sections = Vec::new();
     let mut routes = Vec::new();
@@ -263,6 +282,7 @@ fn prepare_terminal_tails(
         while molecule_end < x.mols.len()
             && x.mols[molecule_end].chrom == chrom
             && x.mols[molecule_end].anchor() < bin_end
+            && (chunk_records == 0 || molecule_end-molecule_start < chunk_records || x.mols[molecule_end].anchor() == x.mols[molecule_end-1].anchor())
         {
             molecule_end += 1;
         }
@@ -356,6 +376,9 @@ fn prepare_terminal_tails(
 
 #[derive(Clone, Copy, Default)]
 struct ArchiveExtensions<'a> {
+    access_index: bool,
+    chunk_records: usize,
+    compression_tuning: bool,
     alignment_provenance: Option<&'a AlignmentProvenanceManifest>,
     junction_catalogue_bytes: Option<&'a [u8]>,
     terminal_tails: Option<&'a ExtractedTerminalTails>,
@@ -414,7 +437,7 @@ fn write_archive_sections(
     }
     let prepared_tails = extensions
         .terminal_tails
-        .map(|tails| prepare_terminal_tails(x, tails, chunk_bp))
+        .map(|tails| prepare_terminal_tails(x, tails, chunk_bp, extensions.chunk_records))
         .transpose()?;
 
     let mut meta = serde_json::Map::new();
@@ -428,6 +451,12 @@ fn write_archive_sections(
     meta.insert("chunk_streams".into(), serde_json::json!(10u32));
     meta.insert("coc_block".into(), serde_json::json!(COC_BLOCK));
     meta.insert("codec".into(), serde_json::json!("rans2"));
+    if extensions.access_index {
+        meta.insert("access_index".into(), serde_json::json!(crate::accessindex::SCHEMA));
+    }
+    if extensions.chunk_records != 0 {
+        meta.insert("chunk_record_target".into(), serde_json::json!(extensions.chunk_records));
+    }
     if let Some(sig) = genome_sig {
         meta.insert("genome_sig".into(), serde_json::to_value(sig)?);
     }
@@ -544,9 +573,11 @@ fn write_archive_sections(
         let bin_start = (x.mols[i].anchor() / chunk_bp) * chunk_bp;
         let bin_end = bin_start + chunk_bp;
         let mut j = i;
-        while j < x.mols.len() && x.mols[j].chrom == chrom && x.mols[j].anchor() < bin_end {
+        while j < x.mols.len() && x.mols[j].chrom == chrom && x.mols[j].anchor() < bin_end
+            && (extensions.chunk_records == 0 || j-i < extensions.chunk_records || x.mols[j].anchor() == x.mols[j-1].anchor()) {
             j += 1;
         }
+        let bin_start = if extensions.chunk_records == 0 { bin_start } else { x.mols[i].anchor() };
         let mols = &x.mols[i..j];
 
         let (mut anchor_s, mut layout_s) = (Vec::new(), Vec::new());
@@ -712,6 +743,10 @@ fn write_archive_sections(
         put_varint(&mut cm, c.n_cells as u64);
     }
     sections.push(("index.chunks".into(), cm));
+    if extensions.access_index {
+        let index = crate::accessindex::Index::build(x, chunk_meta.iter().map(|c| c.n_mols))?;
+        sections.push((crate::accessindex::SECTION.into(), index.encode()));
+    }
     sections.extend(coc_blocks);
     if let Some(prepared) = prepared_tails {
         sections.push((
@@ -787,13 +822,51 @@ fn write_archive_sections(
     sections.push(("edges".into(), edg));
 
     // One parallel compression pass, then a serial ordered write.
-    let compressed: Vec<(String, usize, Vec<u8>)> = sections
-        .into_par_iter()
-        .map(|(name, raw)| {
-            let comp = evidence_io::format::compress(&raw, level)?;
-            Ok((name, raw.len(), comp))
-        })
-        .collect::<Result<_>>()?;
+    // Fine access units must not multiply simultaneous high-level zstd contexts
+    // with the host's CPU count. Keep default construction unchanged, and bound
+    // the opt-in fine-chunk path to four compression workers.
+    let compress_sections = || sections.into_par_iter().map(|(name, raw)| {
+        let block = name.strip_prefix("coc.").and_then(|v| v.parse::<usize>().ok());
+        let is_shapes = name == "shapes";
+        let mut best = (name, raw.len(), evidence_io::format::compress(&raw, level)?);
+        if extensions.compression_tuning {
+            let mut consider = |name: String, candidate: Vec<u8>| -> Result<()> {
+                if candidate == raw { return Ok(()); }
+                let comp = evidence_io::format::compress(&candidate, level)?;
+                // Inline header and authenticated directory both repeat the section name.
+                if comp.len() + 2 * name.len() < best.2.len() + 2 * best.0.len() {
+                    best = (name, candidate.len(), comp);
+                }
+                Ok(())
+            };
+            if let Some(block) = block {
+                let start = block * COC_BLOCK as usize;
+                let vals = &coc_u64[start..coc_u64.len().min(start + COC_BLOCK as usize)];
+                let mut delta = vec![0];
+                put_varint(&mut delta, vals[0]);
+                for pair in vals.windows(2) { put_svarint(&mut delta, pair[1] as i64 - pair[0] as i64); }
+                let mut rans = vec![1];
+                evidence_io::rans::encode(vals, &tables[5], &mut rans);
+                let mut runs = vec![2];
+                let mut i = 0;
+                while i < vals.len() {
+                    let mut j = i + 1;
+                    while j < vals.len() && vals[j] == vals[i] { j += 1; }
+                    put_varint(&mut runs, vals[i]);
+                    put_varint(&mut runs, (j-i) as u64);
+                    i = j;
+                }
+                for candidate in [delta, rans, runs] { consider(format!("coc.{block}"), candidate)?; }
+            } else if is_shapes {
+                consider(crate::shapecodec::SECTION.into(), crate::shapecodec::encode(&x.shapes)?)?;
+            }
+        }
+        Ok(best)
+    }).collect::<Result<Vec<(String, usize, Vec<u8>)>>>();
+    let compressed = if extensions.chunk_records != 0 || extensions.compression_tuning {
+        rayon::ThreadPoolBuilder::new().num_threads(rayon::current_num_threads().min(4))
+            .build()?.install(compress_sections)?
+    } else { compress_sections()? };
     for (name, raw_len, comp) in &compressed {
         w.section_precompressed(name, *raw_len as u64, comp)?;
     }
@@ -930,6 +1003,19 @@ fn decode_coc_block(comp: &[u8], raw_len: usize, coc_table: &evidence_io::rans::
             .into_iter()
             .map(|v| u32::try_from(v).context("cell id exceeds u32"))
             .collect(),
+        2 => {
+            let mut c = Cursor::new(&raw[1..]);
+            let mut out = Vec::new();
+            while !c.is_empty() {
+                let value = u32::try_from(c.varint()?).context("cell id exceeds u32")?;
+                let count = usize::try_from(c.varint()?).context("cell run exceeds usize")?;
+                if count == 0 || count > COC_BLOCK as usize - out.len() {
+                    bail!("invalid cell run length");
+                }
+                out.resize(out.len() + count, value);
+            }
+            Ok(out)
+        }
         b => bail!("unknown coc block codec {b}"),
     }
 }
@@ -955,6 +1041,14 @@ fn decode_shapes(raw: &[u8]) -> Result<Vec<Shape>> {
         shapes.push(Shape { blocks });
     }
     Ok(shapes)
+}
+
+fn read_shapes(reader: &mut SectionReader) -> Result<Vec<Shape>> {
+    match (reader.has("shapes"), reader.has(crate::shapecodec::SECTION)) {
+        (true, false) => decode_shapes(&reader.read("shapes")?),
+        (false, true) => crate::shapecodec::decode(&reader.read(crate::shapecodec::SECTION)?),
+        _ => bail!("archive must have exactly one supported shape dictionary"),
+    }
 }
 
 fn decode_patterns(raw: &[u8]) -> Result<Vec<Vec<PatAlt>>> {
@@ -1033,7 +1127,7 @@ pub fn read_dicts(r: &mut SectionReader) -> Result<Dicts> {
         .iter()
         .map(|&bytes| u32::from_le_bytes(bytes))
         .collect();
-    let shapes = decode_shapes(&r.read("shapes")?)?;
+    let shapes = read_shapes(r)?;
     let patterns = decode_patterns(&r.read("patterns")?)?;
     let rans_tables = read_rans_tables(r)?;
     let n_classes = required_meta_u32(&meta, "classes")?;
@@ -1089,6 +1183,44 @@ pub struct TerminalTailRecord {
     pub strand_rev: bool,
     pub anchor: u32,
     pub signal: TerminalTailSignal,
+}
+
+/// Projection sufficient to resolve sparse tail attachments. The complete chunk
+/// payload remains authenticated, but unrelated child geometry is not decoded.
+pub struct MoleculeIdentity {
+    pub class: u32,
+    pub anchor: u32,
+    pub reverse: bool,
+}
+
+pub fn decode_chunk_identities(raw: &[u8], info: &ChunkInfo, tables: &[evidence_io::rans::Table]) -> Result<Vec<MoleculeIdentity>> {
+    let mut c = Cursor::new(raw);
+    let mut streams = [&[][..]; 10];
+    for stream in &mut streams {
+        let len=usize::try_from(c.varint()?).context("chunk stream length overflow")?;
+        *stream=c.take(len)?;
+    }
+    if !c.is_empty() { bail!("chunk has trailing bytes"); }
+    let table=tables.first().context("missing class rANS table")?;
+    let classes=evidence_io::rans::decode_limited(streams[1],table,info.n_mols as usize)?;
+    if classes.len()!=info.n_mols as usize || streams[2].len()<info.n_mols as usize*3 { bail!("identity projection cardinality mismatch"); }
+    let mut anchors=Cursor::new(streams[0]);
+    let mut layout=Cursor::new(streams[2]);
+    let (mut anchor,mut next)=(info.bin_start,info.class_base);
+    let mut out=Vec::with_capacity(classes.len());
+    for token in classes {
+        anchor=anchor.checked_add(u32::try_from(anchors.varint()?)?).context("anchor overflow")?;
+        if anchor>info.max_anchor { bail!("anchor outside chunk envelope"); }
+        let class=if token==0 { let class=next;next=next.checked_add(1).context("class overflow")?;class }
+            else { next.checked_sub(u32::try_from(token)?).context("class backreference underflow")? };
+        let strand=layout.byte()?;
+        let chains=layout.varint()?;
+        let mms=layout.varint()?;
+        if strand>1 || (chains==0 && mms==0) { bail!("invalid projected molecule layout"); }
+        out.push(MoleculeIdentity {class,anchor,reverse:strand!=0});
+    }
+    if !anchors.is_empty() || !layout.is_empty() { bail!("identity projection has trailing values"); }
+    Ok(out)
 }
 
 pub fn read_chunk_index(r: &mut SectionReader) -> Result<Vec<ChunkInfo>> {
@@ -1302,6 +1434,8 @@ pub fn decode_chunk(
 /// query-open cost flat as archives grow; eager loading took 0.69 s on an approximately
 /// 100-million-molecule benchmark archive.
 pub struct LazyArchive {
+    access_index: Option<crate::accessindex::Index>,
+    has_access_index: bool,
     r: SectionReader,
     pub chrom_names: Vec<String>,
     pub chrom_digest: String,
@@ -1333,6 +1467,17 @@ fn archive_capabilities(
     Option<GenomeReferenceBinding>,
 )> {
     let has_provenance_section = reader.has(ALIGNMENT_PROVENANCE_SECTION);
+    let has_access = reader.has(crate::accessindex::SECTION);
+    if meta.get("access_index").is_some() != has_access
+        || meta.get("access_index").is_some_and(|v| v.as_str() != Some(crate::accessindex::SCHEMA))
+        || (has_access && reader.content_commitment().is_none()) {
+        bail!("partial or unsupported access-index capability");
+    }
+    if has_access && verify_declared_payloads {
+        let chunks = read_chunk_index(reader)?;
+        let chroms = std::str::from_utf8(&reader.read("chroms")?)?.lines().count();
+        crate::accessindex::Index::decode(&reader.read(crate::accessindex::SECTION)?, chunks.len(), required_meta_u32(meta,"classes")?, chroms)?;
+    }
     let has_catalogue_section = reader.has(JUNCTION_CATALOGUE_SECTION);
     let has_tail_index = reader.has(terminal_tail::TERMINAL_TAIL_INDEX_SECTION);
     let tail_section_count = reader
@@ -1551,6 +1696,12 @@ impl LazyArchive {
         let meta: serde_json::Value = serde_json::from_slice(&r.read("meta")?)?;
         check_layout(&meta)?;
         let (_, terminal_tail, _) = archive_capabilities(&mut r, &meta, false)?;
+        let has_access_index = r.has(crate::accessindex::SECTION);
+        if meta.get("access_index").is_some() != has_access_index
+            || meta.get("access_index").is_some_and(|v| v.as_str() != Some(crate::accessindex::SCHEMA))
+            || (has_access_index && r.content_commitment().is_none()) {
+            bail!("partial or unsupported access-index capability");
+        }
         let chrom_bytes = r.read("chroms")?;
         let chrom_text = std::str::from_utf8(&chrom_bytes)
             .context("archive chromosome dictionary is not UTF-8")?;
@@ -1561,6 +1712,8 @@ impl LazyArchive {
             .get("genome_sig")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
         Ok(LazyArchive {
+            access_index: None,
+            has_access_index,
             r,
             chrom_names,
             chrom_digest,
@@ -1634,6 +1787,14 @@ impl LazyArchive {
         molecule_base: u64,
         molecules: &[MolRec],
     ) -> Result<Vec<TerminalTailRecord>> {
+        let identities=molecules.iter().map(|m|MoleculeIdentity {class:m.umi_class,anchor:m.anchor(),reverse:m.strand_rev}).collect::<Vec<_>>();
+        if molecules.iter().any(|m|m.chrom!=info.chrom) { bail!("terminal-tail molecule chromosome mismatch"); }
+        self.terminal_tail_records_projected(route,info,molecule_base,&identities)
+    }
+
+    pub fn terminal_tail_records_projected(
+        &mut self, route: TerminalTailRoute, info: &ChunkInfo, molecule_base: u64, molecules: &[MoleculeIdentity],
+    ) -> Result<Vec<TerminalTailRecord>> {
         let known_route = self
             .terminal_tail_routes()?
             .context("terminal-tail capability is unavailable")?
@@ -1654,19 +1815,12 @@ impl LazyArchive {
         let mut max_anchor = 0u32;
         for selected in decoded {
             let molecule = &molecules[selected.local_ordinal as usize];
-            if molecule.chrom != info.chrom {
-                bail!("terminal-tail event is attached to a molecule on another chromosome");
-            }
-            let cell = if molecule.cell == u32::MAX {
-                self.cell_of(molecule.umi_class)?
-            } else {
-                molecule.cell
-            };
+            let cell = self.cell_of(molecule.class)?;
             for event in selected.events {
-                if event.reverse != molecule.strand_rev {
+                if event.reverse != molecule.reverse {
                     bail!("terminal-tail event strand disagrees with its attached molecule");
                 }
-                let anchor = i64::from(molecule.anchor())
+                let anchor = i64::from(molecule.anchor)
                     .checked_add(event.anchor_delta)
                     .and_then(|value| u32::try_from(value).ok())
                     .context("terminal-tail anchor is outside the u32 coordinate range")?;
@@ -1679,9 +1833,9 @@ impl LazyArchive {
                     chunk: route.chunk,
                     local_molecule_ordinal: selected.local_ordinal,
                     cell,
-                    umi_class: molecule.umi_class,
-                    chrom: molecule.chrom,
-                    strand_rev: molecule.strand_rev,
+                    umi_class: molecule.class,
+                    chrom: info.chrom,
+                    strand_rev: molecule.reverse,
                     anchor,
                     signal: event.signal,
                 });
@@ -1698,6 +1852,17 @@ impl LazyArchive {
 
     pub fn reader(&mut self) -> &mut SectionReader {
         &mut self.r
+    }
+
+    pub fn access_index(&mut self) -> Result<Option<&crate::accessindex::Index>> {
+        if self.has_access_index && self.access_index.is_none() {
+            let chunks = read_chunk_index(&mut self.r)?;
+            let raw = self.r.read(crate::accessindex::SECTION)?;
+            let index = crate::accessindex::Index::decode(&raw, chunks.len(), self.n_classes, self.chrom_names.len())?;
+            index.validate_bases(chunks.iter().map(|c| c.class_base))?;
+            self.access_index = Some(index);
+        }
+        Ok(self.access_index.as_ref())
     }
 
     /// Split borrow for parallel chunk decode: the reader (mutable, for compressed reads) and the
@@ -1726,8 +1891,7 @@ impl LazyArchive {
 
     pub fn shapes(&mut self) -> Result<std::sync::Arc<Vec<Shape>>> {
         if self.shapes.is_none() {
-            let raw = self.r.read("shapes")?;
-            self.shapes = Some(std::sync::Arc::new(decode_shapes(&raw)?));
+            self.shapes = Some(std::sync::Arc::new(read_shapes(&mut self.r)?));
         }
         Ok(self.shapes.clone().unwrap())
     }
@@ -2944,6 +3108,7 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         &whitelist_snapshot.0,
         args.locus_gap,
         args.terminal_tails,
+        args.geometry_fidelity,
     )?;
     let x = archive_extraction.evidence;
     let terminal_tails = archive_extraction.terminal_tails;
@@ -3080,7 +3245,9 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
             molecule_codec: "rans2".into(),
             barcode_correction: "unique-hamming1-quality-pseudocount-v1".into(),
             umi_classes: "global-cell-umi-equivalence-with-1mm-edges-v1".into(),
-            unique_chain_reduction: "junction-chain-span-extremes-v1".into(),
+            unique_chain_reduction: if args.geometry_fidelity {
+                "distinct-unique-geometries-v1"
+            } else { "junction-chain-span-extremes-v1" }.into(),
             multimapper_reduction: "primary-relative-placement-pattern-v1".into(),
             terminal_tail_rule: args
                 .terminal_tails
@@ -3092,7 +3259,7 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         terminal_tails
             .as_ref()
             .map(|tails| {
-                prepare_terminal_tails(&x, tails, chunk_bp).map(|prepared| prepared.metadata)
+                prepare_terminal_tails(&x, tails, chunk_bp, args.chunk_records).map(|prepared| prepared.metadata)
             })
             .transpose()?
     } else {
@@ -3109,6 +3276,9 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
                 chunk_bp,
                 genome_sig.as_ref(),
                 ArchiveExtensions {
+                    access_index: args.access_index,
+                    chunk_records: args.chunk_records,
+                    compression_tuning: args.compression_tuning,
                     alignment_provenance: Some(&manifest),
                     junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
                     terminal_tails: terminal_tails.as_ref(),
@@ -3145,6 +3315,9 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
             chunk_bp,
             genome_sig.as_ref(),
             ArchiveExtensions {
+                access_index: args.access_index,
+                chunk_records: args.chunk_records,
+                compression_tuning: args.compression_tuning,
                 alignment_provenance: Some(&manifest),
                 junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
                 terminal_tails: terminal_tails.as_ref(),
@@ -3414,12 +3587,12 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             .context("--whitelist required with --from-bam")?;
         if let Some((whitelist_text, _)) = &whitelist_snapshot {
             let (extracted, identity) =
-                extract_rows_with_identity(&args.input, whitelist_text, args.locus_gap)?;
+                extract_rows_with_identity(&args.input, whitelist_text, args.locus_gap, args.geometry_fidelity)?;
             raw_input_identity = Some(report_file_identity(identity));
             extracted
-        } else {
-            extract_rows(&args.input, wl, args.locus_gap)?
-        }
+        } else if args.geometry_fidelity {
+            crate::rows::extract_rows_fidelity(&args.input, wl, args.locus_gap)?
+        } else { extract_rows(&args.input, wl, args.locus_gap)? }
     } else if args.from_molecule_bam {
         if args.whitelist.is_some() {
             bail!("--whitelist is not used with --from-molecule-bam");
@@ -5307,6 +5480,26 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod astra_codec_tests {
+    use super::*;
+
+    #[test]
+    fn cell_runs_roundtrip_and_reject_invalid_expansion() {
+        let table = evidence_io::rans::Table::from_counts(&[0; evidence_io::rans::NSYM]).unwrap();
+        let decode = |raw: &[u8]| {
+            decode_coc_block(&evidence_io::format::compress(raw, 1).unwrap(), raw.len(), &table)
+        };
+        assert_eq!(decode(&[2, 7, 3, 9, 1]).unwrap(), vec![7,7,7,9]);
+        assert!(decode(&[2, 7]).is_err());
+        assert!(decode(&[2, 7, 0]).is_err());
+        assert!(decode(&[99]).is_err());
+        let mut overflow = vec![2, 7];
+        put_varint(&mut overflow, COC_BLOCK as u64 + 1);
+        assert!(decode(&overflow).is_err());
+    }
 }
 
 #[cfg(all(test, unix))]

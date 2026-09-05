@@ -76,7 +76,7 @@ enum PlacementScopeArg {
     Direct,
     /// Inspect every retained multimapper alternative for junction and aligned-block predicates;
     /// archive-anchor regions remain record-anchor tests. An indexed junction universe then
-    /// requires --allow-full-scan because archive v2 has no alternative-placement postings.
+    /// requires --allow-full-scan unless the archive has optional access-index postings.
     All,
 }
 
@@ -155,9 +155,6 @@ pub(super) fn validate(args: &Args) -> Result<()> {
     }
     if args.max_pattern_rows == 0 {
         bail!("--max-pattern-rows must be at least 1");
-    }
-    if args.unit == EvidenceUnitArg::UmiClass && !args.allow_full_scan {
-        bail!("--unit umi-class requires --allow-full-scan for exact cross-record evaluation");
     }
     Ok(())
 }
@@ -886,13 +883,19 @@ fn route_universe(
     chunks: &[ChunkInfo],
     terminal: &TerminalEvidence,
 ) -> Result<(Vec<usize>, Option<&'static str>)> {
-    let reason = universe_route_full_scan_reason(args, universe);
+    let mode = match args.placements { PlacementScopeArg::Unique => 0, PlacementScopeArg::Direct => 1, PlacementScopeArg::All => 2 };
+    let indexed = if universe.kind == PredicateKind::Junction || (universe.kind == PredicateKind::Region && args.region_match == RegionMatchArg::AlignedBlock) {
+        la.access_index()?.map(|index| index.geometry_chunks(universe.kind == PredicateKind::Junction, mode, universe.chrom_id, universe.start, universe.end))
+    } else { None };
+    let reason = if indexed.is_some() { None } else { universe_route_full_scan_reason(args, universe) };
     if !args.allow_full_scan {
         if let Some(message) = reason {
             bail!("{message}; rerun with --allow-full-scan");
         }
     }
-    let mut selected = if reason.is_some() {
+    let mut selected = if let Some(indexed) = indexed {
+        indexed
+    } else if reason.is_some() {
         (0..chunks.len()).collect::<Vec<_>>()
     } else {
         match universe.kind {
@@ -1188,8 +1191,12 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         .iter()
         .any(|predicate| predicate.kind == PredicateKind::Terminal);
     let terminal = TerminalEvidence::open(la, terminal_required, args.max_terminal_events)?;
+    let indexed_access = la.access_index()?.is_some();
+    if args.unit == EvidenceUnitArg::UmiClass && !args.allow_full_scan && !indexed_access {
+        bail!("--unit umi-class requires --allow-full-scan or an archive with --access-index for exact cross-record evaluation");
+    }
     let (selected_chunks, _) = route_universe(&args, universe, la, chunks, &terminal)?;
-    let full_scan_reason = full_scan_reason(&args, universe);
+    let full_scan_reason = if indexed_access { None } else { full_scan_reason(&args, universe) };
     if full_scan_reason.is_some() && chunks.len() > args.max_chunks {
         bail!(
             "cooccur exact full scan needs {} chunks, exceeding --max-chunks {}; raise the explicit bound or choose a routed evidence unit",
@@ -1228,9 +1235,14 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
                 .map(|record| record.class)
                 .collect();
             let routed: FxHashSet<usize> = selected_chunks.iter().copied().collect();
-            let remaining_chunks: Vec<usize> = (0..chunks.len())
-                .filter(|chunk| !routed.contains(chunk))
-                .collect();
+            let class_chunks = match la.access_index()? {
+                Some(index) => index.class_chunks(classes.iter().copied())?,
+                None => (0..chunks.len()).collect(),
+            };
+            let remaining_chunks: Vec<usize> = class_chunks.into_iter().filter(|chunk| !routed.contains(chunk)).collect();
+            if selected_chunks.len() + remaining_chunks.len() > args.max_chunks {
+                bail!("exact class routes exceed --max-chunks {}", args.max_chunks);
+            }
             let mut all_records = candidate_records.clone();
             let chunks_read = if classes.is_empty() {
                 selected_chunks.len()
@@ -1402,6 +1414,7 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
     parameters.insert("evidence_unit".into(), json!(args.unit.name()));
     parameters.insert("region_match".into(), json!(args.region_match.name()));
     parameters.insert("placement_scope".into(), json!(args.placements.name()));
+    parameters.insert("access_index".into(), json!(indexed_access));
     parameters.insert("cell_scope".into(), scope.provenance_json());
     parameters.insert("aggregation".into(), json!(scope.aggregation_name()));
     parameters.insert("max_chunks".into(), json!(args.max_chunks));

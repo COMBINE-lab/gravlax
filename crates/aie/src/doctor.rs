@@ -481,13 +481,15 @@ fn validate_fast_archive_structure(
     meta: &Value,
     names: &BTreeSet<String>,
 ) -> Result<Vec<crate::archivecmd::ChunkInfo>> {
+    if names.contains("shapes") == names.contains(crate::shapecodec::SECTION) {
+        bail!("archive must have exactly one supported shape dictionary");
+    }
     require_sections(
         names,
         &[
             "meta",
             "chroms",
             "cells",
-            "shapes",
             "patterns",
             "rans.tables",
             "index.chunks",
@@ -713,6 +715,10 @@ fn validate_archive_semantics(
     }
 
     let mut decoded_molecules = 0usize;
+    let access = if reader.has(crate::accessindex::SECTION) {
+        Some(crate::accessindex::Index::decode(&reader.read(crate::accessindex::SECTION)?, chunks.len(), dictionaries.n_classes, dictionaries.chrom_names.len())?)
+    } else { None };
+    let mut verified_access_postings=0usize;
     let mut next_class = 0u32;
     for (chunk_index, info) in chunks.iter().enumerate() {
         if info.class_base != next_class {
@@ -730,6 +736,9 @@ fn validate_archive_semantics(
         )?;
         if molecules.len() != info.n_mols as usize {
             bail!("chunk {chunk_index} decoded molecule count disagrees with its index");
+        }
+        if let Some(index)=&access {
+            verified_access_postings += index.verify_chunk(chunk_index as u32, info.class_base, &molecules, &dictionaries.shapes, &dictionaries.patterns)?;
         }
         let mut cells = HashSet::new();
         let mut previous_anchor = None;
@@ -813,6 +822,9 @@ fn validate_archive_semantics(
             "decoded chunks introduce {next_class} classes, expected {}",
             dictionaries.n_classes
         );
+    }
+    if access.as_ref().is_some_and(|index|index.posting_count()!=verified_access_postings) {
+        bail!("access index contains routes absent from source evidence");
     }
     if decoded_molecules != dictionaries.n_mols {
         bail!(
