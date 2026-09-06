@@ -1,23 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Gravlax">
-  <defs>
-    <linearGradient id="gvx" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2b83c4"/>
-      <stop offset="1" stop-color="#123f63"/>
-    </linearGradient>
-  </defs>
-  <path d="M108.0,64.0 L86.0,102.1 L42.0,102.1 L20.0,64.0 L42.0,25.9 L86.0,25.9 Z" fill="url(#gvx)" stroke="url(#gvx)" stroke-width="9" stroke-linejoin="round"/>
-  <rect x="32" y="70" width="20" height="13" rx="4" fill="#ffffff"/>
-  <rect x="76" y="70" width="20" height="13" rx="4" fill="#ffffff"/>
-  <rect x="35.6" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <rect x="41.2" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <rect x="46.8" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <rect x="79.6" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <rect x="85.2" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <rect x="90.8" y="73.5" width="2.3" height="6" rx="1.1" fill="#2b76ae" opacity="0.55"/>
-  <path d="M52,70 Q64,34 76,70" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-  <g transform="translate(65,38.5) rotate(-20) scale(1.35)">
-    <path d="M-5.5,0 C-2.5,-3.6 3.0,-3.6 7.6,0 C3.0,3.6 -2.5,3.6 -5.5,0 Z
-             M-5.0,0 L-10.5,-4.2 L-8.6,0 L-10.5,4.2 Z" fill="#e8a422"/>
-    <circle cx="4.6" cy="-0.7" r="0.85" fill="#123f63"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Gravlax"><g transform="translate(4,64) scale(0.8)">
+<path d="M0,-21 L23,0 L0,21" fill="none" stroke="#c98f1a" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M46,-21 L23,0 L46,21" fill="none" stroke="#c98f1a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+<rect x="50.1" y="-26.1" width="53.9" height="8.2" rx="4.1" fill="#D2603F"/>
+<rect x="38.0" y="-15.1" width="100.0" height="8.2" rx="4.1" fill="#D2603F"/>
+<rect x="38.0" y="6.9" width="100.0" height="8.2" rx="4.1" fill="#D2603F"/>
+<rect x="50.1" y="17.9" width="53.9" height="8.2" rx="4.1" fill="#D2603F"/>
+<rect x="26.0" y="-4.1" width="58.0" height="8.2" rx="4.1" fill="#D2603F"/>
+<rect x="102" y="-4.1" width="48" height="8.2" rx="4.1" fill="#D2603F"/>
+<path d="M84,-1 Q93,-23 102,-1" fill="none" stroke="#1C2A36" stroke-width="4.6" stroke-linecap="round"/>
+<circle cx="130" cy="-11" r="3.3" fill="#ffffff"/>
+</g></svg>
