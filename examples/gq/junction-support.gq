@@ -1,0 +1,3 @@
+header { gq = 1, assembly = "GRCh38" }
+from junctions(@pbmc, within: g[1:198600000..198800000])
+|> support(unit: class, by: {sample})

@@ -116,15 +116,29 @@ fn build_index(transcripts: &[Transcript]) -> FxHashMap<u32, ChromIndex> {
     }
     for (chrom, mut txs) in by_chrom {
         txs.sort_by_key(|&i| transcripts[i as usize].span().0);
-        let starts: Vec<u32> = txs.iter().map(|&i| transcripts[i as usize].span().0).collect();
-        let ends: Vec<u32> = txs.iter().map(|&i| transcripts[i as usize].span().1).collect();
+        let starts: Vec<u32> = txs
+            .iter()
+            .map(|&i| transcripts[i as usize].span().0)
+            .collect();
+        let ends: Vec<u32> = txs
+            .iter()
+            .map(|&i| transcripts[i as usize].span().1)
+            .collect();
         let mut max_end_prefix = Vec::with_capacity(txs.len());
         let mut m = 0u32;
         for &i in &txs {
             m = m.max(transcripts[i as usize].span().1);
             max_end_prefix.push(m);
         }
-        index.insert(chrom, ChromIndex { starts, ends, max_end_prefix, tx: txs });
+        index.insert(
+            chrom,
+            ChromIndex {
+                starts,
+                ends,
+                max_end_prefix,
+                tx: txs,
+            },
+        );
     }
     index
 }
@@ -155,7 +169,10 @@ impl<'a> CompiledCursor<'a> {
     }
 
     fn take(&mut self, n: usize, label: &str) -> Result<&'a [u8]> {
-        let end = self.at.checked_add(n).context("compiled annotation offset overflow")?;
+        let end = self
+            .at
+            .checked_add(n)
+            .context("compiled annotation offset overflow")?;
         if end > self.bytes.len() {
             bail!("truncated compiled annotation while reading {label}");
         }
@@ -193,7 +210,10 @@ impl<'a> CompiledCursor<'a> {
 
     fn finish(self) -> Result<()> {
         if self.at != self.bytes.len() {
-            bail!("compiled annotation payload has {} trailing bytes", self.bytes.len() - self.at);
+            bail!(
+                "compiled annotation payload has {} trailing bytes",
+                self.bytes.len() - self.at
+            );
         }
         Ok(())
     }
@@ -260,14 +280,17 @@ impl Annotation {
             return Self::from_compiled_file(file, path);
         }
         if path.extension().is_some_and(|ext| ext == "aic") {
-            bail!("{} does not have Gravlax compiled-annotation magic", path.display());
+            bail!(
+                "{} does not have Gravlax compiled-annotation magic",
+                path.display()
+            );
         }
         Self::from_gtf_file(file)
     }
 
     /// Parse and content-bind one annotation snapshot in a single pass over the already-open
     /// descriptor. The returned digest uses the public `blake3:<hex>` identity syntax.
-    pub(crate) fn from_open_file_with_digest(
+    pub fn from_open_file_with_digest(
         mut file: std::fs::File,
         path: &Path,
     ) -> Result<(Annotation, String)> {
@@ -281,7 +304,10 @@ impl Annotation {
             Self::from_compiled_reader(&mut reader, path)?
         } else {
             if path.extension().is_some_and(|ext| ext == "aic") {
-                bail!("{} does not have Gravlax compiled-annotation magic", path.display());
+                bail!(
+                    "{} does not have Gravlax compiled-annotation magic",
+                    path.display()
+                );
             }
             Self::from_gtf_reader(&mut reader)?
         };
@@ -333,7 +359,11 @@ impl Annotation {
 
         let mut indexed_chroms: Vec<u32> = self.index.keys().copied().collect();
         indexed_chroms.sort_unstable();
-        push_u32(&mut payload, indexed_chroms.len(), "indexed chromosome count")?;
+        push_u32(
+            &mut payload,
+            indexed_chroms.len(),
+            "indexed chromosome count",
+        )?;
         for chrom in indexed_chroms {
             payload.extend_from_slice(&chrom.to_le_bytes());
             let ix = &self.index[&chrom];
@@ -542,13 +572,20 @@ impl Annotation {
                     end: cursor.u32("exon end")?,
                 };
                 if exon.start >= exon.end
-                    || exons.last().is_some_and(|previous: &Exon| previous.end >= exon.start)
+                    || exons
+                        .last()
+                        .is_some_and(|previous: &Exon| previous.end >= exon.start)
                 {
                     bail!("compiled annotation has invalid or unsorted exons");
                 }
                 exons.push(exon);
             }
-            transcripts.push(Transcript { gene, chrom, strand_rev, exons });
+            transcripts.push(Transcript {
+                gene,
+                chrom,
+                strand_rev,
+                exons,
+            });
         }
 
         let indexed_chrom_count = cursor.count("indexed chromosome count", 8)?;
@@ -968,9 +1005,15 @@ mod tests {
                 let path = std::env::temp_dir().join(format!(
                     "anno-test-{}-{:x}.gtf",
                     std::process::id(),
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
                 ));
-                NamedTemp { file: std::fs::File::create(&path).unwrap(), path }
+                NamedTemp {
+                    file: std::fs::File::create(&path).unwrap(),
+                    path,
+                }
             }
             pub fn into_path(self) -> TempPath {
                 TempPath(self.path)
@@ -978,9 +1021,12 @@ mod tests {
         }
     }
 
-    const A: &str = r#"chr1	X	exon	101	200	.	+	.	gene_id "G1"; transcript_id "T1"; gene_name "Alpha";"#;
-    const B: &str = r#"chr1	X	exon	301	400	.	+	.	gene_id "G1"; transcript_id "T1"; gene_name "Alpha";"#;
-    const C: &str = r#"chr1	X	exon	150	260	.	-	.	gene_id "G2"; transcript_id "T2"; gene_name "Beta";"#;
+    const A: &str =
+        r#"chr1	X	exon	101	200	.	+	.	gene_id "G1"; transcript_id "T1"; gene_name "Alpha";"#;
+    const B: &str =
+        r#"chr1	X	exon	301	400	.	+	.	gene_id "G1"; transcript_id "T1"; gene_name "Alpha";"#;
+    const C: &str =
+        r#"chr1	X	exon	150	260	.	-	.	gene_id "G2"; transcript_id "T2"; gene_name "Beta";"#;
 
     #[test]
     fn parses_exons_into_transcripts_with_correct_coordinates() {
@@ -991,7 +1037,19 @@ mod tests {
         assert_eq!(a.transcripts.len(), 2);
         let t1 = &a.transcripts[0];
         // 1-based inclusive 101..200 becomes 0-based half-open [100, 200).
-        assert_eq!(t1.exons, vec![Exon { start: 100, end: 200 }, Exon { start: 300, end: 400 }]);
+        assert_eq!(
+            t1.exons,
+            vec![
+                Exon {
+                    start: 100,
+                    end: 200
+                },
+                Exon {
+                    start: 300,
+                    end: 400
+                }
+            ]
+        );
         assert!(!t1.strand_rev);
         assert!(a.transcripts[1].strand_rev);
     }
@@ -1027,14 +1085,12 @@ mod tests {
 
     #[test]
     fn rejects_zero_based_or_reversed_gtf_intervals() {
-        let zero = write_gtf(&[
-            "chr1\tX\texon\t0\t100\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";",
-        ]);
+        let zero =
+            write_gtf(&["chr1\tX\texon\t0\t100\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"]);
         assert!(Annotation::from_gtf(zero.path()).is_err());
 
-        let reversed = write_gtf(&[
-            "chr1\tX\texon\t200\t100\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";",
-        ]);
+        let reversed =
+            write_gtf(&["chr1\tX\texon\t200\t100\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"]);
         assert!(Annotation::from_gtf(reversed.path()).is_err());
     }
 
@@ -1043,9 +1099,8 @@ mod tests {
         let truncated = write_gtf(&["chr1\tX\texon\t1\t100"]);
         assert!(Annotation::from_gtf(truncated.path()).is_err());
 
-        let unstranded = write_gtf(&[
-            "chr1\tX\texon\t1\t100\t.\t.\t.\tgene_id \"G1\"; transcript_id \"T1\";",
-        ]);
+        let unstranded =
+            write_gtf(&["chr1\tX\texon\t1\t100\t.\t.\t.\tgene_id \"G1\"; transcript_id \"T1\";"]);
         assert!(Annotation::from_gtf(unstranded.path()).is_err());
     }
 
@@ -1113,7 +1168,10 @@ mod tests {
         let second = compiled_path("second");
         annotation.write_compiled(first.path()).unwrap();
         annotation.write_compiled(second.path()).unwrap();
-        assert_eq!(std::fs::read(first.path()).unwrap(), std::fs::read(second.path()).unwrap());
+        assert_eq!(
+            std::fs::read(first.path()).unwrap(),
+            std::fs::read(second.path()).unwrap()
+        );
 
         let restored = Annotation::from_path(first.path()).unwrap();
         assert_eq!(restored.gene_ids, annotation.gene_ids);
@@ -1123,8 +1181,10 @@ mod tests {
         assert_eq!(restored.chrom_ids, annotation.chrom_ids);
         assert_eq!(restored.transcripts.len(), annotation.transcripts.len());
         for (actual, expected) in restored.transcripts.iter().zip(&annotation.transcripts) {
-            assert_eq!((actual.gene, actual.chrom, actual.strand_rev),
-                (expected.gene, expected.chrom, expected.strand_rev));
+            assert_eq!(
+                (actual.gene, actual.chrom, actual.strand_rev),
+                (expected.gene, expected.chrom, expected.strand_rev)
+            );
             assert_eq!(actual.exons, expected.exons);
         }
         let chr1 = restored.chrom_ids["chr1"];
@@ -1184,7 +1244,10 @@ mod tests {
         let mut changed = bytes.clone();
         changed[8..12].copy_from_slice(&(COMPILED_VERSION + 1).to_le_bytes());
         std::fs::write(future.path(), changed).unwrap();
-        assert!(Annotation::from_compiled(future.path()).err().unwrap().to_string()
+        assert!(Annotation::from_compiled(future.path())
+            .err()
+            .unwrap()
+            .to_string()
             .contains("unsupported compiled annotation version"));
 
         let truncated = compiled_path("truncated");
@@ -1201,7 +1264,10 @@ mod tests {
         let mut changed = bytes.clone();
         *changed.last_mut().unwrap() ^= 1;
         std::fs::write(corrupt.path(), changed).unwrap();
-        assert!(Annotation::from_compiled(corrupt.path()).err().unwrap().to_string()
+        assert!(Annotation::from_compiled(corrupt.path())
+            .err()
+            .unwrap()
+            .to_string()
             .contains("checksum mismatch"));
 
         let hostile_count = compiled_path("hostile-count");
@@ -1221,7 +1287,10 @@ mod tests {
         let mut structurally_bad = Annotation::from_gtf(gtf.path()).unwrap();
         structurally_bad.transcripts[0].gene = u32::MAX;
         structurally_bad.write_compiled(invalid.path()).unwrap();
-        assert!(Annotation::from_compiled(invalid.path()).err().unwrap().to_string()
+        assert!(Annotation::from_compiled(invalid.path())
+            .err()
+            .unwrap()
+            .to_string()
             .contains("invalid dictionary id"));
     }
 }

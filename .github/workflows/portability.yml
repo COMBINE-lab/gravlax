@@ -37,19 +37,48 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
   release-binary:
-    name: Link and smoke-test ${{ matrix.target }}
+    name: Link and smoke-test ${{ matrix.target }} (${{ matrix.allocator }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rustflags: '-Ctarget-cpu=x86-64'
+            allocator: system
+            features: ''
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            rustflags: '-Ctarget-cpu=apple-m1'
+            allocator: system
+            features: ''
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            rustflags: '-Ctarget-cpu=penryn'
+            allocator: system
+            features: ''
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
             rustflags: '-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static'
+            allocator: system
+            features: ''
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             rustflags: '-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static -Clink-self-contained=yes'
+            allocator: system
+            features: ''
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            rustflags: '-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static'
+            allocator: mimalloc
+            features: mimalloc
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            rustflags: '-Ctarget-cpu=x86-64 -Ctarget-feature=+crt-static -Clink-self-contained=yes'
+            allocator: mimalloc
+            features: mimalloc
     steps:
       - name: Check out the source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -74,7 +103,18 @@ jobs:
           RUSTFLAGS: ${{ matrix.rustflags }}
         run: >-
           cargo build --locked --profile dist --package gravlax --bin aie
-          --target ${{ matrix.target }}
+          --target ${{ matrix.target }} --no-default-features --features "${{ matrix.features }}"
+
+      - name: Install Python for executable acceptance
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Execute GQ archive and federation acceptance
+        shell: bash
+        run: >-
+          python packaging/gq_smoke.py
+          --binary "target/${{ matrix.target }}/dist/aie${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Smoke-test the Windows executable
         if: matrix.target == 'x86_64-pc-windows-msvc'
@@ -100,3 +140,8 @@ jobs:
             echo 'The musl release binary is dynamically linked' >&2
             exit 1
           fi
+
+  distribution-checks:
+    name: Validate release source, Python, documentation and container
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/release-checks.yml

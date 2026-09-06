@@ -1,0 +1,15 @@
+# Coordinates are 0-based and half-open; literal strand is alignment frame.
+header { gq = 1, assembly = "GRCh38" }
+
+let locus = g[1:198600000..198800000]
+let RA = overlaps(g[1:198696711..198696909:-], min: 12bp)
+let RO = j[1:198692373..198703297:-]
+
+from @pbmc.records
+|> within locus
+|> derive {
+     ra = any unique { RA },
+     ro = any unique { RO },
+     joint = any unique { RA & RO }
+   }
+|> tally {ra, ro, joint} by {sample}

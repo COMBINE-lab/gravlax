@@ -1,0 +1,5017 @@
+{
+  "method": "Warm cache, one warmup, randomized interleaving. GQ internal post-parse clock excludes source reading, parsing, process startup and publication. Built-in complete process wall time includes startup, argument parsing and output: this comparison favors GQ. Pre/post GQ results and work counters checked exactly, built-in state totals checked where matched. RSS is whole-process peak from GNU time.",
+  "load_start": [
+    174.51,
+    157.62,
+    98.53
+  ],
+  "affinity": [
+    1,
+    2,
+    7,
+    9
+  ],
+  "rayon_threads": 4,
+  "repeats": 5,
+  "binaries": {
+    "before": {
+      "path": "/tmp/gravlax-gq-before-native",
+      "sha256": "0e5d083388103dbacfe80568c1d1dbf0b485674b3b9d11616a595df4e95da432"
+    },
+    "after": {
+      "path": "/tmp/gravlax-v016/target/release/aie",
+      "sha256": "c168328f56d561ae32974162cdd2270dc0c44354fc9315a13d5a178a60664506"
+    }
+  },
+  "experiments": [
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "record_marginals",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=any unique {A} & any unique {B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 107.970756,
+          "rss_kib": 23496,
+          "execution_ms": 94.883353,
+          "post_parse_compute_ms": 95.254565,
+          "preparation_ms": 0.139842,
+          "publication_ms": 0.176647,
+          "serialization_ms": 0.199141
+        },
+        "after": {
+          "process_ms": 117.602534,
+          "rss_kib": 30668,
+          "execution_ms": 103.87345,
+          "post_parse_compute_ms": 105.105564,
+          "preparation_ms": 0.143187,
+          "publication_ms": 0.17829,
+          "serialization_ms": 0.477863
+        },
+        "builtin": {
+          "process_ms": 51.883309,
+          "rss_kib": 24724
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.8848730000000002,
+          "chunk_read_decode_attach": 16.947021,
+          "evaluate_and_aggregate": 59.317342000000004,
+          "finalize_sort_project": 0.018878000000000002,
+          "preflight_planning": 3.276856,
+          "unit_and_denominator_setup": 0.029495,
+          "universe_witness": 8.218589999999999
+        },
+        "after": {
+          "archive_setup": 2.934678,
+          "chunk_read_decode_attach": 12.514908,
+          "evaluate_and_aggregate": 66.852348,
+          "finalize_sort_project": 0.015995,
+          "preflight_planning": 3.054129,
+          "unit_and_denominator_setup": 0.023936,
+          "universe_witness": 9.301007
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 103.764386,
+            "rss_kib": 23300,
+            "allocator": "system",
+            "execution_ms": 91.46961,
+            "phases_ms": {
+              "archive_setup": 2.668606,
+              "chunk_read_decode_attach": 18.287508000000003,
+              "evaluate_and_aggregate": 53.824144,
+              "finalize_sort_project": 0.018878000000000002,
+              "preflight_planning": 3.1873,
+              "unit_and_denominator_setup": 0.012499,
+              "universe_witness": 8.218589999999999
+            },
+            "post_parse_compute_ms": 91.852148,
+            "preparation_ms": 0.138369,
+            "publication_ms": 0.15809900000000002,
+            "serialization_ms": 0.216618
+          },
+          {
+            "process_ms": 107.970756,
+            "rss_kib": 23784,
+            "allocator": "system",
+            "execution_ms": 94.883353,
+            "phases_ms": {
+              "archive_setup": 3.070153,
+              "chunk_read_decode_attach": 12.921573,
+              "evaluate_and_aggregate": 60.876641,
+              "finalize_sort_project": 0.040912,
+              "preflight_planning": 3.350547,
+              "unit_and_denominator_setup": 0.029495,
+              "universe_witness": 8.341406000000001
+            },
+            "post_parse_compute_ms": 95.254565,
+            "preparation_ms": 0.139842,
+            "publication_ms": 0.175736,
+            "serialization_ms": 0.199461
+          },
+          {
+            "process_ms": 103.694059,
+            "rss_kib": 23496,
+            "allocator": "system",
+            "execution_ms": 91.514778,
+            "phases_ms": {
+              "archive_setup": 2.8848730000000002,
+              "chunk_read_decode_attach": 12.218129,
+              "evaluate_and_aggregate": 59.154607,
+              "finalize_sort_project": 0.017807,
+              "preflight_planning": 3.318018,
+              "unit_and_denominator_setup": 0.032029,
+              "universe_witness": 7.992618
+            },
+            "post_parse_compute_ms": 91.889816,
+            "preparation_ms": 0.149256,
+            "publication_ms": 0.176647,
+            "serialization_ms": 0.19534500000000002
+          },
+          {
+            "process_ms": 114.805924,
+            "rss_kib": 23724,
+            "allocator": "system",
+            "execution_ms": 102.99017400000001,
+            "phases_ms": {
+              "archive_setup": 3.121782,
+              "chunk_read_decode_attach": 17.707371,
+              "evaluate_and_aggregate": 63.79496399999999,
+              "finalize_sort_project": 0.040451,
+              "preflight_planning": 3.23289,
+              "unit_and_denominator_setup": 0.028734,
+              "universe_witness": 8.513176000000001
+            },
+            "post_parse_compute_ms": 103.36803599999999,
+            "preparation_ms": 0.148595,
+            "publication_ms": 0.189456,
+            "serialization_ms": 0.199141
+          },
+          {
+            "process_ms": 108.186122,
+            "rss_kib": 23408,
+            "allocator": "system",
+            "execution_ms": 95.50516400000001,
+            "phases_ms": {
+              "archive_setup": 2.838663,
+              "chunk_read_decode_attach": 16.947021,
+              "evaluate_and_aggregate": 59.317342000000004,
+              "finalize_sort_project": 0.017467,
+              "preflight_planning": 3.276856,
+              "unit_and_denominator_setup": 0.034502000000000005,
+              "universe_witness": 7.5679359999999996
+            },
+            "post_parse_compute_ms": 95.85471199999999,
+            "preparation_ms": 0.134964,
+            "publication_ms": 0.17818,
+            "serialization_ms": 0.184368
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 104.228267,
+            "rss_kib": 30668,
+            "allocator": "system",
+            "execution_ms": 85.874287,
+            "phases_ms": {
+              "archive_setup": 2.8423290000000003,
+              "chunk_read_decode_attach": 12.514908,
+              "evaluate_and_aggregate": 54.390211,
+              "finalize_sort_project": 0.016535,
+              "preflight_planning": 2.805333,
+              "unit_and_denominator_setup": 0.012019,
+              "universe_witness": 8.547437
+            },
+            "post_parse_compute_ms": 87.07081799999999,
+            "preparation_ms": 0.208566,
+            "publication_ms": 0.180623,
+            "serialization_ms": 0.958971
+          },
+          {
+            "process_ms": 119.659205,
+            "rss_kib": 30024,
+            "allocator": "system",
+            "execution_ms": 107.418572,
+            "phases_ms": {
+              "archive_setup": 2.9844239999999997,
+              "chunk_read_decode_attach": 9.861815,
+              "evaluate_and_aggregate": 73.40015199999999,
+              "finalize_sort_project": 0.016395,
+              "preflight_planning": 3.054129,
+              "unit_and_denominator_setup": 0.014693,
+              "universe_witness": 12.48345
+            },
+            "post_parse_compute_ms": 107.774711,
+            "preparation_ms": 0.12962600000000002,
+            "publication_ms": 0.17829,
+            "serialization_ms": 0.197109
+          },
+          {
+            "process_ms": 97.693193,
+            "rss_kib": 29208,
+            "allocator": "system",
+            "execution_ms": 85.671921,
+            "phases_ms": {
+              "archive_setup": 2.960037,
+              "chunk_read_decode_attach": 9.076977999999999,
+              "evaluate_and_aggregate": 53.696281,
+              "finalize_sort_project": 0.014992,
+              "preflight_planning": 3.1441149999999998,
+              "unit_and_denominator_setup": 0.035573,
+              "universe_witness": 12.193281
+            },
+            "post_parse_compute_ms": 86.10229199999999,
+            "preparation_ms": 0.14347700000000002,
+            "publication_ms": 0.171399,
+            "serialization_ms": 0.257229
+          },
+          {
+            "process_ms": 117.602534,
+            "rss_kib": 33716,
+            "allocator": "system",
+            "execution_ms": 103.87345,
+            "phases_ms": {
+              "archive_setup": 2.864232,
+              "chunk_read_decode_attach": 17.342799,
+              "evaluate_and_aggregate": 66.852348,
+              "finalize_sort_project": 0.015995,
+              "preflight_planning": 3.045927,
+              "unit_and_denominator_setup": 0.025408,
+              "universe_witness": 8.190266999999999
+            },
+            "post_parse_compute_ms": 105.105564,
+            "preparation_ms": 0.13169,
+            "publication_ms": 0.199191,
+            "serialization_ms": 1.066152
+          },
+          {
+            "process_ms": 121.91082,
+            "rss_kib": 31960,
+            "allocator": "system",
+            "execution_ms": 108.318553,
+            "phases_ms": {
+              "archive_setup": 2.934678,
+              "chunk_read_decode_attach": 18.013955000000003,
+              "evaluate_and_aggregate": 69.45838,
+              "finalize_sort_project": 0.015133,
+              "preflight_planning": 3.084085,
+              "unit_and_denominator_setup": 0.023936,
+              "universe_witness": 9.301007
+            },
+            "post_parse_compute_ms": 108.972562,
+            "preparation_ms": 0.143187,
+            "publication_ms": 0.16265600000000002,
+            "serialization_ms": 0.477863
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 57.783552,
+            "rss_kib": 26888
+          },
+          {
+            "process_ms": 45.400424,
+            "rss_kib": 24724
+          },
+          {
+            "process_ms": 55.305164,
+            "rss_kib": 26480
+          },
+          {
+            "process_ms": 51.486438,
+            "rss_kib": 24692
+          },
+          {
+            "process_ms": 51.883309,
+            "rss_kib": 23596
+          }
+        ]
+      },
+      "states": {
+        "false": 53936
+      },
+      "verified_result_sha256": "2bd48aa151da49a77aa19d5182518a3d16c16e2165b29fa925b26b2f081787cd"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "same_observation",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=any unique {A | B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 110.798754,
+          "rss_kib": 23916,
+          "execution_ms": 99.27806,
+          "post_parse_compute_ms": 99.650103,
+          "preparation_ms": 0.139932,
+          "publication_ms": 0.172802,
+          "serialization_ms": 0.198791
+        },
+        "after": {
+          "process_ms": 133.964891,
+          "rss_kib": 32540,
+          "execution_ms": 117.28895,
+          "post_parse_compute_ms": 117.820544,
+          "preparation_ms": 0.146552,
+          "publication_ms": 0.18705300000000002,
+          "serialization_ms": 0.660399
+        },
+        "builtin": {
+          "process_ms": 52.932937,
+          "rss_kib": 23976
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.984924,
+          "chunk_read_decode_attach": 17.192813,
+          "evaluate_and_aggregate": 63.012521,
+          "finalize_sort_project": 0.019009,
+          "preflight_planning": 3.169604,
+          "unit_and_denominator_setup": 0.016515000000000002,
+          "universe_witness": 7.911325000000001
+        },
+        "after": {
+          "archive_setup": 2.831803,
+          "chunk_read_decode_attach": 16.525003,
+          "evaluate_and_aggregate": 80.112934,
+          "finalize_sort_project": 0.016465,
+          "preflight_planning": 3.159438,
+          "unit_and_denominator_setup": 0.023445999999999998,
+          "universe_witness": 8.707148
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 114.16173,
+            "rss_kib": 25772,
+            "allocator": "system",
+            "execution_ms": 102.18021900000001,
+            "phases_ms": {
+              "archive_setup": 2.9059049999999997,
+              "chunk_read_decode_attach": 18.925414,
+              "evaluate_and_aggregate": 63.012521,
+              "finalize_sort_project": 0.018157,
+              "preflight_planning": 3.055682,
+              "unit_and_denominator_setup": 0.013591,
+              "universe_witness": 8.308186000000001
+            },
+            "post_parse_compute_ms": 102.535797,
+            "preparation_ms": 0.139932,
+            "publication_ms": 0.176567,
+            "serialization_ms": 0.186612
+          },
+          {
+            "process_ms": 110.798754,
+            "rss_kib": 23916,
+            "allocator": "system",
+            "execution_ms": 98.40624100000001,
+            "phases_ms": {
+              "archive_setup": 3.223896,
+              "chunk_read_decode_attach": 12.828042,
+              "evaluate_and_aggregate": 66.153112,
+              "finalize_sort_project": 0.018408,
+              "preflight_planning": 3.1472499999999997,
+              "unit_and_denominator_setup": 0.016515000000000002,
+              "universe_witness": 7.42509
+            },
+            "post_parse_compute_ms": 98.766897,
+            "preparation_ms": 0.144699,
+            "publication_ms": 0.172802,
+            "serialization_ms": 0.188906
+          },
+          {
+            "process_ms": 126.69747,
+            "rss_kib": 23948,
+            "allocator": "system",
+            "execution_ms": 114.097353,
+            "phases_ms": {
+              "archive_setup": 3.460003,
+              "chunk_read_decode_attach": 18.379738,
+              "evaluate_and_aggregate": 73.380863,
+              "finalize_sort_project": 0.019188999999999998,
+              "preflight_planning": 3.8939500000000002,
+              "unit_and_denominator_setup": 0.027781999999999998,
+              "universe_witness": 8.54237
+            },
+            "post_parse_compute_ms": 114.482124,
+            "preparation_ms": 0.136466,
+            "publication_ms": 0.17354299999999998,
+            "serialization_ms": 0.21515499999999999
+          },
+          {
+            "process_ms": 100.131761,
+            "rss_kib": 23076,
+            "allocator": "system",
+            "execution_ms": 89.254961,
+            "phases_ms": {
+              "archive_setup": 2.7162279999999996,
+              "chunk_read_decode_attach": 12.170416999999999,
+              "evaluate_and_aggregate": 58.36394,
+              "finalize_sort_project": 0.019009,
+              "preflight_planning": 3.169604,
+              "unit_and_denominator_setup": 0.01309,
+              "universe_witness": 7.159138
+            },
+            "post_parse_compute_ms": 89.61554600000001,
+            "preparation_ms": 0.119311,
+            "publication_ms": 0.166972,
+            "serialization_ms": 0.207804
+          },
+          {
+            "process_ms": 110.51161,
+            "rss_kib": 23464,
+            "allocator": "system",
+            "execution_ms": 99.27806,
+            "phases_ms": {
+              "archive_setup": 2.984924,
+              "chunk_read_decode_attach": 17.192813,
+              "evaluate_and_aggregate": 61.953139,
+              "finalize_sort_project": 0.01994,
+              "preflight_planning": 3.322635,
+              "unit_and_denominator_setup": 0.030065,
+              "universe_witness": 7.911325000000001
+            },
+            "post_parse_compute_ms": 99.650103,
+            "preparation_ms": 0.146392,
+            "publication_ms": 0.157238,
+            "serialization_ms": 0.198791
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 133.964891,
+            "rss_kib": 36020,
+            "allocator": "system",
+            "execution_ms": 115.918067,
+            "phases_ms": {
+              "archive_setup": 2.7388019999999997,
+              "chunk_read_decode_attach": 12.574257,
+              "evaluate_and_aggregate": 84.97486699999999,
+              "finalize_sort_project": 0.014613000000000001,
+              "preflight_planning": 2.9680090000000003,
+              "unit_and_denominator_setup": 0.023445999999999998,
+              "universe_witness": 8.135885
+            },
+            "post_parse_compute_ms": 116.972731,
+            "preparation_ms": 0.140412,
+            "publication_ms": 0.172261,
+            "serialization_ms": 0.879149
+          },
+          {
+            "process_ms": 119.574977,
+            "rss_kib": 32104,
+            "allocator": "system",
+            "execution_ms": 105.597888,
+            "phases_ms": {
+              "archive_setup": 2.831803,
+              "chunk_read_decode_attach": 10.120446,
+              "evaluate_and_aggregate": 74.70184,
+              "finalize_sort_project": 0.017927,
+              "preflight_planning": 3.159438,
+              "unit_and_denominator_setup": 0.023725,
+              "universe_witness": 8.707148
+            },
+            "post_parse_compute_ms": 106.797792,
+            "preparation_ms": 0.147402,
+            "publication_ms": 0.191119,
+            "serialization_ms": 1.010929
+          },
+          {
+            "process_ms": 142.310202,
+            "rss_kib": 32540,
+            "allocator": "system",
+            "execution_ms": 121.850238,
+            "phases_ms": {
+              "archive_setup": 2.814386,
+              "chunk_read_decode_attach": 19.409304,
+              "evaluate_and_aggregate": 79.328038,
+              "finalize_sort_project": 0.016365,
+              "preflight_planning": 3.119107,
+              "unit_and_denominator_setup": 0.015914,
+              "universe_witness": 12.739166999999998
+            },
+            "post_parse_compute_ms": 122.526061,
+            "preparation_ms": 0.146552,
+            "publication_ms": 0.159241,
+            "serialization_ms": 0.501459
+          },
+          {
+            "process_ms": 146.344624,
+            "rss_kib": 34584,
+            "allocator": "system",
+            "execution_ms": 131.409315,
+            "phases_ms": {
+              "archive_setup": 3.155793,
+              "chunk_read_decode_attach": 27.411627,
+              "evaluate_and_aggregate": 83.58748,
+              "finalize_sort_project": 0.016465,
+              "preflight_planning": 3.833448,
+              "unit_and_denominator_setup": 0.014292,
+              "universe_witness": 8.736042
+            },
+            "post_parse_compute_ms": 132.22989700000002,
+            "preparation_ms": 0.127192,
+            "publication_ms": 0.19164,
+            "serialization_ms": 0.660399
+          },
+          {
+            "process_ms": 130.24172,
+            "rss_kib": 31732,
+            "allocator": "system",
+            "execution_ms": 117.28895,
+            "phases_ms": {
+              "archive_setup": 3.239429,
+              "chunk_read_decode_attach": 16.525003,
+              "evaluate_and_aggregate": 80.112934,
+              "finalize_sort_project": 0.019018999999999998,
+              "preflight_planning": 3.6814370000000003,
+              "unit_and_denominator_setup": 0.032089,
+              "universe_witness": 8.604353
+            },
+            "post_parse_compute_ms": 117.820544,
+            "preparation_ms": 0.16258599999999998,
+            "publication_ms": 0.18705300000000002,
+            "serialization_ms": 0.336739
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 52.932937,
+            "rss_kib": 25552
+          },
+          {
+            "process_ms": 55.178853,
+            "rss_kib": 25344
+          },
+          {
+            "process_ms": 59.744228,
+            "rss_kib": 22856
+          },
+          {
+            "process_ms": 52.074208,
+            "rss_kib": 23844
+          },
+          {
+            "process_ms": 52.086006,
+            "rss_kib": 23976
+          }
+        ]
+      },
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "verified_result_sha256": "16bf3c4ae201638bcf51290ead7961706d14cabdeeb88647c28d5d1f2e145391"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "universal",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=nonempty(unique) & all unique {A | B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 116.399986,
+          "rss_kib": 23756,
+          "execution_ms": 104.12463,
+          "post_parse_compute_ms": 104.47899600000001,
+          "preparation_ms": 0.13234100000000001,
+          "publication_ms": 0.169206,
+          "serialization_ms": 0.20008299999999998
+        },
+        "after": {
+          "process_ms": 125.272053,
+          "rss_kib": 34544,
+          "execution_ms": 113.865753,
+          "post_parse_compute_ms": 114.68598300000001,
+          "preparation_ms": 0.13259,
+          "publication_ms": 0.1718,
+          "serialization_ms": 0.652707
+        },
+        "builtin": {
+          "process_ms": 51.767734,
+          "rss_kib": 25508
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.238117,
+          "chunk_read_decode_attach": 13.429250999999999,
+          "evaluate_and_aggregate": 70.23220099999999,
+          "finalize_sort_project": 0.018347,
+          "preflight_planning": 3.389427,
+          "unit_and_denominator_setup": 0.024768000000000002,
+          "universe_witness": 7.634297
+        },
+        "after": {
+          "archive_setup": 2.968299,
+          "chunk_read_decode_attach": 13.689995,
+          "evaluate_and_aggregate": 80.016659,
+          "finalize_sort_project": 0.017856999999999998,
+          "preflight_planning": 3.196875,
+          "unit_and_denominator_setup": 0.01971,
+          "universe_witness": 8.513435999999999
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 118.738983,
+            "rss_kib": 23756,
+            "allocator": "system",
+            "execution_ms": 107.247413,
+            "phases_ms": {
+              "archive_setup": 3.238117,
+              "chunk_read_decode_attach": 15.072496,
+              "evaluate_and_aggregate": 71.22029400000001,
+              "finalize_sort_project": 0.015283,
+              "preflight_planning": 3.875852,
+              "unit_and_denominator_setup": 0.012649,
+              "universe_witness": 7.881881
+            },
+            "post_parse_compute_ms": 107.623842,
+            "preparation_ms": 0.153993,
+            "publication_ms": 0.153191,
+            "serialization_ms": 0.190207
+          },
+          {
+            "process_ms": 127.354302,
+            "rss_kib": 23920,
+            "allocator": "system",
+            "execution_ms": 115.053609,
+            "phases_ms": {
+              "archive_setup": 3.3947640000000003,
+              "chunk_read_decode_attach": 22.608013,
+              "evaluate_and_aggregate": 70.85366,
+              "finalize_sort_project": 0.019981000000000002,
+              "preflight_planning": 3.984897,
+              "unit_and_denominator_setup": 0.012809999999999998,
+              "universe_witness": 8.591584
+            },
+            "post_parse_compute_ms": 115.427024,
+            "preparation_ms": 0.13247,
+            "publication_ms": 0.19650700000000001,
+            "serialization_ms": 0.207254
+          },
+          {
+            "process_ms": 116.399986,
+            "rss_kib": 23928,
+            "allocator": "system",
+            "execution_ms": 104.12463,
+            "phases_ms": {
+              "archive_setup": 3.2720380000000002,
+              "chunk_read_decode_attach": 13.429250999999999,
+              "evaluate_and_aggregate": 70.23220099999999,
+              "finalize_sort_project": 0.018647999999999998,
+              "preflight_planning": 3.389427,
+              "unit_and_denominator_setup": 0.024768000000000002,
+              "universe_witness": 7.634297
+            },
+            "post_parse_compute_ms": 104.47899600000001,
+            "preparation_ms": 0.12237500000000001,
+            "publication_ms": 0.168345,
+            "serialization_ms": 0.20008299999999998
+          },
+          {
+            "process_ms": 106.606674,
+            "rss_kib": 23168,
+            "allocator": "system",
+            "execution_ms": 96.93935300000001,
+            "phases_ms": {
+              "archive_setup": 3.00805,
+              "chunk_read_decode_attach": 12.810214,
+              "evaluate_and_aggregate": 64.574554,
+              "finalize_sort_project": 0.018347,
+              "preflight_planning": 3.053488,
+              "unit_and_denominator_setup": 0.028784,
+              "universe_witness": 7.633433999999999
+            },
+            "post_parse_compute_ms": 97.31064500000001,
+            "preparation_ms": 0.13234100000000001,
+            "publication_ms": 0.169206,
+            "serialization_ms": 0.20183500000000001
+          },
+          {
+            "process_ms": 108.692739,
+            "rss_kib": 23664,
+            "allocator": "system",
+            "execution_ms": 98.73819400000001,
+            "phases_ms": {
+              "archive_setup": 3.00213,
+              "chunk_read_decode_attach": 12.507076000000001,
+              "evaluate_and_aggregate": 66.692417,
+              "finalize_sort_project": 0.017575999999999998,
+              "preflight_planning": 3.285529,
+              "unit_and_denominator_setup": 0.025879,
+              "universe_witness": 7.205798000000001
+            },
+            "post_parse_compute_ms": 99.103515,
+            "preparation_ms": 0.13205899999999998,
+            "publication_ms": 0.183427,
+            "serialization_ms": 0.196207
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 123.48426,
+            "rss_kib": 33220,
+            "allocator": "system",
+            "execution_ms": 110.781188,
+            "phases_ms": {
+              "archive_setup": 2.968299,
+              "chunk_read_decode_attach": 13.983458,
+              "evaluate_and_aggregate": 77.129311,
+              "finalize_sort_project": 0.017856999999999998,
+              "preflight_planning": 3.059367,
+              "unit_and_denominator_setup": 0.01971,
+              "universe_witness": 8.307905000000002
+            },
+            "post_parse_compute_ms": 111.264478,
+            "preparation_ms": 0.140402,
+            "publication_ms": 0.1718,
+            "serialization_ms": 0.31451599999999996
+          },
+          {
+            "process_ms": 137.147364,
+            "rss_kib": 34148,
+            "allocator": "system",
+            "execution_ms": 124.305552,
+            "phases_ms": {
+              "archive_setup": 2.7951870000000003,
+              "chunk_read_decode_attach": 13.299344,
+              "evaluate_and_aggregate": 90.10479600000001,
+              "finalize_sort_project": 0.019639,
+              "preflight_planning": 3.281673,
+              "unit_and_denominator_setup": 0.015233,
+              "universe_witness": 8.726008
+            },
+            "post_parse_compute_ms": 125.13742,
+            "preparation_ms": 0.129546,
+            "publication_ms": 0.186442,
+            "serialization_ms": 0.652707
+          },
+          {
+            "process_ms": 140.586416,
+            "rss_kib": 34544,
+            "allocator": "system",
+            "execution_ms": 128.17579500000002,
+            "phases_ms": {
+              "archive_setup": 3.17398,
+              "chunk_read_decode_attach": 25.481519000000002,
+              "evaluate_and_aggregate": 80.750349,
+              "finalize_sort_project": 0.018287,
+              "preflight_planning": 3.587987,
+              "unit_and_denominator_setup": 0.012830000000000001,
+              "universe_witness": 8.717164
+            },
+            "post_parse_compute_ms": 128.82651,
+            "preparation_ms": 0.13376300000000002,
+            "publication_ms": 0.18445899999999998,
+            "serialization_ms": 0.46742700000000004
+          },
+          {
+            "process_ms": 125.272053,
+            "rss_kib": 36612,
+            "allocator": "system",
+            "execution_ms": 113.865753,
+            "phases_ms": {
+              "archive_setup": 3.001149,
+              "chunk_read_decode_attach": 13.689995,
+              "evaluate_and_aggregate": 80.016659,
+              "finalize_sort_project": 0.015593000000000001,
+              "preflight_planning": 3.196875,
+              "unit_and_denominator_setup": 0.025839,
+              "universe_witness": 8.293473
+            },
+            "post_parse_compute_ms": 114.68598300000001,
+            "preparation_ms": 0.13259,
+            "publication_ms": 0.17102799999999999,
+            "serialization_ms": 0.653899
+          },
+          {
+            "process_ms": 116.710756,
+            "rss_kib": 34976,
+            "allocator": "system",
+            "execution_ms": 105.575495,
+            "phases_ms": {
+              "archive_setup": 2.9505619999999997,
+              "chunk_read_decode_attach": 12.346403,
+              "evaluate_and_aggregate": 73.854318,
+              "finalize_sort_project": 0.015073,
+              "preflight_planning": 2.924273,
+              "unit_and_denominator_setup": 0.025208,
+              "universe_witness": 8.513435999999999
+            },
+            "post_parse_compute_ms": 106.86232,
+            "preparation_ms": 0.121724,
+            "publication_ms": 0.148655,
+            "serialization_ms": 1.133364
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 51.970251,
+            "rss_kib": 25496
+          },
+          {
+            "process_ms": 57.74835,
+            "rss_kib": 26256
+          },
+          {
+            "process_ms": 51.767734,
+            "rss_kib": 25944
+          },
+          {
+            "process_ms": 46.734772,
+            "rss_kib": 25012
+          },
+          {
+            "process_ms": 45.70141,
+            "rss_kib": 25508
+          }
+        ]
+      },
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "verified_result_sha256": "dbf9f5f3fcd845ca64ecf92a0fa40ab8a414599360edd217f2d3819236b1c3b4"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "geometry_tally",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {a=any unique {overlaps(R,min:12bp)},b=any unique {B},joint=any unique {overlaps(R,min:12bp) & B}} |> tally {a,b,joint} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 140.846018,
+          "rss_kib": 35192,
+          "execution_ms": 130.35228700000002,
+          "post_parse_compute_ms": 130.759703,
+          "preparation_ms": 0.128324,
+          "publication_ms": 0.172621,
+          "serialization_ms": 0.24182599999999999
+        },
+        "after": {
+          "process_ms": 154.879383,
+          "rss_kib": 44080,
+          "execution_ms": 142.191854,
+          "post_parse_compute_ms": 143.382925,
+          "preparation_ms": 0.134914,
+          "publication_ms": 0.1584,
+          "serialization_ms": 1.019932
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9667169999999996,
+          "chunk_read_decode_attach": 12.80749,
+          "evaluate_and_aggregate": 92.42653800000001,
+          "finalize_sort_project": 0.0527,
+          "preflight_planning": 3.101862,
+          "unit_and_denominator_setup": 0.029956,
+          "universe_witness": 8.135203
+        },
+        "after": {
+          "archive_setup": 2.781286,
+          "chunk_read_decode_attach": 12.593878,
+          "evaluate_and_aggregate": 106.00796899999999,
+          "finalize_sort_project": 0.049405,
+          "preflight_planning": 2.922791,
+          "unit_and_denominator_setup": 0.021983,
+          "universe_witness": 8.599095
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 139.82909,
+            "rss_kib": 35492,
+            "allocator": "system",
+            "execution_ms": 130.040746,
+            "phases_ms": {
+              "archive_setup": 2.80963,
+              "chunk_read_decode_attach": 12.739697,
+              "evaluate_and_aggregate": 91.529421,
+              "finalize_sort_project": 0.065178,
+              "preflight_planning": 2.924463,
+              "unit_and_denominator_setup": 0.033630999999999994,
+              "universe_witness": 7.824614
+            },
+            "post_parse_compute_ms": 130.461442,
+            "preparation_ms": 0.12350699999999999,
+            "publication_ms": 0.183087,
+            "serialization_ms": 0.2512
+          },
+          {
+            "process_ms": 139.805785,
+            "rss_kib": 35192,
+            "allocator": "system",
+            "execution_ms": 129.476393,
+            "phases_ms": {
+              "archive_setup": 2.987969,
+              "chunk_read_decode_attach": 12.89962,
+              "evaluate_and_aggregate": 91.842594,
+              "finalize_sort_project": 0.045248,
+              "preflight_planning": 3.101862,
+              "unit_and_denominator_setup": 0.028493,
+              "universe_witness": 8.198219
+            },
+            "post_parse_compute_ms": 129.881245,
+            "preparation_ms": 0.122085,
+            "publication_ms": 0.195365,
+            "serialization_ms": 0.24182599999999999
+          },
+          {
+            "process_ms": 140.846018,
+            "rss_kib": 35620,
+            "allocator": "system",
+            "execution_ms": 130.35228700000002,
+            "phases_ms": {
+              "archive_setup": 2.767015,
+              "chunk_read_decode_attach": 12.490820999999999,
+              "evaluate_and_aggregate": 92.42653800000001,
+              "finalize_sort_project": 0.0527,
+              "preflight_planning": 3.300722,
+              "unit_and_denominator_setup": 0.029956,
+              "universe_witness": 8.197377000000001
+            },
+            "post_parse_compute_ms": 130.759703,
+            "preparation_ms": 0.135775,
+            "publication_ms": 0.163397,
+            "serialization_ms": 0.23185999999999998
+          },
+          {
+            "process_ms": 142.565429,
+            "rss_kib": 35112,
+            "allocator": "system",
+            "execution_ms": 131.545222,
+            "phases_ms": {
+              "archive_setup": 2.9667169999999996,
+              "chunk_read_decode_attach": 12.80749,
+              "evaluate_and_aggregate": 93.124122,
+              "finalize_sort_project": 0.060602,
+              "preflight_planning": 3.076232,
+              "unit_and_denominator_setup": 0.032969000000000005,
+              "universe_witness": 8.135203
+            },
+            "post_parse_compute_ms": 131.97598299999999,
+            "preparation_ms": 0.128324,
+            "publication_ms": 0.172621,
+            "serialization_ms": 0.25767900000000005
+          },
+          {
+            "process_ms": 141.661992,
+            "rss_kib": 35076,
+            "allocator": "system",
+            "execution_ms": 131.28008,
+            "phases_ms": {
+              "archive_setup": 3.074049,
+              "chunk_read_decode_attach": 12.870015,
+              "evaluate_and_aggregate": 93.35571300000001,
+              "finalize_sort_project": 0.036506,
+              "preflight_planning": 3.169093,
+              "unit_and_denominator_setup": 0.018999,
+              "universe_witness": 7.884054
+            },
+            "post_parse_compute_ms": 131.693976,
+            "preparation_ms": 0.150698,
+            "publication_ms": 0.166161,
+            "serialization_ms": 0.194735
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 154.879383,
+            "rss_kib": 44964,
+            "allocator": "system",
+            "execution_ms": 142.191854,
+            "phases_ms": {
+              "archive_setup": 2.781286,
+              "chunk_read_decode_attach": 12.593878,
+              "evaluate_and_aggregate": 106.00796899999999,
+              "finalize_sort_project": 0.049405,
+              "preflight_planning": 2.915519,
+              "unit_and_denominator_setup": 0.030987,
+              "universe_witness": 8.599516
+            },
+            "post_parse_compute_ms": 143.382925,
+            "preparation_ms": 0.130047,
+            "publication_ms": 0.158379,
+            "serialization_ms": 1.019932
+          },
+          {
+            "process_ms": 144.875282,
+            "rss_kib": 43512,
+            "allocator": "system",
+            "execution_ms": 132.92604,
+            "phases_ms": {
+              "archive_setup": 2.795878,
+              "chunk_read_decode_attach": 12.084337000000001,
+              "evaluate_and_aggregate": 98.578451,
+              "finalize_sort_project": 0.033911000000000004,
+              "preflight_planning": 3.050634,
+              "unit_and_denominator_setup": 0.021983,
+              "universe_witness": 8.788211
+            },
+            "post_parse_compute_ms": 134.122459,
+            "preparation_ms": 0.138159,
+            "publication_ms": 0.15248,
+            "serialization_ms": 1.000894
+          },
+          {
+            "process_ms": 155.954759,
+            "rss_kib": 44420,
+            "allocator": "system",
+            "execution_ms": 144.390398,
+            "phases_ms": {
+              "archive_setup": 2.700153,
+              "chunk_read_decode_attach": 12.923235,
+              "evaluate_and_aggregate": 108.0981,
+              "finalize_sort_project": 0.051107,
+              "preflight_planning": 2.8544970000000003,
+              "unit_and_denominator_setup": 0.021122,
+              "universe_witness": 8.599095
+            },
+            "post_parse_compute_ms": 145.219302,
+            "preparation_ms": 0.12342700000000001,
+            "publication_ms": 0.16316599999999998,
+            "serialization_ms": 0.66752
+          },
+          {
+            "process_ms": 153.514328,
+            "rss_kib": 42492,
+            "allocator": "system",
+            "execution_ms": 140.949264,
+            "phases_ms": {
+              "archive_setup": 2.802619,
+              "chunk_read_decode_attach": 12.825508,
+              "evaluate_and_aggregate": 104.71094599999999,
+              "finalize_sort_project": 0.044197,
+              "preflight_planning": 2.922791,
+              "unit_and_denominator_setup": 0.024167,
+              "universe_witness": 8.240273
+            },
+            "post_parse_compute_ms": 142.228108,
+            "preparation_ms": 0.134914,
+            "publication_ms": 0.162135,
+            "serialization_ms": 1.108416
+          },
+          {
+            "process_ms": 155.882439,
+            "rss_kib": 44080,
+            "allocator": "system",
+            "execution_ms": 143.259799,
+            "phases_ms": {
+              "archive_setup": 2.502625,
+              "chunk_read_decode_attach": 12.395537,
+              "evaluate_and_aggregate": 106.887279,
+              "finalize_sort_project": 0.06140299999999999,
+              "preflight_planning": 3.3261,
+              "unit_and_denominator_setup": 0.020520999999999998,
+              "universe_witness": 8.385602
+            },
+            "post_parse_compute_ms": 144.539394,
+            "preparation_ms": 0.145089,
+            "publication_ms": 0.1584,
+            "serialization_ms": 1.074335
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "53f7343fc44cf102ac8fdd85f8332bd2b93000ca1106b115b1c0b2ef64b6fee2"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "truth_read_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {q=any unique {B}} |> summarize {n=count(),t=count_true(q),reads=sum(reads.total)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 113.718731,
+          "rss_kib": 35352,
+          "execution_ms": 102.323205,
+          "post_parse_compute_ms": 102.69596899999999,
+          "preparation_ms": 0.13495400000000002,
+          "publication_ms": 0.16847499999999999,
+          "serialization_ms": 0.199692
+        },
+        "after": {
+          "process_ms": 116.079921,
+          "rss_kib": 41172,
+          "execution_ms": 104.50631800000001,
+          "post_parse_compute_ms": 105.383734,
+          "preparation_ms": 0.136096,
+          "publication_ms": 0.166963,
+          "serialization_ms": 0.943927
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.910031,
+          "chunk_read_decode_attach": 12.94614,
+          "evaluate_and_aggregate": 63.523995,
+          "finalize_sort_project": 0.048402999999999995,
+          "preflight_planning": 3.105507,
+          "unit_and_denominator_setup": 0.03254,
+          "universe_witness": 7.922742
+        },
+        "after": {
+          "archive_setup": 2.912024,
+          "chunk_read_decode_attach": 13.203038,
+          "evaluate_and_aggregate": 67.077279,
+          "finalize_sort_project": 0.03972,
+          "preflight_planning": 3.019717,
+          "unit_and_denominator_setup": 0.033811,
+          "universe_witness": 8.447105
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 113.589024,
+            "rss_kib": 35956,
+            "allocator": "system",
+            "execution_ms": 102.320221,
+            "phases_ms": {
+              "archive_setup": 2.8809869999999997,
+              "chunk_read_decode_attach": 12.973902,
+              "evaluate_and_aggregate": 62.889345,
+              "finalize_sort_project": 0.051328,
+              "preflight_planning": 3.185658,
+              "unit_and_denominator_setup": 0.03254,
+              "universe_witness": 7.865445
+            },
+            "post_parse_compute_ms": 102.69596899999999,
+            "preparation_ms": 0.137318,
+            "publication_ms": 0.16847499999999999,
+            "serialization_ms": 0.210168
+          },
+          {
+            "process_ms": 113.929169,
+            "rss_kib": 35352,
+            "allocator": "system",
+            "execution_ms": 103.660568,
+            "phases_ms": {
+              "archive_setup": 2.9602370000000002,
+              "chunk_read_decode_attach": 14.087716,
+              "evaluate_and_aggregate": 63.79707799999999,
+              "finalize_sort_project": 0.041754,
+              "preflight_planning": 3.06148,
+              "unit_and_denominator_setup": 0.030857,
+              "universe_witness": 7.922742
+            },
+            "post_parse_compute_ms": 104.013913,
+            "preparation_ms": 0.11496400000000001,
+            "publication_ms": 0.150257,
+            "serialization_ms": 0.211069
+          },
+          {
+            "process_ms": 114.294602,
+            "rss_kib": 34280,
+            "allocator": "system",
+            "execution_ms": 102.323205,
+            "phases_ms": {
+              "archive_setup": 2.958625,
+              "chunk_read_decode_attach": 12.823625,
+              "evaluate_and_aggregate": 63.523995,
+              "finalize_sort_project": 0.048402999999999995,
+              "preflight_planning": 3.1432539999999998,
+              "unit_and_denominator_setup": 0.038439,
+              "universe_witness": 8.106449999999999
+            },
+            "post_parse_compute_ms": 102.68971,
+            "preparation_ms": 0.141013,
+            "publication_ms": 0.169617,
+            "serialization_ms": 0.19772900000000002
+          },
+          {
+            "process_ms": 110.033907,
+            "rss_kib": 34624,
+            "allocator": "system",
+            "execution_ms": 99.72953199999999,
+            "phases_ms": {
+              "archive_setup": 2.910031,
+              "chunk_read_decode_attach": 12.730724,
+              "evaluate_and_aggregate": 61.817073,
+              "finalize_sort_project": 0.065639,
+              "preflight_planning": 3.036242,
+              "unit_and_denominator_setup": 0.036085,
+              "universe_witness": 7.763471
+            },
+            "post_parse_compute_ms": 100.08489,
+            "preparation_ms": 0.13495400000000002,
+            "publication_ms": 0.17275100000000002,
+            "serialization_ms": 0.19206
+          },
+          {
+            "process_ms": 113.718731,
+            "rss_kib": 35948,
+            "allocator": "system",
+            "execution_ms": 102.750552,
+            "phases_ms": {
+              "archive_setup": 2.879525,
+              "chunk_read_decode_attach": 12.94614,
+              "evaluate_and_aggregate": 63.589434,
+              "finalize_sort_project": 0.04649,
+              "preflight_planning": 3.105507,
+              "unit_and_denominator_setup": 0.029965,
+              "universe_witness": 8.395227
+            },
+            "post_parse_compute_ms": 103.10658000000001,
+            "preparation_ms": 0.129065,
+            "publication_ms": 0.154203,
+            "serialization_ms": 0.199692
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 116.079921,
+            "rss_kib": 41172,
+            "allocator": "system",
+            "execution_ms": 104.50631800000001,
+            "phases_ms": {
+              "archive_setup": 2.774636,
+              "chunk_read_decode_attach": 13.203038,
+              "evaluate_and_aggregate": 66.81427099999999,
+              "finalize_sort_project": 0.039129,
+              "preflight_planning": 2.966417,
+              "unit_and_denominator_setup": 0.043055,
+              "universe_witness": 8.804426000000001
+            },
+            "post_parse_compute_ms": 105.383734,
+            "preparation_ms": 0.136096,
+            "publication_ms": 0.174343,
+            "serialization_ms": 0.710064
+          },
+          {
+            "process_ms": 115.752396,
+            "rss_kib": 39812,
+            "allocator": "system",
+            "execution_ms": 103.577472,
+            "phases_ms": {
+              "archive_setup": 2.933577,
+              "chunk_read_decode_attach": 12.532575000000001,
+              "evaluate_and_aggregate": 67.077279,
+              "finalize_sort_project": 0.045828999999999995,
+              "preflight_planning": 3.019717,
+              "unit_and_denominator_setup": 0.022394,
+              "universe_witness": 8.339913
+            },
+            "post_parse_compute_ms": 104.690195,
+            "preparation_ms": 0.137048,
+            "publication_ms": 0.180343,
+            "serialization_ms": 0.943927
+          },
+          {
+            "process_ms": 111.261884,
+            "rss_kib": 39252,
+            "allocator": "system",
+            "execution_ms": 99.156837,
+            "phases_ms": {
+              "archive_setup": 2.912024,
+              "chunk_read_decode_attach": 12.545844,
+              "evaluate_and_aggregate": 63.545087,
+              "finalize_sort_project": 0.028293000000000002,
+              "preflight_planning": 3.024625,
+              "unit_and_denominator_setup": 0.032198,
+              "universe_witness": 8.236036
+            },
+            "post_parse_compute_ms": 100.363591,
+            "preparation_ms": 0.12579,
+            "publication_ms": 0.166963,
+            "serialization_ms": 1.05156
+          },
+          {
+            "process_ms": 117.954486,
+            "rss_kib": 43468,
+            "allocator": "system",
+            "execution_ms": 104.742154,
+            "phases_ms": {
+              "archive_setup": 3.020558,
+              "chunk_read_decode_attach": 13.221727000000001,
+              "evaluate_and_aggregate": 67.274688,
+              "finalize_sort_project": 0.042264,
+              "preflight_planning": 2.992997,
+              "unit_and_denominator_setup": 0.033811,
+              "universe_witness": 8.447105
+            },
+            "post_parse_compute_ms": 105.919294,
+            "preparation_ms": 0.12341699999999999,
+            "publication_ms": 0.15590600000000002,
+            "serialization_ms": 1.020904
+          },
+          {
+            "process_ms": 117.602073,
+            "rss_kib": 41284,
+            "allocator": "system",
+            "execution_ms": 105.472438,
+            "phases_ms": {
+              "archive_setup": 2.894017,
+              "chunk_read_decode_attach": 13.255787999999999,
+              "evaluate_and_aggregate": 67.206384,
+              "finalize_sort_project": 0.03972,
+              "preflight_planning": 3.148031,
+              "unit_and_denominator_setup": 0.037948,
+              "universe_witness": 8.616972
+            },
+            "post_parse_compute_ms": 106.298037,
+            "preparation_ms": 0.142065,
+            "publication_ms": 0.156226,
+            "serialization_ms": 0.6481199999999999
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "50d6efc2d22f0386ba15cef1afb4e37e3e4d93f1a17069b4634ff7a8cd8ea0f3"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "class_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.classes |> within U |> derive {q=any record {any unique {B}}} |> summarize {n=count(),t=count_true(q),reads=sum(reads.total)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 157.563142,
+          "rss_kib": 34552,
+          "execution_ms": 147.25833699999998,
+          "post_parse_compute_ms": 147.603679,
+          "preparation_ms": 0.135234,
+          "publication_ms": 0.170778,
+          "serialization_ms": 0.198781
+        },
+        "after": {
+          "process_ms": 171.835658,
+          "rss_kib": 41352,
+          "execution_ms": 160.321293,
+          "post_parse_compute_ms": 161.13250000000002,
+          "preparation_ms": 0.133462,
+          "publication_ms": 0.159751,
+          "serialization_ms": 0.834582
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9166410000000003,
+          "chunk_read_decode_attach": 13.216969,
+          "evaluate_and_aggregate": 68.186416,
+          "finalize_sort_project": 0.050235999999999996,
+          "preflight_planning": 3.25282,
+          "unit_and_denominator_setup": 15.561295,
+          "universe_witness": 23.558971000000003
+        },
+        "after": {
+          "archive_setup": 3.009552,
+          "chunk_read_decode_attach": 13.40896,
+          "evaluate_and_aggregate": 78.75492000000001,
+          "finalize_sort_project": 0.045649,
+          "preflight_planning": 3.355405,
+          "unit_and_denominator_setup": 16.00776,
+          "universe_witness": 23.664581000000002
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 157.563142,
+            "rss_kib": 34000,
+            "allocator": "system",
+            "execution_ms": 147.25833699999998,
+            "phases_ms": {
+              "archive_setup": 3.065967,
+              "chunk_read_decode_attach": 17.261796999999998,
+              "evaluate_and_aggregate": 68.186416,
+              "finalize_sort_project": 0.043405,
+              "preflight_planning": 3.479383,
+              "unit_and_denominator_setup": 13.321468,
+              "universe_witness": 23.378808
+            },
+            "post_parse_compute_ms": 147.603679,
+            "preparation_ms": 0.12638100000000002,
+            "publication_ms": 0.169126,
+            "serialization_ms": 0.18820499999999998
+          },
+          {
+            "process_ms": 158.602723,
+            "rss_kib": 34552,
+            "allocator": "system",
+            "execution_ms": 148.893519,
+            "phases_ms": {
+              "archive_setup": 2.703569,
+              "chunk_read_decode_attach": 12.786318,
+              "evaluate_and_aggregate": 71.391323,
+              "finalize_sort_project": 0.044718,
+              "preflight_planning": 3.25282,
+              "unit_and_denominator_setup": 15.561295,
+              "universe_witness": 23.558971000000003
+            },
+            "post_parse_compute_ms": 149.24258700000001,
+            "preparation_ms": 0.136546,
+            "publication_ms": 0.16185400000000003,
+            "serialization_ms": 0.181304
+          },
+          {
+            "process_ms": 162.292224,
+            "rss_kib": 35168,
+            "allocator": "system",
+            "execution_ms": 150.882618,
+            "phases_ms": {
+              "archive_setup": 3.2010810000000003,
+              "chunk_read_decode_attach": 17.550262999999998,
+              "evaluate_and_aggregate": 66.29879199999999,
+              "finalize_sort_project": 0.050235999999999996,
+              "preflight_planning": 3.685815,
+              "unit_and_denominator_setup": 16.046399,
+              "universe_witness": 23.584991
+            },
+            "post_parse_compute_ms": 151.276663,
+            "preparation_ms": 0.135234,
+            "publication_ms": 0.172541,
+            "serialization_ms": 0.221996
+          },
+          {
+            "process_ms": 155.359419,
+            "rss_kib": 33980,
+            "allocator": "system",
+            "execution_ms": 145.44932,
+            "phases_ms": {
+              "archive_setup": 2.867597,
+              "chunk_read_decode_attach": 12.942824,
+              "evaluate_and_aggregate": 69.085366,
+              "finalize_sort_project": 0.052319,
+              "preflight_planning": 3.145107,
+              "unit_and_denominator_setup": 14.194568,
+              "universe_witness": 23.030210999999998
+            },
+            "post_parse_compute_ms": 145.82687099999998,
+            "preparation_ms": 0.146702,
+            "publication_ms": 0.170778,
+            "serialization_ms": 0.198781
+          },
+          {
+            "process_ms": 156.597651,
+            "rss_kib": 35596,
+            "allocator": "system",
+            "execution_ms": 146.35953700000002,
+            "phases_ms": {
+              "archive_setup": 2.9166410000000003,
+              "chunk_read_decode_attach": 13.216969,
+              "evaluate_and_aggregate": 66.766559,
+              "finalize_sort_project": 0.050517,
+              "preflight_planning": 3.11465,
+              "unit_and_denominator_setup": 15.579331999999999,
+              "universe_witness": 23.696229
+            },
+            "post_parse_compute_ms": 146.751459,
+            "preparation_ms": 0.134864,
+            "publication_ms": 0.21134999999999998,
+            "serialization_ms": 0.217979
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 166.638267,
+            "rss_kib": 41644,
+            "allocator": "system",
+            "execution_ms": 155.037371,
+            "phases_ms": {
+              "archive_setup": 2.714705,
+              "chunk_read_decode_attach": 12.804314999999999,
+              "evaluate_and_aggregate": 78.75492000000001,
+              "finalize_sort_project": 0.045649,
+              "preflight_planning": 3.355405,
+              "unit_and_denominator_setup": 14.735797,
+              "universe_witness": 23.664581000000002
+            },
+            "post_parse_compute_ms": 156.277697,
+            "preparation_ms": 0.127182,
+            "publication_ms": 0.15559499999999998,
+            "serialization_ms": 1.079643
+          },
+          {
+            "process_ms": 174.934344,
+            "rss_kib": 37112,
+            "allocator": "system",
+            "execution_ms": 161.965059,
+            "phases_ms": {
+              "archive_setup": 3.225639,
+              "chunk_read_decode_attach": 15.973678999999999,
+              "evaluate_and_aggregate": 77.289334,
+              "finalize_sort_project": 0.067352,
+              "preflight_planning": 3.806026,
+              "unit_and_denominator_setup": 16.562639,
+              "universe_witness": 23.925225
+            },
+            "post_parse_compute_ms": 162.97742000000002,
+            "preparation_ms": 0.14537999999999998,
+            "publication_ms": 0.170238,
+            "serialization_ms": 0.834582
+          },
+          {
+            "process_ms": 164.588397,
+            "rss_kib": 41352,
+            "allocator": "system",
+            "execution_ms": 152.75538999999998,
+            "phases_ms": {
+              "archive_setup": 3.085566,
+              "chunk_read_decode_attach": 13.40896,
+              "evaluate_and_aggregate": 74.838207,
+              "finalize_sort_project": 0.046279999999999995,
+              "preflight_planning": 3.424509,
+              "unit_and_denominator_setup": 14.153506,
+              "universe_witness": 23.127658999999998
+            },
+            "post_parse_compute_ms": 153.712447,
+            "preparation_ms": 0.134773,
+            "publication_ms": 0.159751,
+            "serialization_ms": 0.790215
+          },
+          {
+            "process_ms": 173.416559,
+            "rss_kib": 39308,
+            "allocator": "system",
+            "execution_ms": 161.175315,
+            "phases_ms": {
+              "archive_setup": 3.009552,
+              "chunk_read_decode_attach": 12.345482,
+              "evaluate_and_aggregate": 80.65378199999999,
+              "finalize_sort_project": 0.037407,
+              "preflight_planning": 3.2499450000000003,
+              "unit_and_denominator_setup": 17.339785,
+              "universe_witness": 23.714186
+            },
+            "post_parse_compute_ms": 162.48494499999998,
+            "preparation_ms": 0.118229,
+            "publication_ms": 0.185371,
+            "serialization_ms": 1.153645
+          },
+          {
+            "process_ms": 171.835658,
+            "rss_kib": 41772,
+            "allocator": "system",
+            "execution_ms": 160.321293,
+            "phases_ms": {
+              "archive_setup": 2.972245,
+              "chunk_read_decode_attach": 13.603534,
+              "evaluate_and_aggregate": 81.411739,
+              "finalize_sort_project": 0.040631,
+              "preflight_planning": 3.234442,
+              "unit_and_denominator_setup": 16.00776,
+              "universe_witness": 23.586212
+            },
+            "post_parse_compute_ms": 161.13250000000002,
+            "preparation_ms": 0.133462,
+            "publication_ms": 0.153392,
+            "serialization_ms": 0.6483599999999999
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "fbf7f3b6b4ad7d649b0323dc19b50fba066b34db94997567515dffcb54a07d2b"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "distinct_counts",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> summarize {cells=count_distinct(cell.id)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 206.340423,
+          "rss_kib": 50204,
+          "execution_ms": 193.47864,
+          "post_parse_compute_ms": 193.817272,
+          "preparation_ms": 0.140873,
+          "publication_ms": 0.17176999999999998,
+          "serialization_ms": 0.186843
+        },
+        "after": {
+          "process_ms": 203.004448,
+          "rss_kib": 55648,
+          "execution_ms": 190.55611,
+          "post_parse_compute_ms": 190.964458,
+          "preparation_ms": 0.132821,
+          "publication_ms": 0.16519,
+          "serialization_ms": 0.280605
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.024134,
+          "chunk_read_decode_attach": 13.277561,
+          "evaluate_and_aggregate": 131.300391,
+          "finalize_sort_project": 2.96242,
+          "preflight_planning": 3.492583,
+          "unit_and_denominator_setup": 0.038358,
+          "universe_witness": 8.233381999999999
+        },
+        "after": {
+          "archive_setup": 2.9355800000000003,
+          "chunk_read_decode_attach": 13.845168999999999,
+          "evaluate_and_aggregate": 128.69787499999998,
+          "finalize_sort_project": 2.932134,
+          "preflight_planning": 3.123294,
+          "unit_and_denominator_setup": 0.040822000000000004,
+          "universe_witness": 8.832809000000001
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 204.571678,
+            "rss_kib": 50724,
+            "allocator": "system",
+            "execution_ms": 193.06187,
+            "phases_ms": {
+              "archive_setup": 3.1058969999999997,
+              "chunk_read_decode_attach": 12.946601000000001,
+              "evaluate_and_aggregate": 130.385558,
+              "finalize_sort_project": 3.151045,
+              "preflight_planning": 3.0282199999999997,
+              "unit_and_denominator_setup": 0.044406999999999995,
+              "universe_witness": 8.176967
+            },
+            "post_parse_compute_ms": 193.38245500000002,
+            "preparation_ms": 0.111679,
+            "publication_ms": 0.162246,
+            "serialization_ms": 0.189747
+          },
+          {
+            "process_ms": 206.894691,
+            "rss_kib": 49856,
+            "allocator": "system",
+            "execution_ms": 195.490844,
+            "phases_ms": {
+              "archive_setup": 2.685392,
+              "chunk_read_decode_attach": 13.277561,
+              "evaluate_and_aggregate": 132.71294699999999,
+              "finalize_sort_project": 2.96242,
+              "preflight_planning": 3.492583,
+              "unit_and_denominator_setup": 0.037266,
+              "universe_witness": 8.22545
+            },
+            "post_parse_compute_ms": 195.82280599999999,
+            "preparation_ms": 0.128654,
+            "publication_ms": 0.156457,
+            "serialization_ms": 0.180644
+          },
+          {
+            "process_ms": 213.641836,
+            "rss_kib": 50204,
+            "allocator": "system",
+            "execution_ms": 201.608667,
+            "phases_ms": {
+              "archive_setup": 3.024134,
+              "chunk_read_decode_attach": 13.439496,
+              "evaluate_and_aggregate": 136.402969,
+              "finalize_sort_project": 3.415365,
+              "preflight_planning": 3.779276,
+              "unit_and_denominator_setup": 0.035174,
+              "universe_witness": 8.347745
+            },
+            "post_parse_compute_ms": 201.979507,
+            "preparation_ms": 0.15228,
+            "publication_ms": 0.178119,
+            "serialization_ms": 0.19171999999999997
+          },
+          {
+            "process_ms": 203.998421,
+            "rss_kib": 50760,
+            "allocator": "system",
+            "execution_ms": 192.73102,
+            "phases_ms": {
+              "archive_setup": 2.941279,
+              "chunk_read_decode_attach": 13.074765000000001,
+              "evaluate_and_aggregate": 131.300391,
+              "finalize_sort_project": 2.94209,
+              "preflight_planning": 3.197356,
+              "unit_and_denominator_setup": 0.038358,
+              "universe_witness": 8.887291000000001
+            },
+            "post_parse_compute_ms": 193.084204,
+            "preparation_ms": 0.143797,
+            "publication_ms": 0.17176999999999998,
+            "serialization_ms": 0.186843
+          },
+          {
+            "process_ms": 206.340423,
+            "rss_kib": 49720,
+            "allocator": "system",
+            "execution_ms": 193.47864,
+            "phases_ms": {
+              "archive_setup": 3.166138,
+              "chunk_read_decode_attach": 17.780262,
+              "evaluate_and_aggregate": 128.632516,
+              "finalize_sort_project": 2.853967,
+              "preflight_planning": 3.621788,
+              "unit_and_denominator_setup": 0.049885,
+              "universe_witness": 8.233381999999999
+            },
+            "post_parse_compute_ms": 193.817272,
+            "preparation_ms": 0.140873,
+            "publication_ms": 0.19040800000000002,
+            "serialization_ms": 0.173842
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 198.714149,
+            "rss_kib": 55648,
+            "allocator": "system",
+            "execution_ms": 186.336018,
+            "phases_ms": {
+              "archive_setup": 2.9355800000000003,
+              "chunk_read_decode_attach": 13.845168999999999,
+              "evaluate_and_aggregate": 124.011016,
+              "finalize_sort_project": 3.0034929999999997,
+              "preflight_planning": 3.178277,
+              "unit_and_denominator_setup": 0.035684,
+              "universe_witness": 8.948183
+            },
+            "post_parse_compute_ms": 186.733409,
+            "preparation_ms": 0.124098,
+            "publication_ms": 0.14966600000000002,
+            "serialization_ms": 0.252291
+          },
+          {
+            "process_ms": 203.004448,
+            "rss_kib": 55780,
+            "allocator": "system",
+            "execution_ms": 190.55611,
+            "phases_ms": {
+              "archive_setup": 2.986467,
+              "chunk_read_decode_attach": 13.905330000000001,
+              "evaluate_and_aggregate": 128.69787499999998,
+              "finalize_sort_project": 2.9705529999999998,
+              "preflight_planning": 3.1108450000000003,
+              "unit_and_denominator_setup": 0.043074999999999995,
+              "universe_witness": 8.824296
+            },
+            "post_parse_compute_ms": 190.964458,
+            "preparation_ms": 0.132821,
+            "publication_ms": 0.160823,
+            "serialization_ms": 0.253523
+          },
+          {
+            "process_ms": 215.002974,
+            "rss_kib": 55492,
+            "allocator": "system",
+            "execution_ms": 202.08021000000002,
+            "phases_ms": {
+              "archive_setup": 3.269335,
+              "chunk_read_decode_attach": 17.687431,
+              "evaluate_and_aggregate": 134.66050299999998,
+              "finalize_sort_project": 2.845213,
+              "preflight_planning": 3.528326,
+              "unit_and_denominator_setup": 0.03952,
+              "universe_witness": 8.832809000000001
+            },
+            "post_parse_compute_ms": 202.522178,
+            "preparation_ms": 0.14082299999999998,
+            "publication_ms": 0.169547,
+            "serialization_ms": 0.280605
+          },
+          {
+            "process_ms": 210.578032,
+            "rss_kib": 58212,
+            "allocator": "system",
+            "execution_ms": 198.740048,
+            "phases_ms": {
+              "archive_setup": 2.6447599999999998,
+              "chunk_read_decode_attach": 13.213815,
+              "evaluate_and_aggregate": 136.84907299999998,
+              "finalize_sort_project": 2.903741,
+              "preflight_planning": 3.123294,
+              "unit_and_denominator_setup": 0.040822000000000004,
+              "universe_witness": 8.821462
+            },
+            "post_parse_compute_ms": 199.201646,
+            "preparation_ms": 0.122215,
+            "publication_ms": 0.16519,
+            "serialization_ms": 0.316018
+          },
+          {
+            "process_ms": 189.745574,
+            "rss_kib": 53704,
+            "allocator": "system",
+            "execution_ms": 177.20656100000002,
+            "phases_ms": {
+              "archive_setup": 2.9298409999999997,
+              "chunk_read_decode_attach": 12.448196999999999,
+              "evaluate_and_aggregate": 117.28225,
+              "finalize_sort_project": 2.932134,
+              "preflight_planning": 3.106789,
+              "unit_and_denominator_setup": 0.047342,
+              "universe_witness": 9.083308
+            },
+            "post_parse_compute_ms": 177.681448,
+            "preparation_ms": 0.137748,
+            "publication_ms": 0.166612,
+            "serialization_ms": 0.309468
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "fcfe4f37acb10c3e959583622fe4dc1869c7dfd32213ec070b99131e7fc1af33"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "cell_grouped_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> summarize {n=count(),reads=sum(reads.total)} by {cell.id}",
+      "median": {
+        "before": {
+          "process_ms": 499.764663,
+          "rss_kib": 79488,
+          "execution_ms": 399.45167799999996,
+          "post_parse_compute_ms": 479.291899,
+          "preparation_ms": 0.13181900000000002,
+          "publication_ms": 1.920745,
+          "serialization_ms": 42.315218
+        },
+        "after": {
+          "process_ms": 518.540389,
+          "rss_kib": 84520,
+          "execution_ms": 419.65698699999996,
+          "post_parse_compute_ms": 497.565547,
+          "preparation_ms": 0.131419,
+          "publication_ms": 1.9239789999999999,
+          "serialization_ms": 42.383342
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.0271679999999996,
+          "chunk_read_decode_attach": 13.196157999999999,
+          "evaluate_and_aggregate": 213.070591,
+          "finalize_sort_project": 46.857478,
+          "preflight_planning": 3.25256,
+          "unit_and_denominator_setup": 28.908251999999997,
+          "universe_witness": 8.008582
+        },
+        "after": {
+          "archive_setup": 2.979406,
+          "chunk_read_decode_attach": 18.522354,
+          "evaluate_and_aggregate": 225.531508,
+          "finalize_sort_project": 46.040842,
+          "preflight_planning": 3.123383,
+          "unit_and_denominator_setup": 29.742203,
+          "universe_witness": 8.542340000000001
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 488.093891,
+            "rss_kib": 79488,
+            "allocator": "system",
+            "execution_ms": 386.50680900000003,
+            "phases_ms": {
+              "archive_setup": 3.225268,
+              "chunk_read_decode_attach": 17.979142,
+              "evaluate_and_aggregate": 199.78223400000002,
+              "finalize_sort_project": 45.231559,
+              "preflight_planning": 3.355074,
+              "unit_and_denominator_setup": 28.478281000000003,
+              "universe_witness": 8.045038
+            },
+            "post_parse_compute_ms": 467.20705200000003,
+            "preparation_ms": 0.128615,
+            "publication_ms": 2.020837,
+            "serialization_ms": 40.698082
+          },
+          {
+            "process_ms": 494.733954,
+            "rss_kib": 79960,
+            "allocator": "system",
+            "execution_ms": 395.30863100000005,
+            "phases_ms": {
+              "archive_setup": 2.90261,
+              "chunk_read_decode_attach": 17.346125,
+              "evaluate_and_aggregate": 210.167911,
+              "finalize_sort_project": 46.383912,
+              "preflight_planning": 3.071145,
+              "unit_and_denominator_setup": 27.539641,
+              "universe_witness": 7.936202999999999
+            },
+            "post_parse_compute_ms": 473.11353499999996,
+            "preparation_ms": 0.129816,
+            "publication_ms": 1.920745,
+            "serialization_ms": 42.315218
+          },
+          {
+            "process_ms": 510.40794,
+            "rss_kib": 79332,
+            "allocator": "system",
+            "execution_ms": 405.49121199999996,
+            "phases_ms": {
+              "archive_setup": 3.14746,
+              "chunk_read_decode_attach": 13.196157999999999,
+              "evaluate_and_aggregate": 215.29958299999998,
+              "finalize_sort_project": 48.62418,
+              "preflight_planning": 3.02841,
+              "unit_and_denominator_setup": 28.908251999999997,
+              "universe_witness": 8.307214
+            },
+            "post_parse_compute_ms": 490.070601,
+            "preparation_ms": 0.13181900000000002,
+            "publication_ms": 1.9567400000000001,
+            "serialization_ms": 44.465379999999996
+          },
+          {
+            "process_ms": 499.764663,
+            "rss_kib": 79164,
+            "allocator": "system",
+            "execution_ms": 399.45167799999996,
+            "phases_ms": {
+              "archive_setup": 3.0271679999999996,
+              "chunk_read_decode_attach": 12.651545,
+              "evaluate_and_aggregate": 213.070591,
+              "finalize_sort_project": 46.857478,
+              "preflight_planning": 3.25256,
+              "unit_and_denominator_setup": 29.01983,
+              "universe_witness": 8.008582
+            },
+            "post_parse_compute_ms": 479.291899,
+            "preparation_ms": 0.140232,
+            "publication_ms": 1.895847,
+            "serialization_ms": 41.467205
+          },
+          {
+            "process_ms": 510.835527,
+            "rss_kib": 79644,
+            "allocator": "system",
+            "execution_ms": 405.283028,
+            "phases_ms": {
+              "archive_setup": 2.9362310000000003,
+              "chunk_read_decode_attach": 12.349238,
+              "evaluate_and_aggregate": 213.13642099999998,
+              "finalize_sort_project": 48.553543999999995,
+              "preflight_planning": 8.507778,
+              "unit_and_denominator_setup": 30.297142,
+              "universe_witness": 7.335013
+            },
+            "post_parse_compute_ms": 488.311131,
+            "preparation_ms": 0.134123,
+            "publication_ms": 1.874795,
+            "serialization_ms": 45.382207
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 518.540389,
+            "rss_kib": 84520,
+            "allocator": "system",
+            "execution_ms": 419.65698699999996,
+            "phases_ms": {
+              "archive_setup": 3.129133,
+              "chunk_read_decode_attach": 18.611938,
+              "evaluate_and_aggregate": 225.944392,
+              "finalize_sort_project": 46.535650999999994,
+              "preflight_planning": 3.885716,
+              "unit_and_denominator_setup": 29.62146,
+              "universe_witness": 8.898689
+            },
+            "post_parse_compute_ms": 497.565547,
+            "preparation_ms": 0.13955099999999998,
+            "publication_ms": 1.9239789999999999,
+            "serialization_ms": 40.775951
+          },
+          {
+            "process_ms": 525.341335,
+            "rss_kib": 84476,
+            "allocator": "system",
+            "execution_ms": 421.82710899999995,
+            "phases_ms": {
+              "archive_setup": 3.267933,
+              "chunk_read_decode_attach": 19.278938,
+              "evaluate_and_aggregate": 225.531508,
+              "finalize_sort_project": 46.213694,
+              "preflight_planning": 3.7798559999999997,
+              "unit_and_denominator_setup": 33.177478,
+              "universe_witness": 8.542340000000001
+            },
+            "post_parse_compute_ms": 503.40003099999996,
+            "preparation_ms": 0.13169899999999998,
+            "publication_ms": 1.944491,
+            "serialization_ms": 42.765229000000005
+          },
+          {
+            "process_ms": 524.402195,
+            "rss_kib": 86288,
+            "allocator": "system",
+            "execution_ms": 419.87746999999996,
+            "phases_ms": {
+              "archive_setup": 2.979406,
+              "chunk_read_decode_attach": 13.260365,
+              "evaluate_and_aggregate": 235.545923,
+              "finalize_sort_project": 46.040842,
+              "preflight_planning": 3.123383,
+              "unit_and_denominator_setup": 29.867643,
+              "universe_witness": 8.434046
+            },
+            "post_parse_compute_ms": 502.19044099999996,
+            "preparation_ms": 0.120933,
+            "publication_ms": 2.147007,
+            "serialization_ms": 41.529861000000004
+          },
+          {
+            "process_ms": 502.781525,
+            "rss_kib": 86476,
+            "allocator": "system",
+            "execution_ms": 402.677547,
+            "phases_ms": {
+              "archive_setup": 2.946336,
+              "chunk_read_decode_attach": 16.905198,
+              "evaluate_and_aggregate": 219.098728,
+              "finalize_sort_project": 43.181608000000004,
+              "preflight_planning": 3.066268,
+              "unit_and_denominator_setup": 29.563853,
+              "universe_witness": 8.572876
+            },
+            "post_parse_compute_ms": 480.937459,
+            "preparation_ms": 0.131299,
+            "publication_ms": 1.740612,
+            "serialization_ms": 42.383342
+          },
+          {
+            "process_ms": 486.383204,
+            "rss_kib": 81284,
+            "allocator": "system",
+            "execution_ms": 384.598494,
+            "phases_ms": {
+              "archive_setup": 2.8975519999999997,
+              "chunk_read_decode_attach": 18.522354,
+              "evaluate_and_aggregate": 205.23117499999998,
+              "finalize_sort_project": 42.456212,
+              "preflight_planning": 2.955781,
+              "unit_and_denominator_setup": 29.742203,
+              "universe_witness": 8.264399000000001
+            },
+            "post_parse_compute_ms": 462.016722,
+            "preparation_ms": 0.131419,
+            "publication_ms": 1.886112,
+            "serialization_ms": 42.882246
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "d4a9d66cd24498d7b0977a55cc2ccff3ded987f0b33abcabf9610b0ab8af58dc"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "support_fallback",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {s=support_reads(overlaps(R,min:12bp))} |> select {unit.id,s} |> sort {unit.id} |> take 20",
+      "median": {
+        "before": {
+          "process_ms": 185.996454,
+          "rss_kib": 80500,
+          "execution_ms": 167.765522,
+          "post_parse_compute_ms": 168.170825,
+          "preparation_ms": 0.142986,
+          "publication_ms": 0.17858,
+          "serialization_ms": 0.234795
+        },
+        "after": {
+          "process_ms": 194.968022,
+          "rss_kib": 83056,
+          "execution_ms": 175.093875,
+          "post_parse_compute_ms": 176.854788,
+          "preparation_ms": 0.14067300000000002,
+          "publication_ms": 0.18506,
+          "serialization_ms": 1.459868
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9085389999999998,
+          "chunk_read_decode_attach": 13.480277000000001,
+          "evaluate_and_aggregate": 82.693848,
+          "finalize_sort_project": 50.254796999999996,
+          "preflight_planning": 3.7798570000000002,
+          "unit_and_denominator_setup": 0.0021339999999999996,
+          "universe_witness": 7.954872
+        },
+        "after": {
+          "archive_setup": 2.993828,
+          "chunk_read_decode_attach": 17.463732,
+          "evaluate_and_aggregate": 82.68292100000001,
+          "finalize_sort_project": 54.622932999999996,
+          "preflight_planning": 4.044727,
+          "unit_and_denominator_setup": 0.002023,
+          "universe_witness": 7.997865999999999
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 190.86661,
+            "rss_kib": 80216,
+            "allocator": "system",
+            "execution_ms": 170.592377,
+            "phases_ms": {
+              "archive_setup": 3.3720999999999997,
+              "chunk_read_decode_attach": 17.704175999999997,
+              "evaluate_and_aggregate": 80.608644,
+              "finalize_sort_project": 53.166751,
+              "preflight_planning": 3.7798570000000002,
+              "unit_and_denominator_setup": 0.002053,
+              "universe_witness": 8.138839
+            },
+            "post_parse_compute_ms": 171.03733,
+            "preparation_ms": 0.135235,
+            "publication_ms": 0.18737399999999999,
+            "serialization_ms": 0.254094
+          },
+          {
+            "process_ms": 184.570298,
+            "rss_kib": 80280,
+            "allocator": "system",
+            "execution_ms": 167.765522,
+            "phases_ms": {
+              "archive_setup": 2.824692,
+              "chunk_read_decode_attach": 16.877025,
+              "evaluate_and_aggregate": 82.693848,
+              "finalize_sort_project": 50.254796999999996,
+              "preflight_planning": 3.8277699999999997,
+              "unit_and_denominator_setup": 0.0021339999999999996,
+              "universe_witness": 7.439832
+            },
+            "post_parse_compute_ms": 168.170825,
+            "preparation_ms": 0.150728,
+            "publication_ms": 0.16555,
+            "serialization_ms": 0.21136000000000002
+          },
+          {
+            "process_ms": 185.996454,
+            "rss_kib": 80744,
+            "allocator": "system",
+            "execution_ms": 167.41450999999998,
+            "phases_ms": {
+              "archive_setup": 2.744381,
+              "chunk_read_decode_attach": 12.927291,
+              "evaluate_and_aggregate": 88.162589,
+              "finalize_sort_project": 47.934818,
+              "preflight_planning": 3.692985,
+              "unit_and_denominator_setup": 0.0025440000000000003,
+              "universe_witness": 7.89451
+            },
+            "post_parse_compute_ms": 167.835066,
+            "preparation_ms": 0.149276,
+            "publication_ms": 0.17858,
+            "serialization_ms": 0.228325
+          },
+          {
+            "process_ms": 177.713928,
+            "rss_kib": 80500,
+            "allocator": "system",
+            "execution_ms": 159.613222,
+            "phases_ms": {
+              "archive_setup": 2.9085389999999998,
+              "chunk_read_decode_attach": 12.320434,
+              "evaluate_and_aggregate": 78.632575,
+              "finalize_sort_project": 50.382319,
+              "preflight_planning": 3.90726,
+              "unit_and_denominator_setup": 0.002103,
+              "universe_witness": 7.954872
+            },
+            "post_parse_compute_ms": 160.027528,
+            "preparation_ms": 0.13159900000000002,
+            "publication_ms": 0.161484,
+            "serialization_ms": 0.237629
+          },
+          {
+            "process_ms": 188.198695,
+            "rss_kib": 80652,
+            "allocator": "system",
+            "execution_ms": 169.20619,
+            "phases_ms": {
+              "archive_setup": 2.9372119999999997,
+              "chunk_read_decode_attach": 13.480277000000001,
+              "evaluate_and_aggregate": 88.970932,
+              "finalize_sort_project": 47.926014,
+              "preflight_planning": 3.310567,
+              "unit_and_denominator_setup": 0.002254,
+              "universe_witness": 8.506375
+            },
+            "post_parse_compute_ms": 169.632495,
+            "preparation_ms": 0.142986,
+            "publication_ms": 0.186372,
+            "serialization_ms": 0.234795
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 194.968022,
+            "rss_kib": 83496,
+            "allocator": "system",
+            "execution_ms": 175.093875,
+            "phases_ms": {
+              "archive_setup": 2.992205,
+              "chunk_read_decode_attach": 17.463732,
+              "evaluate_and_aggregate": 82.501667,
+              "finalize_sort_project": 52.644209999999994,
+              "preflight_planning": 7.911866,
+              "unit_and_denominator_setup": 0.001683,
+              "universe_witness": 8.07975
+            },
+            "post_parse_compute_ms": 176.854788,
+            "preparation_ms": 0.158559,
+            "publication_ms": 0.18506,
+            "serialization_ms": 1.55362
+          },
+          {
+            "process_ms": 198.949264,
+            "rss_kib": 82888,
+            "allocator": "system",
+            "execution_ms": 180.55211,
+            "phases_ms": {
+              "archive_setup": 2.993828,
+              "chunk_read_decode_attach": 17.756264,
+              "evaluate_and_aggregate": 88.73228,
+              "finalize_sort_project": 55.783227,
+              "preflight_planning": 4.044727,
+              "unit_and_denominator_setup": 0.002074,
+              "universe_witness": 7.841539
+            },
+            "post_parse_compute_ms": 181.96095100000002,
+            "preparation_ms": 0.14067300000000002,
+            "publication_ms": 0.19315200000000002,
+            "serialization_ms": 1.2202650000000002
+          },
+          {
+            "process_ms": 184.153507,
+            "rss_kib": 82076,
+            "allocator": "system",
+            "execution_ms": 164.818204,
+            "phases_ms": {
+              "archive_setup": 3.028159,
+              "chunk_read_decode_attach": 12.929575,
+              "evaluate_and_aggregate": 82.68292100000001,
+              "finalize_sort_project": 51.952224,
+              "preflight_planning": 3.169734,
+              "unit_and_denominator_setup": 0.001833,
+              "universe_witness": 7.886426999999999
+            },
+            "post_parse_compute_ms": 166.084059,
+            "preparation_ms": 0.135906,
+            "publication_ms": 0.19769899999999999,
+            "serialization_ms": 1.0843800000000001
+          },
+          {
+            "process_ms": 194.164278,
+            "rss_kib": 83056,
+            "allocator": "system",
+            "execution_ms": 167.723428,
+            "phases_ms": {
+              "archive_setup": 3.095912,
+              "chunk_read_decode_attach": 12.646988,
+              "evaluate_and_aggregate": 82.363067,
+              "finalize_sort_project": 54.622932999999996,
+              "preflight_planning": 3.746556,
+              "unit_and_denominator_setup": 0.002023,
+              "universe_witness": 7.9992280000000004
+            },
+            "post_parse_compute_ms": 169.379482,
+            "preparation_ms": 0.14562,
+            "publication_ms": 0.179201,
+            "serialization_ms": 1.459868
+          },
+          {
+            "process_ms": 206.077144,
+            "rss_kib": 83308,
+            "allocator": "system",
+            "execution_ms": 182.235807,
+            "phases_ms": {
+              "archive_setup": 2.906686,
+              "chunk_read_decode_attach": 21.029474999999998,
+              "evaluate_and_aggregate": 85.316965,
+              "finalize_sort_project": 54.708512,
+              "preflight_planning": 7.385661,
+              "unit_and_denominator_setup": 0.002754,
+              "universe_witness": 7.997865999999999
+            },
+            "post_parse_compute_ms": 183.945812,
+            "preparation_ms": 0.13328099999999998,
+            "publication_ms": 0.172571,
+            "serialization_ms": 1.530965
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "a69989c07bc64e04bd5f5ffa5ef0be228f82cd0d2d0685ccb10f1e3e5e942d16"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "junction_enumeration",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom junctions(@x,within:U) |> support(unit:class,by:{sample})",
+      "median": {
+        "before": {
+          "process_ms": 148.580055,
+          "rss_kib": 22816,
+          "execution_ms": 135.64828500000002,
+          "post_parse_compute_ms": 136.560833,
+          "preparation_ms": 0.146371,
+          "publication_ms": 0.196717,
+          "serialization_ms": 0.4236
+        },
+        "after": {
+          "process_ms": 148.671804,
+          "rss_kib": 26332,
+          "execution_ms": 135.130402,
+          "post_parse_compute_ms": 135.920766,
+          "preparation_ms": 0.153922,
+          "publication_ms": 0.184879,
+          "serialization_ms": 0.40207699999999996
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 0.740068,
+          "chunk_read_decode_attach": 17.166006,
+          "enumerate_and_aggregate": 107.95017299999999,
+          "finalize_sort_project": 0.285881,
+          "preflight_planning": 3.388077
+        },
+        "after": {
+          "archive_setup": 0.938027,
+          "chunk_read_decode_attach": 20.83109,
+          "enumerate_and_aggregate": 106.598071,
+          "finalize_sort_project": 0.267644,
+          "preflight_planning": 3.543632
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 149.435047,
+            "rss_kib": 22420,
+            "allocator": "system",
+            "execution_ms": 135.785352,
+            "phases_ms": {
+              "archive_setup": 0.739857,
+              "chunk_read_decode_attach": 17.166006,
+              "enumerate_and_aggregate": 109.02601800000001,
+              "finalize_sort_project": 0.288495,
+              "preflight_planning": 3.041844
+            },
+            "post_parse_compute_ms": 136.560833,
+            "preparation_ms": 0.141734,
+            "publication_ms": 0.21174,
+            "serialization_ms": 0.4236
+          },
+          {
+            "process_ms": 147.92111,
+            "rss_kib": 22816,
+            "allocator": "system",
+            "execution_ms": 134.27872599999998,
+            "phases_ms": {
+              "archive_setup": 0.877425,
+              "chunk_read_decode_attach": 17.888597,
+              "enumerate_and_aggregate": 106.26168299999999,
+              "finalize_sort_project": 0.255736,
+              "preflight_planning": 3.5896719999999998
+            },
+            "post_parse_compute_ms": 135.047527,
+            "preparation_ms": 0.147633,
+            "publication_ms": 0.18457900000000002,
+            "serialization_ms": 0.41373499999999996
+          },
+          {
+            "process_ms": 148.580055,
+            "rss_kib": 22608,
+            "allocator": "system",
+            "execution_ms": 135.64828500000002,
+            "phases_ms": {
+              "archive_setup": 0.8256570000000001,
+              "chunk_read_decode_attach": 16.929789,
+              "enumerate_and_aggregate": 108.301444,
+              "finalize_sort_project": 0.29317299999999996,
+              "preflight_planning": 3.6855260000000003
+            },
+            "post_parse_compute_ms": 136.614093,
+            "preparation_ms": 0.146371,
+            "publication_ms": 0.202566,
+            "serialization_ms": 0.465373
+          },
+          {
+            "process_ms": 152.302517,
+            "rss_kib": 22816,
+            "allocator": "system",
+            "execution_ms": 139.116173,
+            "phases_ms": {
+              "archive_setup": 0.7312249999999999,
+              "chunk_read_decode_attach": 21.902158,
+              "enumerate_and_aggregate": 107.95017299999999,
+              "finalize_sort_project": 0.240533,
+              "preflight_planning": 3.388077
+            },
+            "post_parse_compute_ms": 139.89675100000002,
+            "preparation_ms": 0.14981599999999998,
+            "publication_ms": 0.17845,
+            "serialization_ms": 0.39729000000000003
+          },
+          {
+            "process_ms": 143.3589,
+            "rss_kib": 22880,
+            "allocator": "system",
+            "execution_ms": 129.965743,
+            "phases_ms": {
+              "archive_setup": 0.740068,
+              "chunk_read_decode_attach": 16.768595,
+              "enumerate_and_aggregate": 103.569297,
+              "finalize_sort_project": 0.285881,
+              "preflight_planning": 3.314305
+            },
+            "post_parse_compute_ms": 130.83827,
+            "preparation_ms": 0.143807,
+            "publication_ms": 0.196717,
+            "serialization_ms": 0.46012499999999995
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 157.758317,
+            "rss_kib": 27020,
+            "allocator": "system",
+            "execution_ms": 143.750011,
+            "phases_ms": {
+              "archive_setup": 0.886378,
+              "chunk_read_decode_attach": 21.124834,
+              "enumerate_and_aggregate": 113.79433,
+              "finalize_sort_project": 0.33314299999999997,
+              "preflight_planning": 3.511985
+            },
+            "post_parse_compute_ms": 144.53781099999998,
+            "preparation_ms": 0.153853,
+            "publication_ms": 0.184879,
+            "serialization_ms": 0.413925
+          },
+          {
+            "process_ms": 148.273151,
+            "rss_kib": 26332,
+            "allocator": "system",
+            "execution_ms": 132.65569499999998,
+            "phases_ms": {
+              "archive_setup": 0.987522,
+              "chunk_read_decode_attach": 16.314609,
+              "enumerate_and_aggregate": 107.029353,
+              "finalize_sort_project": 0.278741,
+              "preflight_planning": 3.9587579999999996
+            },
+            "post_parse_compute_ms": 133.427761,
+            "preparation_ms": 0.165169,
+            "publication_ms": 0.20098300000000002,
+            "serialization_ms": 0.40070500000000003
+          },
+          {
+            "process_ms": 150.573356,
+            "rss_kib": 25740,
+            "allocator": "system",
+            "execution_ms": 136.38832200000002,
+            "phases_ms": {
+              "archive_setup": 0.991708,
+              "chunk_read_decode_attach": 20.83109,
+              "enumerate_and_aggregate": 106.598071,
+              "finalize_sort_project": 0.221585,
+              "preflight_planning": 3.5837019999999997
+            },
+            "post_parse_compute_ms": 137.19459,
+            "preparation_ms": 0.174604,
+            "publication_ms": 0.196457,
+            "serialization_ms": 0.40207699999999996
+          },
+          {
+            "process_ms": 148.671804,
+            "rss_kib": 26124,
+            "allocator": "system",
+            "execution_ms": 135.130402,
+            "phases_ms": {
+              "archive_setup": 0.733348,
+              "chunk_read_decode_attach": 23.900195999999998,
+              "enumerate_and_aggregate": 103.44974699999999,
+              "finalize_sort_project": 0.267644,
+              "preflight_planning": 3.185902
+            },
+            "post_parse_compute_ms": 135.920766,
+            "preparation_ms": 0.153922,
+            "publication_ms": 0.176367,
+            "serialization_ms": 0.409308
+          },
+          {
+            "process_ms": 137.974018,
+            "rss_kib": 27716,
+            "allocator": "system",
+            "execution_ms": 123.017349,
+            "phases_ms": {
+              "archive_setup": 0.938027,
+              "chunk_read_decode_attach": 9.893122,
+              "enumerate_and_aggregate": 104.27171799999999,
+              "finalize_sort_project": 0.187643,
+              "preflight_planning": 3.543632
+            },
+            "post_parse_compute_ms": 123.609363,
+            "preparation_ms": 0.146391,
+            "publication_ms": 0.16778400000000002,
+            "serialization_ms": 0.31031800000000004
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "f23d8fb0bf5383994cd524c784c5c78f667f91f7dd620216c2fae5dde3e506f2"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "record_marginals",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=any unique {A} & any unique {B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 124.464865,
+          "rss_kib": 27468,
+          "execution_ms": 110.79736299999999,
+          "post_parse_compute_ms": 111.15248,
+          "preparation_ms": 0.144148,
+          "publication_ms": 0.159551,
+          "serialization_ms": 0.203318
+        },
+        "after": {
+          "process_ms": 141.740997,
+          "rss_kib": 38852,
+          "execution_ms": 127.12443200000001,
+          "post_parse_compute_ms": 127.606439,
+          "preparation_ms": 0.14541,
+          "publication_ms": 0.173052,
+          "serialization_ms": 0.286433
+        },
+        "builtin": {
+          "process_ms": 64.650299,
+          "rss_kib": 33080
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.139291,
+          "chunk_read_decode_attach": 20.519279,
+          "evaluate_and_aggregate": 66.711362,
+          "finalize_sort_project": 0.017867,
+          "preflight_planning": 3.81357,
+          "unit_and_denominator_setup": 0.028393,
+          "universe_witness": 8.627369
+        },
+        "after": {
+          "archive_setup": 3.14511,
+          "chunk_read_decode_attach": 20.783569,
+          "evaluate_and_aggregate": 82.70198300000001,
+          "finalize_sort_project": 0.016375,
+          "preflight_planning": 3.583612,
+          "unit_and_denominator_setup": 0.023886,
+          "universe_witness": 9.474469
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 121.054314,
+            "rss_kib": 27476,
+            "allocator": "system",
+            "execution_ms": 108.306592,
+            "phases_ms": {
+              "archive_setup": 3.139291,
+              "chunk_read_decode_attach": 16.922518,
+              "evaluate_and_aggregate": 66.813666,
+              "finalize_sort_project": 0.031768,
+              "preflight_planning": 3.887642,
+              "unit_and_denominator_setup": 0.028393,
+              "universe_witness": 9.127565
+            },
+            "post_parse_compute_ms": 108.66969999999999,
+            "preparation_ms": 0.145019,
+            "publication_ms": 0.159551,
+            "serialization_ms": 0.18917599999999998
+          },
+          {
+            "process_ms": 121.533588,
+            "rss_kib": 26956,
+            "allocator": "system",
+            "execution_ms": 108.01057399999999,
+            "phases_ms": {
+              "archive_setup": 3.126332,
+              "chunk_read_decode_attach": 22.156553,
+              "evaluate_and_aggregate": 61.978484,
+              "finalize_sort_project": 0.018899,
+              "preflight_planning": 3.708561,
+              "unit_and_denominator_setup": 0.030506,
+              "universe_witness": 8.322929
+            },
+            "post_parse_compute_ms": 108.400283,
+            "preparation_ms": 0.143267,
+            "publication_ms": 0.19202,
+            "serialization_ms": 0.203318
+          },
+          {
+            "process_ms": 125.120325,
+            "rss_kib": 27468,
+            "allocator": "system",
+            "execution_ms": 111.76262100000001,
+            "phases_ms": {
+              "archive_setup": 3.189577,
+              "chunk_read_decode_attach": 20.617388000000002,
+              "evaluate_and_aggregate": 65.00513500000001,
+              "finalize_sort_project": 0.017536,
+              "preflight_planning": 3.8410610000000003,
+              "unit_and_denominator_setup": 0.02665,
+              "universe_witness": 9.508310000000002
+            },
+            "post_parse_compute_ms": 112.148133,
+            "preparation_ms": 0.144148,
+            "publication_ms": 0.163247,
+            "serialization_ms": 0.20993699999999998
+          },
+          {
+            "process_ms": 126.402221,
+            "rss_kib": 27456,
+            "allocator": "system",
+            "execution_ms": 111.65588,
+            "phases_ms": {
+              "archive_setup": 3.411552,
+              "chunk_read_decode_attach": 17.122009000000002,
+              "evaluate_and_aggregate": 69.58056499999999,
+              "finalize_sort_project": 0.017867,
+              "preflight_planning": 3.81357,
+              "unit_and_denominator_setup": 0.029154,
+              "universe_witness": 8.627369
+            },
+            "post_parse_compute_ms": 112.038799,
+            "preparation_ms": 0.146141,
+            "publication_ms": 0.157679,
+            "serialization_ms": 0.206772
+          },
+          {
+            "process_ms": 124.464865,
+            "rss_kib": 27496,
+            "allocator": "system",
+            "execution_ms": 110.79736299999999,
+            "phases_ms": {
+              "archive_setup": 2.962855,
+              "chunk_read_decode_attach": 20.519279,
+              "evaluate_and_aggregate": 66.711362,
+              "finalize_sort_project": 0.017456,
+              "preflight_planning": 3.192822,
+              "unit_and_denominator_setup": 0.027962,
+              "universe_witness": 8.604966000000001
+            },
+            "post_parse_compute_ms": 111.15248,
+            "preparation_ms": 0.135595,
+            "publication_ms": 0.15651700000000002,
+            "serialization_ms": 0.190047
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 145.389937,
+            "rss_kib": 36656,
+            "allocator": "system",
+            "execution_ms": 131.387711,
+            "phases_ms": {
+              "archive_setup": 3.451683,
+              "chunk_read_decode_attach": 16.640883,
+              "evaluate_and_aggregate": 90.081377,
+              "finalize_sort_project": 0.016375,
+              "preflight_planning": 3.763584,
+              "unit_and_denominator_setup": 0.024858,
+              "universe_witness": 9.607149
+            },
+            "post_parse_compute_ms": 131.854766,
+            "preparation_ms": 0.14541,
+            "publication_ms": 0.17532499999999998,
+            "serialization_ms": 0.282677
+          },
+          {
+            "process_ms": 138.089432,
+            "rss_kib": 39092,
+            "allocator": "system",
+            "execution_ms": 123.351483,
+            "phases_ms": {
+              "archive_setup": 3.024268,
+              "chunk_read_decode_attach": 23.672472,
+              "evaluate_and_aggregate": 76.175976,
+              "finalize_sort_project": 0.015634,
+              "preflight_planning": 3.583612,
+              "unit_and_denominator_setup": 0.022704000000000002,
+              "universe_witness": 9.474469
+            },
+            "post_parse_compute_ms": 123.758939,
+            "preparation_ms": 0.15856,
+            "publication_ms": 0.173052,
+            "serialization_ms": 0.21330200000000002
+          },
+          {
+            "process_ms": 136.808107,
+            "rss_kib": 42720,
+            "allocator": "system",
+            "execution_ms": 122.02831499999999,
+            "phases_ms": {
+              "archive_setup": 2.947151,
+              "chunk_read_decode_attach": 24.282794,
+              "evaluate_and_aggregate": 76.543471,
+              "finalize_sort_project": 0.015123000000000001,
+              "preflight_planning": 3.101954,
+              "unit_and_denominator_setup": 0.023886,
+              "universe_witness": 9.267707
+            },
+            "post_parse_compute_ms": 122.56877100000001,
+            "preparation_ms": 0.129245,
+            "publication_ms": 0.148084,
+            "serialization_ms": 0.380715
+          },
+          {
+            "process_ms": 144.134702,
+            "rss_kib": 38852,
+            "allocator": "system",
+            "execution_ms": 130.18942,
+            "phases_ms": {
+              "archive_setup": 3.14511,
+              "chunk_read_decode_attach": 20.783569,
+              "evaluate_and_aggregate": 84.968445,
+              "finalize_sort_project": 0.017235999999999998,
+              "preflight_planning": 3.403991,
+              "unit_and_denominator_setup": 0.023486,
+              "universe_witness": 9.77322
+            },
+            "post_parse_compute_ms": 130.769767,
+            "preparation_ms": 0.131809,
+            "publication_ms": 0.156856,
+            "serialization_ms": 0.415127
+          },
+          {
+            "process_ms": 141.740997,
+            "rss_kib": 36996,
+            "allocator": "system",
+            "execution_ms": 127.12443200000001,
+            "phases_ms": {
+              "archive_setup": 3.2022869999999997,
+              "chunk_read_decode_attach": 19.534232,
+              "evaluate_and_aggregate": 82.70198300000001,
+              "finalize_sort_project": 0.018408,
+              "preflight_planning": 3.9139709999999996,
+              "unit_and_denominator_setup": 0.036485000000000004,
+              "universe_witness": 9.143008
+            },
+            "post_parse_compute_ms": 127.606439,
+            "preparation_ms": 0.149836,
+            "publication_ms": 0.201385,
+            "serialization_ms": 0.286433
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 62.476576,
+            "rss_kib": 31708
+          },
+          {
+            "process_ms": 65.242683,
+            "rss_kib": 35684
+          },
+          {
+            "process_ms": 70.052368,
+            "rss_kib": 30296
+          },
+          {
+            "process_ms": 64.650299,
+            "rss_kib": 35756
+          },
+          {
+            "process_ms": 52.800964,
+            "rss_kib": 33080
+          }
+        ]
+      },
+      "states": {
+        "false": 53936
+      },
+      "verified_result_sha256": "f17d1c61bcaf0f2d18688afde3229a859c211d267a2907c23cfbe3956e006066"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "same_observation",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=any unique {A | B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 131.272366,
+          "rss_kib": 27496,
+          "execution_ms": 118.26990900000001,
+          "post_parse_compute_ms": 118.64806,
+          "preparation_ms": 0.14418699999999998,
+          "publication_ms": 0.16999699999999998,
+          "serialization_ms": 0.190067
+        },
+        "after": {
+          "process_ms": 142.65654,
+          "rss_kib": 40708,
+          "execution_ms": 130.356023,
+          "post_parse_compute_ms": 130.75794900000002,
+          "preparation_ms": 0.134212,
+          "publication_ms": 0.166852,
+          "serialization_ms": 0.204459
+        },
+        "builtin": {
+          "process_ms": 62.500553,
+          "rss_kib": 32124
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.002755,
+          "chunk_read_decode_attach": 20.873875,
+          "evaluate_and_aggregate": 73.003175,
+          "finalize_sort_project": 0.01951,
+          "preflight_planning": 3.143838,
+          "unit_and_denominator_setup": 0.013981,
+          "universe_witness": 9.019351
+        },
+        "after": {
+          "archive_setup": 2.715581,
+          "chunk_read_decode_attach": 22.120548,
+          "evaluate_and_aggregate": 84.034054,
+          "finalize_sort_project": 0.017417,
+          "preflight_planning": 3.0537419999999997,
+          "unit_and_denominator_setup": 0.021331999999999997,
+          "universe_witness": 9.516963
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 133.530517,
+            "rss_kib": 27496,
+            "allocator": "system",
+            "execution_ms": 120.00563,
+            "phases_ms": {
+              "archive_setup": 3.002755,
+              "chunk_read_decode_attach": 16.575063,
+              "evaluate_and_aggregate": 75.329437,
+              "finalize_sort_project": 0.01951,
+              "preflight_planning": 7.597834000000001,
+              "unit_and_denominator_setup": 0.013741,
+              "universe_witness": 8.521851
+            },
+            "post_parse_compute_ms": 120.380346,
+            "preparation_ms": 0.149626,
+            "publication_ms": 0.16999699999999998,
+            "serialization_ms": 0.196607
+          },
+          {
+            "process_ms": 133.331416,
+            "rss_kib": 26952,
+            "allocator": "system",
+            "execution_ms": 118.988123,
+            "phases_ms": {
+              "archive_setup": 3.270439,
+              "chunk_read_decode_attach": 20.271335,
+              "evaluate_and_aggregate": 74.275295,
+              "finalize_sort_project": 0.017546000000000003,
+              "preflight_planning": 3.698996,
+              "unit_and_denominator_setup": 0.030907,
+              "universe_witness": 9.019351
+            },
+            "post_parse_compute_ms": 119.347126,
+            "preparation_ms": 0.148254,
+            "publication_ms": 0.180082,
+            "serialization_ms": 0.181053
+          },
+          {
+            "process_ms": 131.006504,
+            "rss_kib": 27524,
+            "allocator": "system",
+            "execution_ms": 114.72555700000001,
+            "phases_ms": {
+              "archive_setup": 3.034674,
+              "chunk_read_decode_attach": 23.427321,
+              "evaluate_and_aggregate": 67.468636,
+              "finalize_sort_project": 0.017937,
+              "preflight_planning": 3.143838,
+              "unit_and_denominator_setup": 0.014863,
+              "universe_witness": 9.66733
+            },
+            "post_parse_compute_ms": 115.073501,
+            "preparation_ms": 0.14418699999999998,
+            "publication_ms": 0.160953,
+            "serialization_ms": 0.177658
+          },
+          {
+            "process_ms": 129.358685,
+            "rss_kib": 27428,
+            "allocator": "system",
+            "execution_ms": 116.741471,
+            "phases_ms": {
+              "archive_setup": 2.8162830000000003,
+              "chunk_read_decode_attach": 22.455994999999998,
+              "evaluate_and_aggregate": 71.16570899999999,
+              "finalize_sort_project": 0.021903,
+              "preflight_planning": 3.0917190000000003,
+              "unit_and_denominator_setup": 0.013981,
+              "universe_witness": 8.461619
+            },
+            "post_parse_compute_ms": 117.097718,
+            "preparation_ms": 0.13689600000000002,
+            "publication_ms": 0.168785,
+            "serialization_ms": 0.190067
+          },
+          {
+            "process_ms": 131.272366,
+            "rss_kib": 28496,
+            "allocator": "system",
+            "execution_ms": 118.26990900000001,
+            "phases_ms": {
+              "archive_setup": 2.924958,
+              "chunk_read_decode_attach": 20.873875,
+              "evaluate_and_aggregate": 73.003175,
+              "finalize_sort_project": 0.019991,
+              "preflight_planning": 3.129336,
+              "unit_and_denominator_setup": 0.012579,
+              "universe_witness": 9.462610999999999
+            },
+            "post_parse_compute_ms": 118.64806,
+            "preparation_ms": 0.122886,
+            "publication_ms": 0.17236,
+            "serialization_ms": 0.22547999999999999
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 154.328337,
+            "rss_kib": 40736,
+            "allocator": "system",
+            "execution_ms": 140.050974,
+            "phases_ms": {
+              "archive_setup": 2.961132,
+              "chunk_read_decode_attach": 22.120548,
+              "evaluate_and_aggregate": 90.413709,
+              "finalize_sort_project": 0.018959,
+              "preflight_planning": 3.0537419999999997,
+              "unit_and_denominator_setup": 0.032359,
+              "universe_witness": 13.018952
+            },
+            "post_parse_compute_ms": 140.440984,
+            "preparation_ms": 0.136056,
+            "publication_ms": 0.162725,
+            "serialization_ms": 0.221064
+          },
+          {
+            "process_ms": 137.132337,
+            "rss_kib": 34796,
+            "allocator": "system",
+            "execution_ms": 124.910327,
+            "phases_ms": {
+              "archive_setup": 2.715581,
+              "chunk_read_decode_attach": 18.591338,
+              "evaluate_and_aggregate": 83.575521,
+              "finalize_sort_project": 0.017417,
+              "preflight_planning": 2.892678,
+              "unit_and_denominator_setup": 0.015602999999999999,
+              "universe_witness": 9.516963
+            },
+            "post_parse_compute_ms": 125.27054100000001,
+            "preparation_ms": 0.13241899999999998,
+            "publication_ms": 0.17071799999999998,
+            "serialization_ms": 0.19882
+          },
+          {
+            "process_ms": 136.694655,
+            "rss_kib": 40708,
+            "allocator": "system",
+            "execution_ms": 123.41492,
+            "phases_ms": {
+              "archive_setup": 2.591484,
+              "chunk_read_decode_attach": 24.504588000000002,
+              "evaluate_and_aggregate": 77.088644,
+              "finalize_sort_project": 0.015814,
+              "preflight_planning": 2.988734,
+              "unit_and_denominator_setup": 0.021331999999999997,
+              "universe_witness": 9.085801
+            },
+            "post_parse_compute_ms": 123.77645600000001,
+            "preparation_ms": 0.128845,
+            "publication_ms": 0.155294,
+            "serialization_ms": 0.204459
+          },
+          {
+            "process_ms": 142.65654,
+            "rss_kib": 37672,
+            "allocator": "system",
+            "execution_ms": 130.356023,
+            "phases_ms": {
+              "archive_setup": 2.834982,
+              "chunk_read_decode_attach": 22.64505,
+              "evaluate_and_aggregate": 84.034054,
+              "finalize_sort_project": 0.016795,
+              "preflight_planning": 3.056456,
+              "unit_and_denominator_setup": 0.014151,
+              "universe_witness": 9.56774
+            },
+            "post_parse_compute_ms": 130.75794900000002,
+            "preparation_ms": 0.134212,
+            "publication_ms": 0.17831999999999998,
+            "serialization_ms": 0.234814
+          },
+          {
+            "process_ms": 153.280103,
+            "rss_kib": 41588,
+            "allocator": "system",
+            "execution_ms": 135.645811,
+            "phases_ms": {
+              "archive_setup": 2.707349,
+              "chunk_read_decode_attach": 17.337263,
+              "evaluate_and_aggregate": 95.727694,
+              "finalize_sort_project": 0.017536,
+              "preflight_planning": 3.19802,
+              "unit_and_denominator_setup": 0.025899000000000002,
+              "universe_witness": 9.349851
+            },
+            "post_parse_compute_ms": 136.02052700000002,
+            "preparation_ms": 0.14482899999999999,
+            "publication_ms": 0.166852,
+            "serialization_ms": 0.201063
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 54.050931,
+            "rss_kib": 34084
+          },
+          {
+            "process_ms": 69.317918,
+            "rss_kib": 29788
+          },
+          {
+            "process_ms": 71.361115,
+            "rss_kib": 28244
+          },
+          {
+            "process_ms": 61.011644,
+            "rss_kib": 32124
+          },
+          {
+            "process_ms": 62.500553,
+            "rss_kib": 32864
+          }
+        ]
+      },
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "verified_result_sha256": "25a8ff50083a416815e59bde6c5157c13270dc26ac37449f24452317cb3a145d"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "universal",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> where any stored {overlaps(U)} |> derive {q=nonempty(unique) & all unique {A | B}} |> tally {q}",
+      "median": {
+        "before": {
+          "process_ms": 127.316001,
+          "rss_kib": 27092,
+          "execution_ms": 114.054031,
+          "post_parse_compute_ms": 114.42372,
+          "preparation_ms": 0.144708,
+          "publication_ms": 0.167534,
+          "serialization_ms": 0.204389
+        },
+        "after": {
+          "process_ms": 156.43591,
+          "rss_kib": 39916,
+          "execution_ms": 138.702888,
+          "post_parse_compute_ms": 139.27442200000002,
+          "preparation_ms": 0.134112,
+          "publication_ms": 0.17146899999999998,
+          "serialization_ms": 0.36779500000000004
+        },
+        "builtin": {
+          "process_ms": 60.925704,
+          "rss_kib": 31888
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9526790000000003,
+          "chunk_read_decode_attach": 16.856688000000002,
+          "evaluate_and_aggregate": 73.512043,
+          "finalize_sort_project": 0.019519,
+          "preflight_planning": 3.459945,
+          "unit_and_denominator_setup": 0.014362000000000002,
+          "universe_witness": 9.154575999999999
+        },
+        "after": {
+          "archive_setup": 2.8261380000000003,
+          "chunk_read_decode_attach": 16.829898,
+          "evaluate_and_aggregate": 91.75381300000001,
+          "finalize_sort_project": 0.017897000000000003,
+          "preflight_planning": 3.1593609999999996,
+          "unit_and_denominator_setup": 0.024417,
+          "universe_witness": 9.523193
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 125.37551,
+            "rss_kib": 27000,
+            "allocator": "system",
+            "execution_ms": 114.037748,
+            "phases_ms": {
+              "archive_setup": 2.9526790000000003,
+              "chunk_read_decode_attach": 16.856688000000002,
+              "evaluate_and_aggregate": 71.65223399999999,
+              "finalize_sort_project": 0.021141999999999998,
+              "preflight_planning": 3.168254,
+              "unit_and_denominator_setup": 0.013661,
+              "universe_witness": 8.909155
+            },
+            "post_parse_compute_ms": 114.396048,
+            "preparation_ms": 0.13815799999999998,
+            "publication_ms": 0.167443,
+            "serialization_ms": 0.19210000000000002
+          },
+          {
+            "process_ms": 126.778629,
+            "rss_kib": 27492,
+            "allocator": "system",
+            "execution_ms": 114.054031,
+            "phases_ms": {
+              "archive_setup": 2.824546,
+              "chunk_read_decode_attach": 16.536455,
+              "evaluate_and_aggregate": 73.512043,
+              "finalize_sort_project": 0.019519,
+              "preflight_planning": 3.151179,
+              "unit_and_denominator_setup": 0.01312,
+              "universe_witness": 8.61436
+            },
+            "post_parse_compute_ms": 114.42372,
+            "preparation_ms": 0.14022099999999998,
+            "publication_ms": 0.167534,
+            "serialization_ms": 0.199672
+          },
+          {
+            "process_ms": 132.980185,
+            "rss_kib": 27092,
+            "allocator": "system",
+            "execution_ms": 119.192863,
+            "phases_ms": {
+              "archive_setup": 2.898367,
+              "chunk_read_decode_attach": 16.957760999999998,
+              "evaluate_and_aggregate": 76.178159,
+              "finalize_sort_project": 0.0198,
+              "preflight_planning": 3.8164029999999998,
+              "unit_and_denominator_setup": 0.014362000000000002,
+              "universe_witness": 9.163218
+            },
+            "post_parse_compute_ms": 119.587319,
+            "preparation_ms": 0.156697,
+            "publication_ms": 0.184779,
+            "serialization_ms": 0.210077
+          },
+          {
+            "process_ms": 127.316001,
+            "rss_kib": 27500,
+            "allocator": "system",
+            "execution_ms": 113.811135,
+            "phases_ms": {
+              "archive_setup": 3.3768700000000003,
+              "chunk_read_decode_attach": 16.834335,
+              "evaluate_and_aggregate": 72.608658,
+              "finalize_sort_project": 0.018248,
+              "preflight_planning": 4.0971779999999995,
+              "unit_and_denominator_setup": 0.027602,
+              "universe_witness": 9.154575999999999
+            },
+            "post_parse_compute_ms": 114.194033,
+            "preparation_ms": 0.144708,
+            "publication_ms": 0.16711199999999998,
+            "serialization_ms": 0.204389
+          },
+          {
+            "process_ms": 136.383566,
+            "rss_kib": 26824,
+            "allocator": "system",
+            "execution_ms": 122.919741,
+            "phases_ms": {
+              "archive_setup": 3.234215,
+              "chunk_read_decode_attach": 17.510685000000002,
+              "evaluate_and_aggregate": 80.040162,
+              "finalize_sort_project": 0.017527,
+              "preflight_planning": 3.459945,
+              "unit_and_denominator_setup": 0.014672,
+              "universe_witness": 9.293506
+            },
+            "post_parse_compute_ms": 123.317963,
+            "preparation_ms": 0.15847,
+            "publication_ms": 0.188625,
+            "serialization_ms": 0.206622
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 142.478491,
+            "rss_kib": 41484,
+            "allocator": "system",
+            "execution_ms": 129.37094499999998,
+            "phases_ms": {
+              "archive_setup": 2.9591589999999997,
+              "chunk_read_decode_attach": 15.187057000000001,
+              "evaluate_and_aggregate": 90.576824,
+              "finalize_sort_project": 0.019169,
+              "preflight_planning": 3.1593609999999996,
+              "unit_and_denominator_setup": 0.037446,
+              "universe_witness": 9.523193
+            },
+            "post_parse_compute_ms": 129.955097,
+            "preparation_ms": 0.143316,
+            "publication_ms": 0.17839,
+            "serialization_ms": 0.407065
+          },
+          {
+            "process_ms": 151.606066,
+            "rss_kib": 39916,
+            "allocator": "system",
+            "execution_ms": 133.447962,
+            "phases_ms": {
+              "archive_setup": 2.79408,
+              "chunk_read_decode_attach": 15.248339,
+              "evaluate_and_aggregate": 91.75381300000001,
+              "finalize_sort_project": 0.017096,
+              "preflight_planning": 2.9701459999999997,
+              "unit_and_denominator_setup": 0.02602,
+              "universe_witness": 12.71281
+            },
+            "post_parse_compute_ms": 133.859763,
+            "preparation_ms": 0.133621,
+            "publication_ms": 0.163597,
+            "serialization_ms": 0.245331
+          },
+          {
+            "process_ms": 160.202839,
+            "rss_kib": 39860,
+            "allocator": "system",
+            "execution_ms": 143.05042400000002,
+            "phases_ms": {
+              "archive_setup": 2.8261380000000003,
+              "chunk_read_decode_attach": 16.829898,
+              "evaluate_and_aggregate": 102.092657,
+              "finalize_sort_project": 0.017897000000000003,
+              "preflight_planning": 3.8542210000000003,
+              "unit_and_denominator_setup": 0.024077,
+              "universe_witness": 8.747121
+            },
+            "post_parse_compute_ms": 143.448185,
+            "preparation_ms": 0.134112,
+            "publication_ms": 0.17203,
+            "serialization_ms": 0.231189
+          },
+          {
+            "process_ms": 159.531345,
+            "rss_kib": 42600,
+            "allocator": "system",
+            "execution_ms": 145.72818900000001,
+            "phases_ms": {
+              "archive_setup": 3.007532,
+              "chunk_read_decode_attach": 23.308401999999997,
+              "evaluate_and_aggregate": 99.62678199999999,
+              "finalize_sort_project": 0.020420999999999998,
+              "preflight_planning": 3.367637,
+              "unit_and_denominator_setup": 0.012799000000000001,
+              "universe_witness": 9.625207
+            },
+            "post_parse_compute_ms": 146.25829900000002,
+            "preparation_ms": 0.130908,
+            "publication_ms": 0.17146899999999998,
+            "serialization_ms": 0.36779500000000004
+          },
+          {
+            "process_ms": 156.43591,
+            "rss_kib": 37988,
+            "allocator": "system",
+            "execution_ms": 138.702888,
+            "phases_ms": {
+              "archive_setup": 2.815592,
+              "chunk_read_decode_attach": 26.33327,
+              "evaluate_and_aggregate": 90.649565,
+              "finalize_sort_project": 0.015322999999999998,
+              "preflight_planning": 3.111188,
+              "unit_and_denominator_setup": 0.024417,
+              "universe_witness": 9.190010000000001
+            },
+            "post_parse_compute_ms": 139.27442200000002,
+            "preparation_ms": 0.149837,
+            "publication_ms": 0.15668600000000002,
+            "serialization_ms": 0.392232
+          }
+        ],
+        "builtin": [
+          {
+            "process_ms": 67.805534,
+            "rss_kib": 31888
+          },
+          {
+            "process_ms": 60.908918,
+            "rss_kib": 29504
+          },
+          {
+            "process_ms": 58.725671,
+            "rss_kib": 30524
+          },
+          {
+            "process_ms": 64.443747,
+            "rss_kib": 32636
+          },
+          {
+            "process_ms": 60.925704,
+            "rss_kib": 35732
+          }
+        ]
+      },
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "verified_result_sha256": "3ff6b5bec06c33e9cc2787e6f74926723d10421ca75214f3658dd0267ac802ca"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "geometry_tally",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {a=any unique {overlaps(R,min:12bp)},b=any unique {B},joint=any unique {overlaps(R,min:12bp) & B}} |> tally {a,b,joint} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 153.032059,
+          "rss_kib": 38300,
+          "execution_ms": 139.742038,
+          "post_parse_compute_ms": 140.150134,
+          "preparation_ms": 0.13271999999999998,
+          "publication_ms": 0.16529000000000002,
+          "serialization_ms": 0.22112400000000001
+        },
+        "after": {
+          "process_ms": 171.073015,
+          "rss_kib": 47476,
+          "execution_ms": 156.69371900000002,
+          "post_parse_compute_ms": 157.204891,
+          "preparation_ms": 0.133191,
+          "publication_ms": 0.16516999999999998,
+          "serialization_ms": 0.342567
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9858089999999997,
+          "chunk_read_decode_attach": 20.376454,
+          "evaluate_and_aggregate": 90.837238,
+          "finalize_sort_project": 0.044437000000000004,
+          "preflight_planning": 3.239412,
+          "unit_and_denominator_setup": 0.034502000000000005,
+          "universe_witness": 8.549552
+        },
+        "after": {
+          "archive_setup": 2.819458,
+          "chunk_read_decode_attach": 25.340752000000002,
+          "evaluate_and_aggregate": 102.840086,
+          "finalize_sort_project": 0.036594999999999996,
+          "preflight_planning": 3.306333,
+          "unit_and_denominator_setup": 0.032159,
+          "universe_witness": 9.292684000000001
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 151.516169,
+            "rss_kib": 38616,
+            "allocator": "system",
+            "execution_ms": 134.848417,
+            "phases_ms": {
+              "archive_setup": 2.778867,
+              "chunk_read_decode_attach": 15.307459000000001,
+              "evaluate_and_aggregate": 90.837238,
+              "finalize_sort_project": 0.06638,
+              "preflight_planning": 3.3057920000000003,
+              "unit_and_denominator_setup": 0.039039,
+              "universe_witness": 9.32316
+            },
+            "post_parse_compute_ms": 135.237955,
+            "preparation_ms": 0.130958,
+            "publication_ms": 0.169816,
+            "serialization_ms": 0.22112400000000001
+          },
+          {
+            "process_ms": 160.371714,
+            "rss_kib": 38248,
+            "allocator": "system",
+            "execution_ms": 147.806037,
+            "phases_ms": {
+              "archive_setup": 3.1280140000000003,
+              "chunk_read_decode_attach": 28.668287,
+              "evaluate_and_aggregate": 90.57122700000001,
+              "finalize_sort_project": 0.043866999999999996,
+              "preflight_planning": 3.225261,
+              "unit_and_denominator_setup": 0.034873,
+              "universe_witness": 9.148316999999999
+            },
+            "post_parse_compute_ms": 148.19924,
+            "preparation_ms": 0.127953,
+            "publication_ms": 0.15606499999999998,
+            "serialization_ms": 0.230648
+          },
+          {
+            "process_ms": 153.032059,
+            "rss_kib": 37768,
+            "allocator": "system",
+            "execution_ms": 139.742038,
+            "phases_ms": {
+              "archive_setup": 3.0186290000000002,
+              "chunk_read_decode_attach": 20.376454,
+              "evaluate_and_aggregate": 90.92536199999999,
+              "finalize_sort_project": 0.044437000000000004,
+              "preflight_planning": 3.239412,
+              "unit_and_denominator_setup": 0.01961,
+              "universe_witness": 8.549552
+            },
+            "post_parse_compute_ms": 140.150134,
+            "preparation_ms": 0.149596,
+            "publication_ms": 0.149746,
+            "serialization_ms": 0.204298
+          },
+          {
+            "process_ms": 156.524493,
+            "rss_kib": 38300,
+            "allocator": "system",
+            "execution_ms": 142.605833,
+            "phases_ms": {
+              "archive_setup": 2.9858089999999997,
+              "chunk_read_decode_attach": 22.980256,
+              "evaluate_and_aggregate": 92.624397,
+              "finalize_sort_project": 0.041252,
+              "preflight_planning": 3.530582,
+              "unit_and_denominator_setup": 0.034502000000000005,
+              "universe_witness": 7.94569
+            },
+            "post_parse_compute_ms": 142.99141500000002,
+            "preparation_ms": 0.13378199999999998,
+            "publication_ms": 0.172571,
+            "serialization_ms": 0.219581
+          },
+          {
+            "process_ms": 149.869914,
+            "rss_kib": 39208,
+            "allocator": "system",
+            "execution_ms": 135.875448,
+            "phases_ms": {
+              "archive_setup": 2.769072,
+              "chunk_read_decode_attach": 20.166437,
+              "evaluate_and_aggregate": 88.484105,
+              "finalize_sort_project": 0.045309,
+              "preflight_planning": 3.0048179999999998,
+              "unit_and_denominator_setup": 0.034262,
+              "universe_witness": 8.255327999999999
+            },
+            "post_parse_compute_ms": 136.29406999999998,
+            "preparation_ms": 0.13271999999999998,
+            "publication_ms": 0.16529000000000002,
+            "serialization_ms": 0.24627200000000002
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 172.597599,
+            "rss_kib": 49264,
+            "allocator": "system",
+            "execution_ms": 157.598425,
+            "phases_ms": {
+              "archive_setup": 2.819458,
+              "chunk_read_decode_attach": 28.343146,
+              "evaluate_and_aggregate": 102.840086,
+              "finalize_sort_project": 0.036525,
+              "preflight_planning": 3.210389,
+              "unit_and_denominator_setup": 0.032159,
+              "universe_witness": 9.292684000000001
+            },
+            "post_parse_compute_ms": 158.18531099999998,
+            "preparation_ms": 0.133191,
+            "publication_ms": 0.16516999999999998,
+            "serialization_ms": 0.415587
+          },
+          {
+            "process_ms": 178.141271,
+            "rss_kib": 46408,
+            "allocator": "system",
+            "execution_ms": 162.418164,
+            "phases_ms": {
+              "archive_setup": 2.746278,
+              "chunk_read_decode_attach": 25.340752000000002,
+              "evaluate_and_aggregate": 108.92022899999999,
+              "finalize_sort_project": 0.036594999999999996,
+              "preflight_planning": 3.42971,
+              "unit_and_denominator_setup": 0.020611,
+              "universe_witness": 9.516963
+            },
+            "post_parse_compute_ms": 162.948616,
+            "preparation_ms": 0.13269,
+            "publication_ms": 0.190268,
+            "serialization_ms": 0.35419500000000004
+          },
+          {
+            "process_ms": 163.89178,
+            "rss_kib": 46444,
+            "allocator": "system",
+            "execution_ms": 151.38854700000002,
+            "phases_ms": {
+              "archive_setup": 2.903875,
+              "chunk_read_decode_attach": 20.866955,
+              "evaluate_and_aggregate": 102.819124,
+              "finalize_sort_project": 0.039319,
+              "preflight_planning": 3.3322719999999997,
+              "unit_and_denominator_setup": 0.038478,
+              "universe_witness": 9.552827
+            },
+            "post_parse_compute_ms": 151.825297,
+            "preparation_ms": 0.139681,
+            "publication_ms": 0.164148,
+            "serialization_ms": 0.257419
+          },
+          {
+            "process_ms": 171.073015,
+            "rss_kib": 47476,
+            "allocator": "system",
+            "execution_ms": 156.69371900000002,
+            "phases_ms": {
+              "archive_setup": 2.8184270000000002,
+              "chunk_read_decode_attach": 21.184644,
+              "evaluate_and_aggregate": 108.63000000000001,
+              "finalize_sort_project": 0.035704,
+              "preflight_planning": 3.2236890000000002,
+              "unit_and_denominator_setup": 0.043755999999999996,
+              "universe_witness": 9.159203
+            },
+            "post_parse_compute_ms": 157.204891,
+            "preparation_ms": 0.129996,
+            "publication_ms": 0.16042199999999998,
+            "serialization_ms": 0.342567
+          },
+          {
+            "process_ms": 169.40033,
+            "rss_kib": 48456,
+            "allocator": "system",
+            "execution_ms": 154.67154499999998,
+            "phases_ms": {
+              "archive_setup": 2.962103,
+              "chunk_read_decode_attach": 25.847397,
+              "evaluate_and_aggregate": 101.898224,
+              "finalize_sort_project": 0.036686,
+              "preflight_planning": 3.306333,
+              "unit_and_denominator_setup": 0.030897,
+              "universe_witness": 9.234988
+            },
+            "post_parse_compute_ms": 155.18631299999998,
+            "preparation_ms": 0.136987,
+            "publication_ms": 0.17304199999999997,
+            "serialization_ms": 0.33761
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "90fc89e06050bf79c1260b2f3e59559e3b88afc125ff3a41e400b7123ee47c74"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "truth_read_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {q=any unique {B}} |> summarize {n=count(),t=count_true(q),reads=sum(reads.total)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 130.778731,
+          "rss_kib": 38276,
+          "execution_ms": 118.23462599999999,
+          "post_parse_compute_ms": 118.613468,
+          "preparation_ms": 0.140062,
+          "publication_ms": 0.169736,
+          "serialization_ms": 0.196296
+        },
+        "after": {
+          "process_ms": 139.493372,
+          "rss_kib": 47140,
+          "execution_ms": 124.795494,
+          "post_parse_compute_ms": 125.23915399999998,
+          "preparation_ms": 0.12589,
+          "publication_ms": 0.164589,
+          "serialization_ms": 0.272472
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.991929,
+          "chunk_read_decode_attach": 19.875617000000002,
+          "evaluate_and_aggregate": 67.229795,
+          "finalize_sort_project": 0.060131,
+          "preflight_planning": 3.3389119999999997,
+          "unit_and_denominator_setup": 0.036966,
+          "universe_witness": 9.744005999999999
+        },
+        "after": {
+          "archive_setup": 2.856394,
+          "chunk_read_decode_attach": 23.900997,
+          "evaluate_and_aggregate": 74.309488,
+          "finalize_sort_project": 0.031868,
+          "preflight_planning": 3.226343,
+          "unit_and_denominator_setup": 0.021052,
+          "universe_witness": 9.475301
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 133.721535,
+            "rss_kib": 38212,
+            "allocator": "system",
+            "execution_ms": 120.116057,
+            "phases_ms": {
+              "archive_setup": 3.098179,
+              "chunk_read_decode_attach": 19.875617000000002,
+              "evaluate_and_aggregate": 67.53112999999999,
+              "finalize_sort_project": 0.06638,
+              "preflight_planning": 3.2900080000000003,
+              "unit_and_denominator_setup": 0.048032,
+              "universe_witness": 12.188256999999998
+            },
+            "post_parse_compute_ms": 120.47566,
+            "preparation_ms": 0.140062,
+            "publication_ms": 0.161494,
+            "serialization_ms": 0.183497
+          },
+          {
+            "process_ms": 130.778731,
+            "rss_kib": 38820,
+            "allocator": "system",
+            "execution_ms": 118.23462599999999,
+            "phases_ms": {
+              "archive_setup": 2.991929,
+              "chunk_read_decode_attach": 20.796768,
+              "evaluate_and_aggregate": 67.56926800000001,
+              "finalize_sort_project": 0.060131,
+              "preflight_planning": 3.129115,
+              "unit_and_denominator_setup": 0.036966,
+              "universe_witness": 9.001544
+            },
+            "post_parse_compute_ms": 118.613468,
+            "preparation_ms": 0.123056,
+            "publication_ms": 0.168845,
+            "serialization_ms": 0.221244
+          },
+          {
+            "process_ms": 136.304456,
+            "rss_kib": 38248,
+            "allocator": "system",
+            "execution_ms": 122.757136,
+            "phases_ms": {
+              "archive_setup": 3.1262109999999996,
+              "chunk_read_decode_attach": 27.360151,
+              "evaluate_and_aggregate": 67.229795,
+              "finalize_sort_project": 0.038198,
+              "preflight_planning": 3.3389119999999997,
+              "unit_and_denominator_setup": 0.04612,
+              "universe_witness": 8.926882
+            },
+            "post_parse_compute_ms": 123.112543,
+            "preparation_ms": 0.130888,
+            "publication_ms": 0.174964,
+            "serialization_ms": 0.196296
+          },
+          {
+            "process_ms": 125.629855,
+            "rss_kib": 38276,
+            "allocator": "system",
+            "execution_ms": 112.29728899999999,
+            "phases_ms": {
+              "archive_setup": 2.930406,
+              "chunk_read_decode_attach": 16.701814,
+              "evaluate_and_aggregate": 65.235503,
+              "finalize_sort_project": 0.043355,
+              "preflight_planning": 3.7409499999999998,
+              "unit_and_denominator_setup": 0.03336,
+              "universe_witness": 9.744005999999999
+            },
+            "post_parse_compute_ms": 112.655219,
+            "preparation_ms": 0.140332,
+            "publication_ms": 0.169736,
+            "serialization_ms": 0.189887
+          },
+          {
+            "process_ms": 124.935947,
+            "rss_kib": 39808,
+            "allocator": "system",
+            "execution_ms": 112.55647,
+            "phases_ms": {
+              "archive_setup": 2.906539,
+              "chunk_read_decode_attach": 16.398426,
+              "evaluate_and_aggregate": 65.999988,
+              "finalize_sort_project": 0.069595,
+              "preflight_planning": 3.697945,
+              "unit_and_denominator_setup": 0.035022,
+              "universe_witness": 9.751027
+            },
+            "post_parse_compute_ms": 112.925288,
+            "preparation_ms": 0.143848,
+            "publication_ms": 0.189867,
+            "serialization_ms": 0.197418
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 139.493372,
+            "rss_kib": 46132,
+            "allocator": "system",
+            "execution_ms": 124.795494,
+            "phases_ms": {
+              "archive_setup": 2.856394,
+              "chunk_read_decode_attach": 23.900997,
+              "evaluate_and_aggregate": 74.309488,
+              "finalize_sort_project": 0.031868,
+              "preflight_planning": 3.226343,
+              "unit_and_denominator_setup": 0.021052,
+              "universe_witness": 9.443261999999999
+            },
+            "post_parse_compute_ms": 125.23915399999998,
+            "preparation_ms": 0.123707,
+            "publication_ms": 0.152731,
+            "serialization_ms": 0.272472
+          },
+          {
+            "process_ms": 140.625461,
+            "rss_kib": 47000,
+            "allocator": "system",
+            "execution_ms": 125.511536,
+            "phases_ms": {
+              "archive_setup": 2.859558,
+              "chunk_read_decode_attach": 22.613543,
+              "evaluate_and_aggregate": 75.849133,
+              "finalize_sort_project": 0.039099,
+              "preflight_planning": 3.0599920000000003,
+              "unit_and_denominator_setup": 0.020822,
+              "universe_witness": 9.475301
+            },
+            "post_parse_compute_ms": 125.892741,
+            "preparation_ms": 0.135905,
+            "publication_ms": 0.164589,
+            "serialization_ms": 0.213252
+          },
+          {
+            "process_ms": 130.084001,
+            "rss_kib": 48032,
+            "allocator": "system",
+            "execution_ms": 115.440055,
+            "phases_ms": {
+              "archive_setup": 2.642321,
+              "chunk_read_decode_attach": 20.443195,
+              "evaluate_and_aggregate": 68.369145,
+              "finalize_sort_project": 0.028051999999999997,
+              "preflight_planning": 3.6125160000000003,
+              "unit_and_denominator_setup": 0.020520999999999998,
+              "universe_witness": 9.333867
+            },
+            "post_parse_compute_ms": 115.791196,
+            "preparation_ms": 0.127974,
+            "publication_ms": 0.18909499999999999,
+            "serialization_ms": 0.194564
+          },
+          {
+            "process_ms": 144.061491,
+            "rss_kib": 47940,
+            "allocator": "system",
+            "execution_ms": 128.491196,
+            "phases_ms": {
+              "archive_setup": 2.770114,
+              "chunk_read_decode_attach": 25.660404,
+              "evaluate_and_aggregate": 74.731935,
+              "finalize_sort_project": 0.041994,
+              "preflight_planning": 3.486556,
+              "unit_and_denominator_setup": 0.030386,
+              "universe_witness": 10.007353
+            },
+            "post_parse_compute_ms": 129.03028,
+            "preparation_ms": 0.123978,
+            "publication_ms": 0.16753300000000002,
+            "serialization_ms": 0.382368
+          },
+          {
+            "process_ms": 139.18753,
+            "rss_kib": 47140,
+            "allocator": "system",
+            "execution_ms": 124.0845,
+            "phases_ms": {
+              "archive_setup": 2.8988780000000003,
+              "chunk_read_decode_attach": 25.896681,
+              "evaluate_and_aggregate": 72.085428,
+              "finalize_sort_project": 0.031507,
+              "preflight_planning": 3.148205,
+              "unit_and_denominator_setup": 0.037737,
+              "universe_witness": 9.690595
+            },
+            "post_parse_compute_ms": 124.575492,
+            "preparation_ms": 0.12589,
+            "publication_ms": 0.16128299999999998,
+            "serialization_ms": 0.33752
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "27ba6a281e84e5093164ebe30b9668423c58fa1b1d5ba3c087a3112a762f1ef0"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "class_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.classes |> within U |> derive {q=any record {any unique {B}}} |> summarize {n=count(),t=count_true(q),reads=sum(reads.total)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 171.225767,
+          "rss_kib": 37960,
+          "execution_ms": 157.830275,
+          "post_parse_compute_ms": 158.173134,
+          "preparation_ms": 0.133081,
+          "publication_ms": 0.156477,
+          "serialization_ms": 0.207254
+        },
+        "after": {
+          "process_ms": 183.6032,
+          "rss_kib": 46928,
+          "execution_ms": 168.77927200000002,
+          "post_parse_compute_ms": 169.156051,
+          "preparation_ms": 0.129906,
+          "publication_ms": 0.176036,
+          "serialization_ms": 0.208855
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.885468,
+          "chunk_read_decode_attach": 20.179837,
+          "evaluate_and_aggregate": 70.47789,
+          "finalize_sort_project": 0.062154,
+          "preflight_planning": 3.288677,
+          "unit_and_denominator_setup": 14.574071,
+          "universe_witness": 23.847686
+        },
+        "after": {
+          "archive_setup": 2.8667190000000002,
+          "chunk_read_decode_attach": 20.587443,
+          "evaluate_and_aggregate": 80.006361,
+          "finalize_sort_project": 0.043105000000000004,
+          "preflight_planning": 3.161645,
+          "unit_and_denominator_setup": 14.409161000000001,
+          "universe_witness": 23.554523
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 171.225767,
+            "rss_kib": 38252,
+            "allocator": "system",
+            "execution_ms": 157.830275,
+            "phases_ms": {
+              "archive_setup": 2.885468,
+              "chunk_read_decode_attach": 22.597167,
+              "evaluate_and_aggregate": 68.34602100000001,
+              "finalize_sort_project": 0.057596999999999995,
+              "preflight_planning": 3.3919829999999997,
+              "unit_and_denominator_setup": 14.164702,
+              "universe_witness": 23.847686
+            },
+            "post_parse_compute_ms": 158.173134,
+            "preparation_ms": 0.13174899999999998,
+            "publication_ms": 0.153001,
+            "serialization_ms": 0.18087299999999998
+          },
+          {
+            "process_ms": 190.466154,
+            "rss_kib": 39020,
+            "allocator": "system",
+            "execution_ms": 176.57792,
+            "phases_ms": {
+              "archive_setup": 2.949194,
+              "chunk_read_decode_attach": 29.242173,
+              "evaluate_and_aggregate": 77.337611,
+              "finalize_sort_project": 0.058949,
+              "preflight_planning": 3.288677,
+              "unit_and_denominator_setup": 14.65916,
+              "universe_witness": 23.714816
+            },
+            "post_parse_compute_ms": 176.949411,
+            "preparation_ms": 0.13048700000000002,
+            "publication_ms": 0.156477,
+            "serialization_ms": 0.209897
+          },
+          {
+            "process_ms": 169.630096,
+            "rss_kib": 37960,
+            "allocator": "system",
+            "execution_ms": 157.467678,
+            "phases_ms": {
+              "archive_setup": 2.909144,
+              "chunk_read_decode_attach": 20.027387,
+              "evaluate_and_aggregate": 70.47789,
+              "finalize_sort_project": 0.062154,
+              "preflight_planning": 3.07937,
+              "unit_and_denominator_setup": 13.626859999999999,
+              "universe_witness": 24.221621
+            },
+            "post_parse_compute_ms": 157.846139,
+            "preparation_ms": 0.135484,
+            "publication_ms": 0.155064,
+            "serialization_ms": 0.207254
+          },
+          {
+            "process_ms": 182.247341,
+            "rss_kib": 37696,
+            "allocator": "system",
+            "execution_ms": 168.922618,
+            "phases_ms": {
+              "archive_setup": 2.843004,
+              "chunk_read_decode_attach": 20.179837,
+              "evaluate_and_aggregate": 75.955423,
+              "finalize_sort_project": 0.074503,
+              "preflight_planning": 3.790234,
+              "unit_and_denominator_setup": 15.346708000000001,
+              "universe_witness": 24.658531
+            },
+            "post_parse_compute_ms": 169.309753,
+            "preparation_ms": 0.133081,
+            "publication_ms": 0.187734,
+            "serialization_ms": 0.221304
+          },
+          {
+            "process_ms": 170.624739,
+            "rss_kib": 37564,
+            "allocator": "system",
+            "execution_ms": 157.21094,
+            "phases_ms": {
+              "archive_setup": 2.846208,
+              "chunk_read_decode_attach": 19.326278000000002,
+              "evaluate_and_aggregate": 69.82924,
+              "finalize_sort_project": 0.081604,
+              "preflight_planning": 3.1767369999999997,
+              "unit_and_denominator_setup": 14.574071,
+              "universe_witness": 22.726903
+            },
+            "post_parse_compute_ms": 157.55496,
+            "preparation_ms": 0.13807899999999998,
+            "publication_ms": 0.169586,
+            "serialization_ms": 0.176176
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 182.815259,
+            "rss_kib": 48076,
+            "allocator": "system",
+            "execution_ms": 168.77927200000002,
+            "phases_ms": {
+              "archive_setup": 2.609712,
+              "chunk_read_decode_attach": 19.435373,
+              "evaluate_and_aggregate": 82.803195,
+              "finalize_sort_project": 0.03978,
+              "preflight_planning": 3.161645,
+              "unit_and_denominator_setup": 14.269802,
+              "universe_witness": 23.554523
+            },
+            "post_parse_compute_ms": 169.156051,
+            "preparation_ms": 0.13881000000000002,
+            "publication_ms": 0.152491,
+            "serialization_ms": 0.208855
+          },
+          {
+            "process_ms": 191.676872,
+            "rss_kib": 46492,
+            "allocator": "system",
+            "execution_ms": 177.953407,
+            "phases_ms": {
+              "archive_setup": 2.8667190000000002,
+              "chunk_read_decode_attach": 26.265848000000002,
+              "evaluate_and_aggregate": 80.006361,
+              "finalize_sort_project": 0.04637,
+              "preflight_planning": 2.978508,
+              "unit_and_denominator_setup": 15.775615,
+              "universe_witness": 28.238238
+            },
+            "post_parse_compute_ms": 178.323706,
+            "preparation_ms": 0.13237000000000002,
+            "publication_ms": 0.319513,
+            "serialization_ms": 0.207754
+          },
+          {
+            "process_ms": 174.036171,
+            "rss_kib": 46928,
+            "allocator": "system",
+            "execution_ms": 159.25288400000002,
+            "phases_ms": {
+              "archive_setup": 3.2820470000000004,
+              "chunk_read_decode_attach": 15.488852000000001,
+              "evaluate_and_aggregate": 77.56618499999999,
+              "finalize_sort_project": 0.043105000000000004,
+              "preflight_planning": 3.288757,
+              "unit_and_denominator_setup": 14.380218,
+              "universe_witness": 23.269934
+            },
+            "post_parse_compute_ms": 159.608211,
+            "preparation_ms": 0.12627100000000002,
+            "publication_ms": 0.178079,
+            "serialization_ms": 0.199741
+          },
+          {
+            "process_ms": 188.605494,
+            "rss_kib": 46808,
+            "allocator": "system",
+            "execution_ms": 174.105275,
+            "phases_ms": {
+              "archive_setup": 3.0371270000000004,
+              "chunk_read_decode_attach": 23.775537,
+              "evaluate_and_aggregate": 82.972631,
+              "finalize_sort_project": 0.048744,
+              "preflight_planning": 3.180544,
+              "unit_and_denominator_setup": 15.036099,
+              "universe_witness": 23.232177
+            },
+            "post_parse_compute_ms": 174.472049,
+            "preparation_ms": 0.122765,
+            "publication_ms": 0.176036,
+            "serialization_ms": 0.212471
+          },
+          {
+            "process_ms": 183.6032,
+            "rss_kib": 53812,
+            "allocator": "system",
+            "execution_ms": 166.99781099999998,
+            "phases_ms": {
+              "archive_setup": 2.796824,
+              "chunk_read_decode_attach": 20.587443,
+              "evaluate_and_aggregate": 78.88013000000001,
+              "finalize_sort_project": 0.042103,
+              "preflight_planning": 2.986871,
+              "unit_and_denominator_setup": 14.409161000000001,
+              "universe_witness": 24.867296
+            },
+            "post_parse_compute_ms": 167.364465,
+            "preparation_ms": 0.129906,
+            "publication_ms": 0.162606,
+            "serialization_ms": 0.20893499999999998
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "63a977b9ff6b2bddc06396559503d6f61c984e565486a3c11fa99c6517bbef53"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "distinct_counts",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> summarize {cells=count_distinct(cell.id)} by {sample}",
+      "median": {
+        "before": {
+          "process_ms": 206.962409,
+          "rss_kib": 53372,
+          "execution_ms": 191.439044,
+          "post_parse_compute_ms": 191.789943,
+          "preparation_ms": 0.13581500000000002,
+          "publication_ms": 0.175715,
+          "serialization_ms": 0.17861
+        },
+        "after": {
+          "process_ms": 211.302012,
+          "rss_kib": 58480,
+          "execution_ms": 195.58204,
+          "post_parse_compute_ms": 195.920582,
+          "preparation_ms": 0.13383199999999998,
+          "publication_ms": 0.166852,
+          "serialization_ms": 0.179441
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 2.9055079999999998,
+          "chunk_read_decode_attach": 20.100226999999997,
+          "evaluate_and_aggregate": 120.650535,
+          "finalize_sort_project": 2.96601,
+          "preflight_planning": 3.2820869999999998,
+          "unit_and_denominator_setup": 0.040590999999999995,
+          "universe_witness": 8.913542
+        },
+        "after": {
+          "archive_setup": 3.015254,
+          "chunk_read_decode_attach": 16.057862,
+          "evaluate_and_aggregate": 123.92070299999999,
+          "finalize_sort_project": 2.924096,
+          "preflight_planning": 3.401667,
+          "unit_and_denominator_setup": 0.041183000000000004,
+          "universe_witness": 9.396121
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 206.962409,
+            "rss_kib": 54472,
+            "allocator": "system",
+            "execution_ms": 193.186944,
+            "phases_ms": {
+              "archive_setup": 2.7605,
+              "chunk_read_decode_attach": 20.305357,
+              "evaluate_and_aggregate": 120.650535,
+              "finalize_sort_project": 2.96601,
+              "preflight_planning": 2.984668,
+              "unit_and_denominator_setup": 0.035043000000000005,
+              "universe_witness": 9.123839
+            },
+            "post_parse_compute_ms": 193.513517,
+            "preparation_ms": 0.132771,
+            "publication_ms": 0.15867900000000001,
+            "serialization_ms": 0.17335199999999998
+          },
+          {
+            "process_ms": 221.062784,
+            "rss_kib": 53372,
+            "allocator": "system",
+            "execution_ms": 202.363773,
+            "phases_ms": {
+              "archive_setup": 2.9055079999999998,
+              "chunk_read_decode_attach": 20.100226999999997,
+              "evaluate_and_aggregate": 128.60022099999998,
+              "finalize_sort_project": 3.120854,
+              "preflight_planning": 3.088204,
+              "unit_and_denominator_setup": 0.04646,
+              "universe_witness": 9.438835
+            },
+            "post_parse_compute_ms": 202.70381700000002,
+            "preparation_ms": 0.136456,
+            "publication_ms": 0.175145,
+            "serialization_ms": 0.17861
+          },
+          {
+            "process_ms": 207.674173,
+            "rss_kib": 53248,
+            "allocator": "system",
+            "execution_ms": 191.439044,
+            "phases_ms": {
+              "archive_setup": 3.328106,
+              "chunk_read_decode_attach": 20.741696,
+              "evaluate_and_aggregate": 116.207514,
+              "finalize_sort_project": 3.089296,
+              "preflight_planning": 8.077439,
+              "unit_and_denominator_setup": 0.040590999999999995,
+              "universe_witness": 8.394637999999999
+            },
+            "post_parse_compute_ms": 191.789943,
+            "preparation_ms": 0.13581500000000002,
+            "publication_ms": 0.190728,
+            "serialization_ms": 0.18806399999999998
+          },
+          {
+            "process_ms": 206.928397,
+            "rss_kib": 53276,
+            "allocator": "system",
+            "execution_ms": 189.675651,
+            "phases_ms": {
+              "archive_setup": 3.338743,
+              "chunk_read_decode_attach": 16.929187,
+              "evaluate_and_aggregate": 124.140405,
+              "finalize_sort_project": 2.6049939999999996,
+              "preflight_planning": 3.9995810000000005,
+              "unit_and_denominator_setup": 0.050867,
+              "universe_witness": 8.913542
+            },
+            "post_parse_compute_ms": 189.99241899999998,
+            "preparation_ms": 0.14534,
+            "publication_ms": 0.18280600000000002,
+            "serialization_ms": 0.151489
+          },
+          {
+            "process_ms": 195.751166,
+            "rss_kib": 54028,
+            "allocator": "system",
+            "execution_ms": 181.073369,
+            "phases_ms": {
+              "archive_setup": 2.850756,
+              "chunk_read_decode_attach": 16.429083000000002,
+              "evaluate_and_aggregate": 116.465794,
+              "finalize_sort_project": 2.730794,
+              "preflight_planning": 3.2820869999999998,
+              "unit_and_denominator_setup": 0.040482000000000004,
+              "universe_witness": 8.545074999999999
+            },
+            "post_parse_compute_ms": 181.416046,
+            "preparation_ms": 0.128865,
+            "publication_ms": 0.175715,
+            "serialization_ms": 0.192521
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 211.562826,
+            "rss_kib": 61520,
+            "allocator": "system",
+            "execution_ms": 195.610264,
+            "phases_ms": {
+              "archive_setup": 3.260164,
+              "chunk_read_decode_attach": 16.057862,
+              "evaluate_and_aggregate": 123.92070299999999,
+              "finalize_sort_project": 3.194815,
+              "preflight_planning": 3.361988,
+              "unit_and_denominator_setup": 0.044267,
+              "universe_witness": 9.581871000000001
+            },
+            "post_parse_compute_ms": 195.955885,
+            "preparation_ms": 0.128684,
+            "publication_ms": 0.18970700000000001,
+            "serialization_ms": 0.193792
+          },
+          {
+            "process_ms": 199.93886,
+            "rss_kib": 60320,
+            "allocator": "system",
+            "execution_ms": 185.492833,
+            "phases_ms": {
+              "archive_setup": 2.567157,
+              "chunk_read_decode_attach": 15.142859999999999,
+              "evaluate_and_aggregate": 119.339494,
+              "finalize_sort_project": 2.763624,
+              "preflight_planning": 3.000411,
+              "unit_and_denominator_setup": 0.041183000000000004,
+              "universe_witness": 9.471694
+            },
+            "post_parse_compute_ms": 185.91128500000002,
+            "preparation_ms": 0.13239,
+            "publication_ms": 0.157418,
+            "serialization_ms": 0.179441
+          },
+          {
+            "process_ms": 211.302012,
+            "rss_kib": 54720,
+            "allocator": "system",
+            "execution_ms": 195.58204,
+            "phases_ms": {
+              "archive_setup": 3.015254,
+              "chunk_read_decode_attach": 20.819643,
+              "evaluate_and_aggregate": 124.128968,
+              "finalize_sort_project": 2.924096,
+              "preflight_planning": 3.401667,
+              "unit_and_denominator_setup": 0.036525,
+              "universe_witness": 9.396121
+            },
+            "post_parse_compute_ms": 195.920582,
+            "preparation_ms": 0.143116,
+            "publication_ms": 0.160342,
+            "serialization_ms": 0.164018
+          },
+          {
+            "process_ms": 197.324242,
+            "rss_kib": 58480,
+            "allocator": "system",
+            "execution_ms": 181.813918,
+            "phases_ms": {
+              "archive_setup": 2.861882,
+              "chunk_read_decode_attach": 20.832252,
+              "evaluate_and_aggregate": 109.972868,
+              "finalize_sort_project": 2.1125599999999998,
+              "preflight_planning": 7.286634,
+              "unit_and_denominator_setup": 0.037637,
+              "universe_witness": 9.135386
+            },
+            "post_parse_compute_ms": 182.132698,
+            "preparation_ms": 0.13383199999999998,
+            "publication_ms": 0.166852,
+            "serialization_ms": 0.160873
+          },
+          {
+            "process_ms": 237.222609,
+            "rss_kib": 57852,
+            "allocator": "system",
+            "execution_ms": 217.996482,
+            "phases_ms": {
+              "archive_setup": 3.447337,
+              "chunk_read_decode_attach": 14.932061,
+              "evaluate_and_aggregate": 146.17601399999998,
+              "finalize_sort_project": 3.692767,
+              "preflight_planning": 3.830555,
+              "unit_and_denominator_setup": 0.041683,
+              "universe_witness": 9.292625000000001
+            },
+            "post_parse_compute_ms": 218.348514,
+            "preparation_ms": 0.136706,
+            "publication_ms": 0.17659699999999998,
+            "serialization_ms": 0.186582
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "6111eaa7efb0b38ef9cd22160cb8aca4c81373b79a0d295837c1364a5da0ef5b"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "cell_grouped_summary",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> summarize {n=count(),reads=sum(reads.total)} by {cell.id}",
+      "median": {
+        "before": {
+          "process_ms": 523.284187,
+          "rss_kib": 84236,
+          "execution_ms": 418.90417,
+          "post_parse_compute_ms": 495.566742,
+          "preparation_ms": 0.137317,
+          "publication_ms": 1.843865,
+          "serialization_ms": 41.08102
+        },
+        "after": {
+          "process_ms": 527.762632,
+          "rss_kib": 90320,
+          "execution_ms": 418.612566,
+          "post_parse_compute_ms": 493.68993300000005,
+          "preparation_ms": 0.129326,
+          "publication_ms": 1.780219,
+          "serialization_ms": 39.676077
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.111049,
+          "chunk_read_decode_attach": 24.149314999999998,
+          "evaluate_and_aggregate": 218.112007,
+          "finalize_sort_project": 42.852705,
+          "preflight_planning": 3.909295,
+          "unit_and_denominator_setup": 31.198372,
+          "universe_witness": 9.166155
+        },
+        "after": {
+          "archive_setup": 3.323971,
+          "chunk_read_decode_attach": 25.032324999999997,
+          "evaluate_and_aggregate": 217.744753,
+          "finalize_sort_project": 42.366821,
+          "preflight_planning": 3.940942,
+          "unit_and_denominator_setup": 32.676521,
+          "universe_witness": 8.978021
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 504.288109,
+            "rss_kib": 84592,
+            "allocator": "system",
+            "execution_ms": 405.561536,
+            "phases_ms": {
+              "archive_setup": 3.3461939999999997,
+              "chunk_read_decode_attach": 17.620852,
+              "evaluate_and_aggregate": 218.112007,
+              "finalize_sort_project": 41.497781999999994,
+              "preflight_planning": 4.031979,
+              "unit_and_denominator_setup": 29.591491,
+              "universe_witness": 8.085842
+            },
+            "post_parse_compute_ms": 480.613814,
+            "preparation_ms": 0.14075200000000002,
+            "publication_ms": 1.767679,
+            "serialization_ms": 39.835102
+          },
+          {
+            "process_ms": 525.105107,
+            "rss_kib": 84236,
+            "allocator": "system",
+            "execution_ms": 425.183064,
+            "phases_ms": {
+              "archive_setup": 3.111049,
+              "chunk_read_decode_attach": 16.736489,
+              "evaluate_and_aggregate": 233.3071,
+              "finalize_sort_project": 42.912936,
+              "preflight_planning": 3.718257,
+              "unit_and_denominator_setup": 31.292285000000003,
+              "universe_witness": 9.066203999999999
+            },
+            "post_parse_compute_ms": 502.02602900000005,
+            "preparation_ms": 0.133953,
+            "publication_ms": 1.795773,
+            "serialization_ms": 41.08102
+          },
+          {
+            "process_ms": 523.284187,
+            "rss_kib": 83516,
+            "allocator": "system",
+            "execution_ms": 418.90417,
+            "phases_ms": {
+              "archive_setup": 3.002375,
+              "chunk_read_decode_attach": 29.308598999999997,
+              "evaluate_and_aggregate": 215.224749,
+              "finalize_sort_project": 41.549927000000004,
+              "preflight_planning": 3.8691440000000004,
+              "unit_and_denominator_setup": 31.198372,
+              "universe_witness": 9.166155
+            },
+            "post_parse_compute_ms": 495.566742,
+            "preparation_ms": 0.142335,
+            "publication_ms": 1.843865,
+            "serialization_ms": 39.394411999999996
+          },
+          {
+            "process_ms": 501.171818,
+            "rss_kib": 83552,
+            "allocator": "system",
+            "execution_ms": 397.210242,
+            "phases_ms": {
+              "archive_setup": 2.867651,
+              "chunk_read_decode_attach": 24.149314999999998,
+              "evaluate_and_aggregate": 204.912172,
+              "finalize_sort_project": 42.852705,
+              "preflight_planning": 3.909295,
+              "unit_and_denominator_setup": 28.200334,
+              "universe_witness": 9.322241
+            },
+            "post_parse_compute_ms": 477.270046,
+            "preparation_ms": 0.137317,
+            "publication_ms": 1.9665199999999998,
+            "serialization_ms": 42.006568
+          },
+          {
+            "process_ms": 537.926774,
+            "rss_kib": 84504,
+            "allocator": "system",
+            "execution_ms": 433.827861,
+            "phases_ms": {
+              "archive_setup": 7.123419,
+              "chunk_read_decode_attach": 26.705596,
+              "evaluate_and_aggregate": 219.998299,
+              "finalize_sort_project": 43.635348,
+              "preflight_planning": 4.18412,
+              "unit_and_denominator_setup": 33.86381900000001,
+              "universe_witness": 9.664547
+            },
+            "post_parse_compute_ms": 513.488241,
+            "preparation_ms": 0.136686,
+            "publication_ms": 1.92648,
+            "serialization_ms": 41.354883
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 527.762632,
+            "rss_kib": 88508,
+            "allocator": "system",
+            "execution_ms": 418.612566,
+            "phases_ms": {
+              "archive_setup": 3.3330040000000003,
+              "chunk_read_decode_attach": 25.032324999999997,
+              "evaluate_and_aggregate": 217.744753,
+              "finalize_sort_project": 41.624003,
+              "preflight_planning": 7.900081999999999,
+              "unit_and_denominator_setup": 32.676521,
+              "universe_witness": 8.920252
+            },
+            "post_parse_compute_ms": 493.68993300000005,
+            "preparation_ms": 0.129326,
+            "publication_ms": 1.780219,
+            "serialization_ms": 39.332773
+          },
+          {
+            "process_ms": 492.600272,
+            "rss_kib": 90320,
+            "allocator": "system",
+            "execution_ms": 389.81327999999996,
+            "phases_ms": {
+              "archive_setup": 3.119752,
+              "chunk_read_decode_attach": 19.639274,
+              "evaluate_and_aggregate": 203.713523,
+              "finalize_sort_project": 41.817963,
+              "preflight_planning": 3.638866,
+              "unit_and_denominator_setup": 29.07117,
+              "universe_witness": 8.70584
+            },
+            "post_parse_compute_ms": 466.153476,
+            "preparation_ms": 0.122855,
+            "publication_ms": 1.750154,
+            "serialization_ms": 39.183363
+          },
+          {
+            "process_ms": 545.484929,
+            "rss_kib": 90704,
+            "allocator": "system",
+            "execution_ms": 440.455651,
+            "phases_ms": {
+              "archive_setup": 3.323971,
+              "chunk_read_decode_attach": 30.240205,
+              "evaluate_and_aggregate": 228.953495,
+              "finalize_sort_project": 44.339911,
+              "preflight_planning": 3.970177,
+              "unit_and_denominator_setup": 34.965293,
+              "universe_witness": 9.935256
+            },
+            "post_parse_compute_ms": 522.126198,
+            "preparation_ms": 0.13074699999999997,
+            "publication_ms": 1.909383,
+            "serialization_ms": 41.778603
+          },
+          {
+            "process_ms": 504.047562,
+            "rss_kib": 94300,
+            "allocator": "system",
+            "execution_ms": 400.009341,
+            "phases_ms": {
+              "archive_setup": 3.407157,
+              "chunk_read_decode_attach": 25.849133,
+              "evaluate_and_aggregate": 205.64379799999998,
+              "finalize_sort_project": 42.366821,
+              "preflight_planning": 3.940942,
+              "unit_and_denominator_setup": 29.2172,
+              "universe_witness": 8.978021
+            },
+            "post_parse_compute_ms": 481.041353,
+            "preparation_ms": 0.12973600000000002,
+            "publication_ms": 2.006991,
+            "serialization_ms": 39.676077
+          },
+          {
+            "process_ms": 563.719821,
+            "rss_kib": 89212,
+            "allocator": "system",
+            "execution_ms": 454.776842,
+            "phases_ms": {
+              "archive_setup": 2.766499,
+              "chunk_read_decode_attach": 18.890832999999997,
+              "evaluate_and_aggregate": 248.242159,
+              "finalize_sort_project": 49.285481,
+              "preflight_planning": 2.831817,
+              "unit_and_denominator_setup": 33.530175,
+              "universe_witness": 9.34807
+            },
+            "post_parse_compute_ms": 535.982076,
+            "preparation_ms": 0.11878,
+            "publication_ms": 1.743293,
+            "serialization_ms": 41.360431000000005
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "3b694d4d2136e7debf20708a8d7485b8d5c58b09239292f031619ef594b2a691"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "support_fallback",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom @x.records |> within U |> derive {s=support_reads(overlaps(R,min:12bp))} |> select {unit.id,s} |> sort {unit.id} |> take 20",
+      "median": {
+        "before": {
+          "process_ms": 195.236338,
+          "rss_kib": 84112,
+          "execution_ms": 175.73808799999998,
+          "post_parse_compute_ms": 176.146615,
+          "preparation_ms": 0.132811,
+          "publication_ms": 0.169356,
+          "serialization_ms": 0.218189
+        },
+        "after": {
+          "process_ms": 199.523784,
+          "rss_kib": 91208,
+          "execution_ms": 175.874534,
+          "post_parse_compute_ms": 176.27115300000003,
+          "preparation_ms": 0.126411,
+          "publication_ms": 0.17274099999999998,
+          "serialization_ms": 0.25168
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 3.163028,
+          "chunk_read_decode_attach": 20.581116,
+          "evaluate_and_aggregate": 82.701884,
+          "finalize_sort_project": 51.885108,
+          "preflight_planning": 3.507017,
+          "unit_and_denominator_setup": 0.0022730000000000003,
+          "universe_witness": 8.983599
+        },
+        "after": {
+          "archive_setup": 2.8089730000000004,
+          "chunk_read_decode_attach": 20.263577,
+          "evaluate_and_aggregate": 87.89337499999999,
+          "finalize_sort_project": 51.380697000000005,
+          "preflight_planning": 3.020753,
+          "unit_and_denominator_setup": 0.001893,
+          "universe_witness": 8.541862
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 196.87285,
+            "rss_kib": 84556,
+            "allocator": "system",
+            "execution_ms": 177.53993000000003,
+            "phases_ms": {
+              "archive_setup": 2.915043,
+              "chunk_read_decode_attach": 19.672173,
+              "evaluate_and_aggregate": 82.701884,
+              "finalize_sort_project": 52.359355,
+              "preflight_planning": 3.743815,
+              "unit_and_denominator_setup": 0.0027140000000000003,
+              "universe_witness": 9.3025
+            },
+            "post_parse_compute_ms": 177.925732,
+            "preparation_ms": 0.123797,
+            "publication_ms": 0.158279,
+            "serialization_ms": 0.22503
+          },
+          {
+            "process_ms": 193.920631,
+            "rss_kib": 84220,
+            "allocator": "system",
+            "execution_ms": 174.77747699999998,
+            "phases_ms": {
+              "archive_setup": 3.099632,
+              "chunk_read_decode_attach": 20.581116,
+              "evaluate_and_aggregate": 82.534291,
+              "finalize_sort_project": 49.911688000000005,
+              "preflight_planning": 3.338232,
+              "unit_and_denominator_setup": 0.002013,
+              "universe_witness": 8.903889
+            },
+            "post_parse_compute_ms": 175.167756,
+            "preparation_ms": 0.132811,
+            "publication_ms": 0.169356,
+            "serialization_ms": 0.217359
+          },
+          {
+            "process_ms": 195.236338,
+            "rss_kib": 83872,
+            "allocator": "system",
+            "execution_ms": 175.73808799999998,
+            "phases_ms": {
+              "archive_setup": 3.163028,
+              "chunk_read_decode_attach": 21.210897,
+              "evaluate_and_aggregate": 80.946944,
+              "finalize_sort_project": 51.885108,
+              "preflight_planning": 3.507017,
+              "unit_and_denominator_setup": 0.0021339999999999996,
+              "universe_witness": 9.122679
+            },
+            "post_parse_compute_ms": 176.146615,
+            "preparation_ms": 0.139912,
+            "publication_ms": 0.17908,
+            "serialization_ms": 0.218189
+          },
+          {
+            "process_ms": 199.006383,
+            "rss_kib": 84104,
+            "allocator": "system",
+            "execution_ms": 181.243022,
+            "phases_ms": {
+              "archive_setup": 3.338823,
+              "chunk_read_decode_attach": 21.030125,
+              "evaluate_and_aggregate": 83.72458900000001,
+              "finalize_sort_project": 53.809545,
+              "preflight_planning": 3.789324,
+              "unit_and_denominator_setup": 0.0022730000000000003,
+              "universe_witness": 8.648413000000001
+            },
+            "post_parse_compute_ms": 181.637438,
+            "preparation_ms": 0.13288,
+            "publication_ms": 0.154873,
+            "serialization_ms": 0.22389900000000001
+          },
+          {
+            "process_ms": 193.342948,
+            "rss_kib": 84112,
+            "allocator": "system",
+            "execution_ms": 174.406406,
+            "phases_ms": {
+              "archive_setup": 3.266504,
+              "chunk_read_decode_attach": 20.138267000000003,
+              "evaluate_and_aggregate": 82.859702,
+              "finalize_sort_project": 49.578483999999996,
+              "preflight_planning": 3.478955,
+              "unit_and_denominator_setup": 0.002504,
+              "universe_witness": 8.983599
+            },
+            "post_parse_compute_ms": 174.811999,
+            "preparation_ms": 0.13181900000000002,
+            "publication_ms": 0.179891,
+            "serialization_ms": 0.20802400000000001
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 202.886433,
+            "rss_kib": 88624,
+            "allocator": "system",
+            "execution_ms": 179.022388,
+            "phases_ms": {
+              "archive_setup": 2.750745,
+              "chunk_read_decode_attach": 20.263577,
+              "evaluate_and_aggregate": 87.89337499999999,
+              "finalize_sort_project": 51.870286,
+              "preflight_planning": 2.910606,
+              "unit_and_denominator_setup": 0.0017230000000000001,
+              "universe_witness": 8.631667
+            },
+            "post_parse_compute_ms": 179.541452,
+            "preparation_ms": 0.13243,
+            "publication_ms": 0.161514,
+            "serialization_ms": 0.348356
+          },
+          {
+            "process_ms": 197.436451,
+            "rss_kib": 93260,
+            "allocator": "system",
+            "execution_ms": 175.874534,
+            "phases_ms": {
+              "archive_setup": 2.790856,
+              "chunk_read_decode_attach": 21.982512,
+              "evaluate_and_aggregate": 83.209972,
+              "finalize_sort_project": 51.380697000000005,
+              "preflight_planning": 3.020753,
+              "unit_and_denominator_setup": 0.002173,
+              "universe_witness": 8.734832999999998
+            },
+            "post_parse_compute_ms": 176.27115300000003,
+            "preparation_ms": 0.132881,
+            "publication_ms": 0.17428300000000002,
+            "serialization_ms": 0.221926
+          },
+          {
+            "process_ms": 199.523784,
+            "rss_kib": 96164,
+            "allocator": "system",
+            "execution_ms": 175.42211,
+            "phases_ms": {
+              "archive_setup": 2.870516,
+              "chunk_read_decode_attach": 17.147851,
+              "evaluate_and_aggregate": 89.619473,
+              "finalize_sort_project": 48.906079,
+              "preflight_planning": 3.419345,
+              "unit_and_denominator_setup": 0.001893,
+              "universe_witness": 8.522833
+            },
+            "post_parse_compute_ms": 175.843466,
+            "preparation_ms": 0.126411,
+            "publication_ms": 0.17274099999999998,
+            "serialization_ms": 0.25168
+          },
+          {
+            "process_ms": 201.742315,
+            "rss_kib": 91208,
+            "allocator": "system",
+            "execution_ms": 182.279157,
+            "phases_ms": {
+              "archive_setup": 2.8089730000000004,
+              "chunk_read_decode_attach": 21.306702,
+              "evaluate_and_aggregate": 88.441874,
+              "finalize_sort_project": 53.295719,
+              "preflight_planning": 3.010166,
+              "unit_and_denominator_setup": 0.001632,
+              "universe_witness": 8.541862
+            },
+            "post_parse_compute_ms": 182.82811700000002,
+            "preparation_ms": 0.12131399999999999,
+            "publication_ms": 0.20537,
+            "serialization_ms": 0.38065499999999997
+          },
+          {
+            "process_ms": 196.413016,
+            "rss_kib": 89172,
+            "allocator": "system",
+            "execution_ms": 174.319725,
+            "phases_ms": {
+              "archive_setup": 3.0852000000000004,
+              "chunk_read_decode_attach": 18.709909,
+              "evaluate_and_aggregate": 85.56969600000001,
+              "finalize_sort_project": 50.716734,
+              "preflight_planning": 3.327135,
+              "unit_and_denominator_setup": 0.002123,
+              "universe_witness": 8.495371
+            },
+            "post_parse_compute_ms": 174.725959,
+            "preparation_ms": 0.126141,
+            "publication_ms": 0.14984699999999998,
+            "serialization_ms": 0.23854
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "3c1c840e8b895cb7f3b831800905866f5da40a540ac65568e0cca3cdc8fc12e6"
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "junction_enumeration",
+      "source": "header {gq=1,assembly=\"GRCh38\"}\nlet U=g[1:198600000..198800000]\nlet R=g[1:198696711..198696909:-]\nlet A=j[1:198692373..198696711:-]\nlet B=j[1:198692373..198703297:-]\nfrom junctions(@x,within:U) |> support(unit:class,by:{sample})",
+      "median": {
+        "before": {
+          "process_ms": 160.058755,
+          "rss_kib": 26644,
+          "execution_ms": 145.818807,
+          "post_parse_compute_ms": 146.51524899999998,
+          "preparation_ms": 0.162125,
+          "publication_ms": 0.173071,
+          "serialization_ms": 0.359763
+        },
+        "after": {
+          "process_ms": 162.807998,
+          "rss_kib": 33852,
+          "execution_ms": 147.249748,
+          "post_parse_compute_ms": 148.041314,
+          "preparation_ms": 0.14382699999999998,
+          "publication_ms": 0.17729799999999998,
+          "serialization_ms": 0.35724900000000004
+        }
+      },
+      "phases_ms": {
+        "before": {
+          "archive_setup": 0.8047249999999999,
+          "chunk_read_decode_attach": 19.997543999999998,
+          "enumerate_and_aggregate": 114.340923,
+          "finalize_sort_project": 0.29757999999999996,
+          "preflight_planning": 3.532886
+        },
+        "after": {
+          "archive_setup": 0.781891,
+          "chunk_read_decode_attach": 22.174754,
+          "enumerate_and_aggregate": 114.920448,
+          "finalize_sort_project": 0.211019,
+          "preflight_planning": 3.52201
+        }
+      },
+      "samples": {
+        "before": [
+          {
+            "process_ms": 160.058755,
+            "rss_kib": 26100,
+            "allocator": "system",
+            "execution_ms": 145.818807,
+            "phases_ms": {
+              "archive_setup": 0.95358,
+              "chunk_read_decode_attach": 16.519201000000002,
+              "enumerate_and_aggregate": 116.387694,
+              "finalize_sort_project": 0.284259,
+              "preflight_planning": 3.900171
+            },
+            "post_parse_compute_ms": 146.51524899999998,
+            "preparation_ms": 0.163877,
+            "publication_ms": 0.169416,
+            "serialization_ms": 0.359763
+          },
+          {
+            "process_ms": 155.986555,
+            "rss_kib": 26644,
+            "allocator": "system",
+            "execution_ms": 141.647107,
+            "phases_ms": {
+              "archive_setup": 0.706156,
+              "chunk_read_decode_attach": 15.958143000000002,
+              "enumerate_and_aggregate": 113.124505,
+              "finalize_sort_project": 0.29757999999999996,
+              "preflight_planning": 3.297711
+            },
+            "post_parse_compute_ms": 142.533815,
+            "preparation_ms": 0.17976099999999998,
+            "publication_ms": 0.183417,
+            "serialization_ms": 0.43399600000000005
+          },
+          {
+            "process_ms": 165.567045,
+            "rss_kib": 29912,
+            "allocator": "system",
+            "execution_ms": 151.60950300000002,
+            "phases_ms": {
+              "archive_setup": 0.858847,
+              "chunk_read_decode_attach": 20.918526,
+              "enumerate_and_aggregate": 117.54820600000001,
+              "finalize_sort_project": 0.303128,
+              "preflight_planning": 3.532886
+            },
+            "post_parse_compute_ms": 152.478537,
+            "preparation_ms": 0.141214,
+            "publication_ms": 0.173071,
+            "serialization_ms": 0.449188
+          },
+          {
+            "process_ms": 163.247803,
+            "rss_kib": 26760,
+            "allocator": "system",
+            "execution_ms": 147.876174,
+            "phases_ms": {
+              "archive_setup": 0.8047249999999999,
+              "chunk_read_decode_attach": 21.022182,
+              "enumerate_and_aggregate": 114.340923,
+              "finalize_sort_project": 0.26478,
+              "preflight_planning": 3.551494
+            },
+            "post_parse_compute_ms": 148.494438,
+            "preparation_ms": 0.162125,
+            "publication_ms": 0.16505,
+            "serialization_ms": 0.323739
+          },
+          {
+            "process_ms": 155.272196,
+            "rss_kib": 26548,
+            "allocator": "system",
+            "execution_ms": 142.54844699999998,
+            "phases_ms": {
+              "archive_setup": 0.7412789999999999,
+              "chunk_read_decode_attach": 19.997543999999998,
+              "enumerate_and_aggregate": 109.60503,
+              "finalize_sort_project": 0.307184,
+              "preflight_planning": 3.167945
+            },
+            "post_parse_compute_ms": 143.215194,
+            "preparation_ms": 0.153662,
+            "publication_ms": 0.188955,
+            "serialization_ms": 0.353394
+          }
+        ],
+        "after": [
+          {
+            "process_ms": 147.757275,
+            "rss_kib": 38924,
+            "allocator": "system",
+            "execution_ms": 133.31277799999998,
+            "phases_ms": {
+              "archive_setup": 0.76129,
+              "chunk_read_decode_attach": 15.922889999999999,
+              "enumerate_and_aggregate": 107.63251,
+              "finalize_sort_project": 0.211019,
+              "preflight_planning": 3.094995
+            },
+            "post_parse_compute_ms": 133.983801,
+            "preparation_ms": 0.143697,
+            "publication_ms": 0.16231500000000001,
+            "serialization_ms": 0.35724900000000004
+          },
+          {
+            "process_ms": 170.287104,
+            "rss_kib": 32740,
+            "allocator": "system",
+            "execution_ms": 155.373719,
+            "phases_ms": {
+              "archive_setup": 0.9796099999999999,
+              "chunk_read_decode_attach": 27.280895,
+              "enumerate_and_aggregate": 116.671663,
+              "finalize_sort_project": 0.171439,
+              "preflight_planning": 4.381378
+            },
+            "post_parse_compute_ms": 155.99678,
+            "preparation_ms": 0.155385,
+            "publication_ms": 0.17729799999999998,
+            "serialization_ms": 0.321014
+          },
+          {
+            "process_ms": 165.859487,
+            "rss_kib": 33852,
+            "allocator": "system",
+            "execution_ms": 149.73367000000002,
+            "phases_ms": {
+              "archive_setup": 1.014662,
+              "chunk_read_decode_attach": 22.625653999999997,
+              "enumerate_and_aggregate": 116.753637,
+              "finalize_sort_project": 0.23002799999999998,
+              "preflight_planning": 3.70109
+            },
+            "post_parse_compute_ms": 150.517824,
+            "preparation_ms": 0.14382699999999998,
+            "publication_ms": 0.19164,
+            "serialization_ms": 0.389298
+          },
+          {
+            "process_ms": 162.807998,
+            "rss_kib": 35048,
+            "allocator": "system",
+            "execution_ms": 147.249748,
+            "phases_ms": {
+              "archive_setup": 0.759518,
+              "chunk_read_decode_attach": 22.174754,
+              "enumerate_and_aggregate": 114.920448,
+              "finalize_sort_project": 0.265421,
+              "preflight_planning": 3.208516
+            },
+            "post_parse_compute_ms": 148.041314,
+            "preparation_ms": 0.166542,
+            "publication_ms": 0.194965,
+            "serialization_ms": 0.394155
+          },
+          {
+            "process_ms": 160.450527,
+            "rss_kib": 33612,
+            "allocator": "system",
+            "execution_ms": 146.04323599999998,
+            "phases_ms": {
+              "archive_setup": 0.781891,
+              "chunk_read_decode_attach": 21.804824,
+              "enumerate_and_aggregate": 114.617059,
+              "finalize_sort_project": 0.184839,
+              "preflight_planning": 3.52201
+            },
+            "post_parse_compute_ms": 146.602701,
+            "preparation_ms": 0.140242,
+            "publication_ms": 0.157327,
+            "serialization_ms": 0.306013
+          }
+        ]
+      },
+      "states": null,
+      "verified_result_sha256": "75e309a6f46b6edd3e2e9fd977dce79d0f0a2ac33b055d2657ce1a02d40b16c7"
+    }
+  ],
+  "load_end": [
+    167.12,
+    158.39,
+    102.19
+  ]
+}

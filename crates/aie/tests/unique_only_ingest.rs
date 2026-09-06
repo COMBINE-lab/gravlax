@@ -229,6 +229,105 @@ fn optional_access_index_matches_fallback_without_full_scan_permission() {
 }
 
 #[test]
+fn rich_geometry_scoping_quantifiers_and_payload_free_explain() {
+    use evidence_io::format::{SectionReader, SectionWriter};
+    let scratch = Scratch::new();
+    let bam = scratch.0.join("input.bam");
+    let whitelist = scratch.0.join("cells.txt");
+    let archive = scratch.0.join("input.aie");
+    write_unique_spliced_bam(&bam);
+    std::fs::write(&whitelist, format!("{BARCODE}\n")).unwrap();
+    run({
+        let mut c = Command::new(env!("CARGO_BIN_EXE_aie"));
+        c.arg("ingest-archive")
+            .arg(&bam)
+            .arg("--whitelist")
+            .arg(&whitelist)
+            .arg("--out")
+            .arg(&archive)
+            .args(["--zstd-level", "1", "--access-index"]);
+        c
+    });
+    let query = |path: &Path| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_aie"));
+        c.arg("query").arg(path).args([
+            "cooccur",
+            "--predicate",
+            "u=region:chr1:0-1000",
+            "--predicate",
+            "p=path:chr1:125-225",
+            "--predicate",
+            "o=overlap:chr1:100-110/10",
+            "--predicate",
+            "e=end:chr1:250-251",
+            "--predicate",
+            "n=junction-near:chr1:126-224/1",
+            "--where",
+            "p & o & e & n",
+            "--universe",
+            "u",
+            "--format",
+            "json",
+            "--emit-membership",
+        ]);
+        c
+    };
+    let mut expected = None;
+    for engine in ["scalar", "compiled", "auto"] {
+        for within in ["record", "any-placement", "all-placements"] {
+            let value: serde_json::Value = serde_json::from_slice(
+                &run({
+                    let mut c = query(&archive);
+                    c.args(["--engine", engine, "--match-within", within, "--cells"])
+                        .arg(&whitelist);
+                    c
+                })
+                .stdout,
+            )
+            .unwrap();
+            assert_eq!(value["data"]["summary"]["selected_units"], 1);
+            let rows = value["data"]["tables"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|table| table["rows"].clone())
+                .collect::<Vec<_>>();
+            if let Some(expected) = &expected {
+                assert_eq!(&rows, expected);
+            } else {
+                expected = Some(rows);
+            }
+        }
+    }
+    // Deliberately invalid molecule payload, but valid outer container and metadata.
+    // Explain must succeed; execution must fail. This verifies no c0 decoding, not just a counter.
+    let broken = scratch.0.join("broken.aie");
+    let mut reader = SectionReader::open(&archive).unwrap();
+    let mut writer = SectionWriter::create(&broken, 1).unwrap();
+    for name in reader.names().map(str::to_owned).collect::<Vec<_>>() {
+        let raw = if name == "c0" {
+            Vec::new()
+        } else {
+            reader.read(&name).unwrap()
+        };
+        writer.section(&name, &raw).unwrap();
+    }
+    writer.finish().unwrap();
+    let plan: serde_json::Value = serde_json::from_slice(
+        &run({
+            let mut c = query(&broken);
+            c.arg("--explain");
+            c
+        })
+        .stdout,
+    )
+    .unwrap();
+    assert_eq!(plan["molecule_payloads_decoded"], 0);
+    assert_eq!(plan["initial_candidate_records_upper_bound"], 1);
+    assert!(!query(&broken).output().unwrap().status.success());
+}
+
+#[test]
 fn fidelity_recovers_omitted_middle_geometry_without_joining_loci() {
     let scratch = Scratch::new();
     let input = scratch.0.join("geometry.bam");
@@ -328,22 +427,49 @@ fn fidelity_recovers_omitted_middle_geometry_without_joining_loci() {
             query["data"]["summary"]["indeterminate_units"],
             if fidelity { 0 } else { 1 }
         );
-        for velocity in [false,true] {
+        for velocity in [false, true] {
             let mut outputs = Vec::new();
-            for bam_reference in [true,false] {
-                let out = scratch.0.join(format!("replay-{fidelity}-{compression}-{velocity}-{bam_reference}"));
-                run({ let mut c = Command::new(env!("CARGO_BIN_EXE_aie"));
-                    c.arg("replay-rows").arg(if bam_reference {&input} else {&archive})
-                        .arg("--gtf").arg(&gtf).arg("--barcodes").arg(&whitelist).arg("--out-dir").arg(&out);
-                    if bam_reference { c.arg("--from-bam").arg("--whitelist").arg(&whitelist);
-                        if fidelity { c.arg("--geometry-fidelity"); }
+            for bam_reference in [true, false] {
+                let out = scratch.0.join(format!(
+                    "replay-{fidelity}-{compression}-{velocity}-{bam_reference}"
+                ));
+                run({
+                    let mut c = Command::new(env!("CARGO_BIN_EXE_aie"));
+                    c.arg("replay-rows")
+                        .arg(if bam_reference { &input } else { &archive })
+                        .arg("--gtf")
+                        .arg(&gtf)
+                        .arg("--barcodes")
+                        .arg(&whitelist)
+                        .arg("--out-dir")
+                        .arg(&out);
+                    if bam_reference {
+                        c.arg("--from-bam").arg("--whitelist").arg(&whitelist);
+                        if fidelity {
+                            c.arg("--geometry-fidelity");
+                        }
                     }
-                    if velocity { c.arg("--velocity"); } c });
+                    if velocity {
+                        c.arg("--velocity");
+                    }
+                    c
+                });
                 outputs.push(out);
             }
-            let matrices: &[&str] = if velocity { &["spliced.mtx","unspliced.mtx","ambiguous.mtx"] } else { &["matrix.mtx"] };
-            for name in matrices.iter().chain(["features.tsv","barcodes.tsv"].iter()) {
-                assert_eq!(std::fs::read(outputs[0].join(name)).unwrap(), std::fs::read(outputs[1].join(name)).unwrap(), "BAM/archive mismatch: {name}");
+            let matrices: &[&str] = if velocity {
+                &["spliced.mtx", "unspliced.mtx", "ambiguous.mtx"]
+            } else {
+                &["matrix.mtx"]
+            };
+            for name in matrices
+                .iter()
+                .chain(["features.tsv", "barcodes.tsv"].iter())
+            {
+                assert_eq!(
+                    std::fs::read(outputs[0].join(name)).unwrap(),
+                    std::fs::read(outputs[1].join(name)).unwrap(),
+                    "BAM/archive mismatch: {name}"
+                );
             }
         }
         run({

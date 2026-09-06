@@ -54,6 +54,7 @@ jobs:
             binary="$(find "${destination}" -type f -name aie -print -quit)"
             test -n "${binary}"
             "${binary}" --version
+            python packaging/gq_smoke.py --binary "${binary}"
           done
           musl_binary="$(find dist/smoke/x86_64-unknown-linux-musl -type f -name aie -print -quit)"
           if readelf --program-headers "${musl_binary}" | grep --quiet 'Requesting program interpreter'; then

@@ -21,7 +21,15 @@ path = "src/main.rs"
 dist = true
 display-name = "Gravlax"
 
+[features]
+# Keep the lower-RSS system allocator by default; opt in after measuring the workload.
+default = []
+mimalloc = ["dep:mimalloc"]
+
 [dependencies]
+# The maintained v2 backend used less peak memory than v3 in the GQ comparison.
+mimalloc = { version = "=0.1.52", optional = true, default-features = false, features = ["v2"] }
+winnow = "=1.0.4"
 anyhow.workspace = true
 clap.workspace = true
 clap_complete.workspace = true

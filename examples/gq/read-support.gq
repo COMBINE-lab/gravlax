@@ -1,0 +1,8 @@
+header { gq = 1, assembly = "GRCh38" }
+let RA = overlaps(g[1:198696711..198696909:-], min: 12bp)
+from @pbmc.records
+|> within g[1:198600000..198800000]
+|> derive {support = support_reads(RA)}
+|> select {unit.id, reads.total, support}
+|> sort {unit.id}
+|> take 20

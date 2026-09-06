@@ -1,0 +1,281 @@
+{
+  "method": "one warmup; randomized interleaving; warm filesystem cache; four Rayon threads; complete processes and JSON output; exact Truth count equivalence required on every run",
+  "binary_sha256": "a7d2d1d3dde05a96a1c4d6a0cb12b8aa6c90f100f52d2a037d28f73aa1425bba",
+  "repeats": 5,
+  "experiments": [
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "record_marginals",
+      "states": {
+        "false": 53936
+      },
+      "source_sha256": "fd5d101b98900c869bf47dd7520da985d215c04848ac89e0735ed8aea8c6a87f",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+          "closure": "none: complete selected records",
+          "content_root": "ee47b5124ef536e22227caaa975497fc132bb0773aad289ec67dff0725315115",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "cooccur": 16.344704,
+        "gq": 76.903069
+      },
+      "runs_ms": {
+        "cooccur": [
+          16.420548,
+          16.700419,
+          16.344704,
+          16.273437,
+          16.24306
+        ],
+        "gq": [
+          78.384841,
+          76.967687,
+          76.348003,
+          76.903069,
+          76.616468
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 533918
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "same_observation",
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "source_sha256": "ffb49b81dc00e86ecd71358c0eeed718b99a5d0ffad712c36561dbb948d2dac6",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+          "closure": "none: complete selected records",
+          "content_root": "ee47b5124ef536e22227caaa975497fc132bb0773aad289ec67dff0725315115",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "gq": 81.402615,
+        "cooccur": 17.446473
+      },
+      "runs_ms": {
+        "gq": [
+          81.799824,
+          83.112199,
+          80.640918,
+          80.172703,
+          81.402615
+        ],
+        "cooccur": [
+          16.573048,
+          17.225871,
+          17.74314,
+          17.548917,
+          17.446473
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 716526
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "nonvacuous_universal",
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "source_sha256": "e6c62caaa38c66b991e7333ae8fab5e013261404ce88cb1f8987bbc9e11d7e2d",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+          "closure": "none: complete selected records",
+          "content_root": "ee47b5124ef536e22227caaa975497fc132bb0773aad289ec67dff0725315115",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "cooccur": 17.162144,
+        "gq": 83.246643
+      },
+      "runs_ms": {
+        "cooccur": [
+          17.162144,
+          16.818788,
+          16.571796,
+          17.418151,
+          17.315776
+        ],
+        "gq": [
+          82.775143,
+          83.246643,
+          82.922124,
+          83.439983,
+          83.629189
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 824398
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "record_marginals",
+      "states": {
+        "false": 53936
+      },
+      "source_sha256": "fd5d101b98900c869bf47dd7520da985d215c04848ac89e0735ed8aea8c6a87f",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+          "closure": "none: complete selected records",
+          "content_root": "836e05ad4362341a9613406689d51e599d60acbdb8e9ef8a7709e1b610ec8f1f",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "cooccur": 18.763737,
+        "gq": 85.739777
+      },
+      "runs_ms": {
+        "cooccur": [
+          18.29455,
+          18.763737,
+          19.195637,
+          18.816375,
+          18.671427
+        ],
+        "gq": [
+          85.494397,
+          85.871826,
+          85.546075,
+          96.923058,
+          85.739777
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 615103
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "same_observation",
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "source_sha256": "ffb49b81dc00e86ecd71358c0eeed718b99a5d0ffad712c36561dbb948d2dac6",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+          "closure": "none: complete selected records",
+          "content_root": "836e05ad4362341a9613406689d51e599d60acbdb8e9ef8a7709e1b610ec8f1f",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "gq": 92.485045,
+        "cooccur": 19.832236
+      },
+      "runs_ms": {
+        "gq": [
+          92.485045,
+          93.575737,
+          92.525426,
+          92.260506,
+          91.725551
+        ],
+        "cooccur": [
+          19.746306,
+          19.915871,
+          19.418774,
+          20.144436,
+          19.832236
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 851467
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "nonvacuous_universal",
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "source_sha256": "e6c62caaa38c66b991e7333ae8fab5e013261404ce88cb1f8987bbc9e11d7e2d",
+      "sources": [
+        {
+          "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+          "closure": "none: complete selected records",
+          "content_root": "836e05ad4362341a9613406689d51e599d60acbdb8e9ef8a7709e1b610ec8f1f",
+          "denominators": "archive metadata plus cell dictionary",
+          "initial_chunks": 14,
+          "initial_routing": "access-index retained-geometry routes",
+          "sample": "x",
+          "total_chunks": 14
+        }
+      ],
+      "median_ms": {
+        "gq": 93.6309,
+        "cooccur": 20.00828
+      },
+      "runs_ms": {
+        "gq": [
+          94.24172,
+          93.6309,
+          93.492902,
+          94.91939,
+          93.630009
+        ],
+        "cooccur": [
+          20.00828,
+          20.00117,
+          20.154531,
+          19.648289,
+          20.117325
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 959339
+      }
+    }
+  ]
+}

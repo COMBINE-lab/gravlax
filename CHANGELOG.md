@@ -2,6 +2,81 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## [0.2.0] - 2026-09-05
+
+### Composable query language
+
+- Reuse built-in shape kernels for compatible GQ predicates, with a fixed-size
+  placement cache and allocation-free shape validation. Offer opt-in
+  `--parallel-decode` with bounded, ordered windows and reuse empty/sample-only aggregation keys
+  per member. Preserve reference results, logical work and uncertainty diagnostics.
+- Add an opt-in `mimalloc` executable feature (mimalloc 0.1.52, v2 backend), with
+  allocator identification in GQ profiles and an interleaved latency/RSS benchmark.
+  Keep the system allocator by default: measured speed gains carry a peak-memory cost.
+  Reusable library crates and native C-library allocation are not overridden.
+- Add GQ v1 with `aie gq validate`, `explain`, and `run`, source-located diagnostics,
+  typed expressions, bounded nonrecursive functions, project annotations, metadata,
+  archive federations, and native evidence execution. Parsing uses winnow 1.0.4;
+  the tested Rust minimum remains 1.89.
+- Distinguish unique observations, diagnostic stored representatives, grouped
+  multimapping signatures and their alternatives. Universal quantification is
+  classical; nonempty requirements are explicit. Record, exact raw-UMI class and
+  cell scopes cannot silently substitute for one another.
+- Add conservative three-valued geometry proofs and predicate-specific read-support
+  bounds. Compact representatives bracket starts, not generally ends; fixed splice
+  gaps and internal blocks provide additional sound proofs without archive changes.
+- Support explicit alignment/transcript strand frames, fixed paths, union overlap,
+  record-scoped tails, accepted-observation totals, grouped Truth tallies, summaries,
+  exact denominator reporting, projection, sorting and disclosed pagination.
+- Add bounded unique-junction enumeration with exact record/class/cell support.
+  Full-scan fallbacks, closure and denominator costs require explicit permission.
+- Add automatic physical GQ planning: fused filter/Truth-derive/aggregate kernels,
+  compact Truth slots, sparse typed accumulators, bounded hash-based distinct counts,
+  direct record iteration, unused identity projection pruning and stable top-k.
+  Preserve logical work budgets, unknown diagnostics, floating-point input order and
+  complete-unit/denominator semantics. Expose `--engine reference` and `--profile`
+  for differential evaluation and post-parse phase timing.
+- Emit typed GQ tables through the existing result envelope, content-bound provenance
+  and atomic no-clobber output. Add Python `gq_validate`, `gq_explain`, `gq_run`, and
+  `gq_run_to_file`, plus executable examples and a language reference.
+
+Existing command semantics remain unchanged. In particular, the legacy co-occurrence
+command's non-vacuous universal mode is not redefined. Its specialized executor can
+be faster than the new general GQ interpreter; GQ is an expressiveness addition, not
+a blanket performance replacement. No mandatory archive-format migration is needed.
+
+### Archive access and optional storage improvements
+
+- Speed up authenticated section lookup, directory/header reads and rANS decoding
+  without changing their wire encodings. Project terminal-query identities without
+  decoding unused molecule columns.
+- Add opt-in `--access-index` class/geometry routes and `--chunk-records` finer
+  access units, with authenticated completeness checks and bounded index expansion.
+- Add opt-in `--geometry-fidelity` to retain distinct accepted unique geometries
+  and multiplicities within the original molecule records. This can change query,
+  assignment and velocity results and declares a new provenance reduction rule.
+- Add experimental `--compression-tuning`, selecting final compressed cell-map
+  and factored-shape encodings losslessly. New selected codecs and the fidelity
+  provenance rule require a compatible reader; older readers fail closed.
+- Keep all four ingest switches disabled by default. Default evidence, chunking,
+  codecs and container/schema versions are unchanged; producer-version provenance
+  changes archive bytes and content roots across releases.
+- Retain structural, sparse-correction and split/path/shared-geometry experiments
+  under `aie dev`; their experimental files are not supported production archives.
+  OpenZL is an external research helper, not a Gravlax dependency.
+
+### Built-in queries and release validation
+
+- Add co-occurrence any/all-placement scopes, overlap/start/end predicates, explicit
+  junction tolerances, paths/subpaths and payload-free query explanations. Preserve
+  record-level defaults and non-vacuous legacy universal semantics.
+- Accelerate larger predicate panels with compiled matching and early cell
+  filtering. Small panels retain scalar matching; no archive storage is added.
+- Add deterministic parser mutation tests and offline executable acceptance of
+  archive/federation GQ, serial/parallel/reference execution and no-clobber output.
+- Exercise GQ on release-target executables and extracted Linux release archives.
+  Keep Rust 1.89 as the minimum supported version.
+
 ## [0.1.6] - 2026-09-04
 
 ### Correctness and compatibility

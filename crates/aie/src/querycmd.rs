@@ -15,6 +15,7 @@
 //! chain never count twice; no gene model is consulted — these are annotation-free queries.
 
 mod cooccur;
+pub(crate) use cooccur::engine::ShapePredicate;
 
 use crate::apastats;
 use crate::archivecmd::transcriptec::{
@@ -457,7 +458,9 @@ pub enum What {
 
 pub(crate) fn parse_locus(s: &str) -> Result<(String, u32, u32)> {
     let (chrom, range) = s.split_once(':').context("locus must be chrom:start-end")?;
-    let (a, b) = range.split_once('-').context("locus must be chrom:start-end")?;
+    let (a, b) = range
+        .split_once('-')
+        .context("locus must be chrom:start-end")?;
     let start = a.replace(',', "").parse()?;
     let end = b.replace(',', "").parse()?;
     if start >= end {
@@ -772,8 +775,8 @@ fn load_query_scope_from_dictionary(
 }
 
 fn read_query_scope_file(path: &Path, kind: &str) -> Result<(String, String)> {
-    let bytes = std::fs::read(path)
-        .with_context(|| format!("reading {kind} scope {}", path.display()))?;
+    let bytes =
+        std::fs::read(path).with_context(|| format!("reading {kind} scope {}", path.display()))?;
     let digest = format!("blake3:{}", blake3::hash(&bytes).to_hex());
     let text = String::from_utf8(bytes)
         .with_context(|| format!("{kind} scope {} is not UTF-8", path.display()))?;
@@ -806,8 +809,8 @@ struct BoundQueryText {
 }
 
 fn read_bound_query_text(path: &Path, label: &str) -> Result<BoundQueryText> {
-    let mut file = std::fs::File::open(path)
-        .with_context(|| format!("opening {label} {}", path.display()))?;
+    let mut file =
+        std::fs::File::open(path).with_context(|| format!("opening {label} {}", path.display()))?;
     let before = file
         .metadata()
         .with_context(|| format!("inspecting {label} {}", path.display()))?;
@@ -911,7 +914,7 @@ fn uniform_count_schema(id: &'static str) -> std::result::Result<TableSchema, Ou
     .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["aggregation", "entity"]))
 }
 
-fn unpack_cell_bytes(packed: u32) -> [u8; 16] {
+pub(crate) fn unpack_cell_bytes(packed: u32) -> [u8; 16] {
     let mut packed = packed;
     let mut barcode = [0_u8; 16];
     for index in (0..barcode.len()).rev() {
@@ -1407,12 +1410,9 @@ fn run_batch(args: BatchRun<'_>) -> Result<()> {
                     .copied()
                     .filter(|&query| specs[query].kind == BatchKind::Region)
                     .collect();
-                let mut wanted_junctions: FxHashMap<(u32, u32), Vec<usize>> =
-                    FxHashMap::default();
+                let mut wanted_junctions: FxHashMap<(u32, u32), Vec<usize>> = FxHashMap::default();
                 for &query in tasks {
-                    if specs[query].kind == BatchKind::Junction
-                        && junction_info[query].is_some()
-                    {
+                    if specs[query].kind == BatchKind::Junction && junction_info[query].is_some() {
                         wanted_junctions
                             .entry((specs[query].start, specs[query].end))
                             .or_default()
@@ -1450,9 +1450,7 @@ fn run_batch(args: BatchRun<'_>) -> Result<()> {
                         for blocks in shapes[shape as usize].blocks.windows(2) {
                             let donor = position + blocks[0].0 + blocks[0].1;
                             let acceptor = position + blocks[1].0;
-                            if let Some(queries) =
-                                wanted_junctions.get(&(donor, acceptor))
-                            {
+                            if let Some(queries) = wanted_junctions.get(&(donor, acceptor)) {
                                 seen.extend(queries);
                             }
                         }
@@ -1465,7 +1463,8 @@ fn run_batch(args: BatchRun<'_>) -> Result<()> {
                     for &(position, shape, _, _) in &molecule.mms {
                         inspect(position, shape);
                     }
-                    out.hits.extend(seen.into_iter().map(|query| (query, molecule.umi_class)));
+                    out.hits
+                        .extend(seen.into_iter().map(|query| (query, molecule.umi_class)));
                 }
                 out.hits.sort_unstable();
                 out.hits.dedup();
@@ -1724,8 +1723,7 @@ fn run_batch(args: BatchRun<'_>) -> Result<()> {
                 ))
             },
         )?;
-        let count_selection =
-            SelectionSummary::selected(available_count_rows, emitted_count_rows)?;
+        let count_selection = SelectionSummary::selected(available_count_rows, emitted_count_rows)?;
         write_uniform_bundle_output(uniform_output, |writer, format| {
             let mut bundle = StreamingBundleWriter::new_with_summary(
                 writer,
@@ -1945,8 +1943,18 @@ fn discovery_molecule_compatible(
     for chain in &molecule.chains {
         for (position, shape) in &chain.reps {
             if discovery_placement_compatible(
-                molecule.chrom, *position, molecule.strand_rev, *shape, 1, shapes,
-                annotation, anno_of, solo_strand, placement, txbuf, genes,
+                molecule.chrom,
+                *position,
+                molecule.strand_rev,
+                *shape,
+                1,
+                shapes,
+                annotation,
+                anno_of,
+                solo_strand,
+                placement,
+                txbuf,
+                genes,
             ) {
                 return true;
             }
@@ -1954,11 +1962,24 @@ fn discovery_molecule_compatible(
     }
     for (position, shape, pattern, _) in &molecule.mms {
         for alt in &patterns[*pattern as usize] {
-            let alt_shape = if alt.shape == SAME_SHAPE { *shape } else { alt.shape };
+            let alt_shape = if alt.shape == SAME_SHAPE {
+                *shape
+            } else {
+                alt.shape
+            };
             if discovery_placement_compatible(
-                alt.chrom, (*position as i64 + alt.offset) as u32,
-                molecule.strand_rev != alt.strand_flip, alt_shape, 2, shapes,
-                annotation, anno_of, solo_strand, placement, txbuf, genes,
+                alt.chrom,
+                (*position as i64 + alt.offset) as u32,
+                molecule.strand_rev != alt.strand_flip,
+                alt_shape,
+                2,
+                shapes,
+                annotation,
+                anno_of,
+                solo_strand,
+                placement,
+                txbuf,
+                genes,
             ) {
                 return true;
             }
@@ -2042,9 +2063,17 @@ fn discovery_unclaimed(
                 } else {
                     let patterns = patterns.expect("residual-site discovery loads patterns");
                     (!discovery_molecule_compatible(
-                        molecule, shapes, patterns, annotation, anno_of, solo_strand,
-                        &mut placement, &mut txbuf, &mut genes,
-                    )).then_some(Some(if molecule.strand_rev {
+                        molecule,
+                        shapes,
+                        patterns,
+                        annotation,
+                        anno_of,
+                        solo_strand,
+                        &mut placement,
+                        &mut txbuf,
+                        &mut genes,
+                    ))
+                    .then_some(Some(if molecule.strand_rev {
                         lo
                     } else {
                         hi.saturating_sub(1)
@@ -2094,7 +2123,9 @@ fn parse_junction_catalogue(raw: &[u8]) -> Result<Vec<(u32, u32, u32)>> {
             .context("junction donor delta overflow")?;
         last_donor = donor;
         let intron = u32::try_from(cursor.varint()?).context("junction span exceeds u32")?;
-        let acceptor = donor.checked_add(intron).context("junction acceptor overflow")?;
+        let acceptor = donor
+            .checked_add(intron)
+            .context("junction acceptor overflow")?;
         rows.push((chrom, donor, acceptor));
     }
     Ok(rows)
@@ -2105,12 +2136,16 @@ fn parse_junction_postings(raw: &[u8], expected: usize) -> Result<Vec<(u64, Vec<
     let mut rows = Vec::with_capacity(expected);
     while !cursor.is_empty() {
         let support = cursor.varint()?;
-        let n = usize::try_from(cursor.varint()?).context("junction posting count exceeds usize")?;
+        let n =
+            usize::try_from(cursor.varint()?).context("junction posting count exceeds usize")?;
         let mut posts = Vec::with_capacity(n);
         let mut last = 0u32;
         for _ in 0..n {
-            let delta = u32::try_from(cursor.varint()?).context("junction posting delta exceeds u32")?;
-            last = last.checked_add(delta).context("junction posting delta overflow")?;
+            let delta =
+                u32::try_from(cursor.varint()?).context("junction posting delta exceeds u32")?;
+            last = last
+                .checked_add(delta)
+                .context("junction posting delta overflow")?;
             posts.push(last);
         }
         rows.push((support, posts));
@@ -2171,7 +2206,11 @@ fn load_junction_annotation(
         return Ok((JunctionAnnotation::default(), content_blake3));
     };
     let mut out = JunctionAnnotation::default();
-    for transcript in annotation.transcripts.iter().filter(|t| t.chrom == chrom_id) {
+    for transcript in annotation
+        .transcripts
+        .iter()
+        .filter(|t| t.chrom == chrom_id)
+    {
         for pair in transcript.exons.windows(2) {
             out.exact.insert((pair[0].end, pair[1].start));
             out.donors.insert(pair[0].end);
@@ -2195,7 +2234,10 @@ fn junction_counts_many(
         .enumerate()
         .map(|(i, row)| ((row.donor, row.acceptor), i))
         .collect();
-    let mut posts: Vec<u32> = rows.iter().flat_map(|row| row.posts.iter().copied()).collect();
+    let mut posts: Vec<u32> = rows
+        .iter()
+        .flat_map(|row| row.posts.iter().copied())
+        .collect();
     posts.sort_unstable();
     posts.dedup();
     if let Some(&bad) = posts.iter().find(|&&post| post as usize >= chunks.len()) {
@@ -2244,7 +2286,10 @@ fn junction_counts_many(
     let mut counts: Vec<FxHashMap<u32, FxHashSet<u32>>> =
         (0..rows.len()).map(|_| FxHashMap::default()).collect();
     for (row, class) in hits.into_iter().flatten() {
-        counts[row].entry(la.cell_of(class)?).or_default().insert(class);
+        counts[row]
+            .entry(la.cell_of(class)?)
+            .or_default()
+            .insert(class);
     }
     Ok(counts)
 }
@@ -3506,7 +3551,11 @@ fn event_annotation_json(
         .flat_map(|values| values.iter().copied())
         .collect();
     let strand = if strands.len() == 1 {
-        if strands.contains(&true) { Some("-") } else { Some("+") }
+        if strands.contains(&true) {
+            Some("-")
+        } else {
+            Some("+")
+        }
     } else {
         None
     };
@@ -3706,11 +3755,8 @@ fn run_events(
         .collect();
     let (annotation, annotation_content_blake3) = match gtf {
         Some(path) => {
-            let (annotation, digest) = load_query_annotation(
-                path,
-                "event annotation",
-                uniform_output.format.is_some(),
-            )?;
+            let (annotation, digest) =
+                load_query_annotation(path, "event annotation", uniform_output.format.is_some())?;
             (Some(annotation), digest)
         }
         None => (None, None),
@@ -4191,15 +4237,21 @@ fn run_events(
             let result = &results[index];
             println!(
                 "  {}\t{} informative\tusage {}\t{} cells",
-                events[index].key.id(), result.totals.informative(),
-                result.totals.usage().map_or_else(|| "NA".to_owned(), |usage| format!("{usage:.4}")),
+                events[index].key.id(),
+                result.totals.informative(),
+                result
+                    .totals
+                    .usage()
+                    .map_or_else(|| "NA".to_owned(), |usage| format!("{usage:.4}")),
                 result.support_cells,
             );
         }
     }
     eprintln!(
         "event engine: {} events retained from {} candidates; open {t_open:.2}s, total {:.2}s",
-        retained.len(), events.len(), t0.elapsed().as_secs_f32(),
+        retained.len(),
+        events.len(),
+        t0.elapsed().as_secs_f32(),
     );
     Ok(())
 }
@@ -4291,7 +4343,8 @@ fn reduce_graph_paths(
         .iter()
         .map(|row| (row.donor, row.acceptor))
         .collect();
-    let independent_chunk_decodes: usize = selected_metadata.iter().map(|row| row.posts.len()).sum();
+    let independent_chunk_decodes: usize =
+        selected_metadata.iter().map(|row| row.posts.len()).sum();
     let mut selected_chunks = BTreeSet::new();
     for row in selected_metadata {
         for &post in &row.posts {
@@ -4318,41 +4371,39 @@ fn reduce_graph_paths(
         let reader = &*reader;
         selected_chunks
             .par_iter()
-            .map(
-                |&chunk_index| -> Result<Vec<GraphPathHit>> {
-                    let (compressed, raw_len) =
-                        reader.read_compressed_at(&format!("c{chunk_index}"))?;
-                    let raw = evidence_io::format::decompress(&compressed, raw_len)?;
-                    let molecules = decode_chunk(&raw, &chunks[chunk_index], None, tables)?;
-                    let mut hits = Vec::new();
-                    for molecule in molecules {
-                        let mut junctions = Vec::new();
-                        let mut inspect = |position: u32, shape: u32| {
-                            for blocks in shapes[shape as usize].blocks.windows(2) {
-                                let donor = position + blocks[0].0 + blocks[0].1;
-                                let acceptor = position + blocks[1].0;
-                                if wanted.contains(&(donor, acceptor)) {
-                                    junctions.push((donor, acceptor));
-                                }
-                            }
-                        };
-                        for chain in &molecule.chains {
-                            for &(position, shape) in &chain.reps {
-                                inspect(position, shape);
+            .map(|&chunk_index| -> Result<Vec<GraphPathHit>> {
+                let (compressed, raw_len) =
+                    reader.read_compressed_at(&format!("c{chunk_index}"))?;
+                let raw = evidence_io::format::decompress(&compressed, raw_len)?;
+                let molecules = decode_chunk(&raw, &chunks[chunk_index], None, tables)?;
+                let mut hits = Vec::new();
+                for molecule in molecules {
+                    let mut junctions = Vec::new();
+                    let mut inspect = |position: u32, shape: u32| {
+                        for blocks in shapes[shape as usize].blocks.windows(2) {
+                            let donor = position + blocks[0].0 + blocks[0].1;
+                            let acceptor = position + blocks[1].0;
+                            if wanted.contains(&(donor, acceptor)) {
+                                junctions.push((donor, acceptor));
                             }
                         }
-                        for &(position, shape, _, _) in &molecule.mms {
+                    };
+                    for chain in &molecule.chains {
+                        for &(position, shape) in &chain.reps {
                             inspect(position, shape);
                         }
-                        if !junctions.is_empty() {
-                            junctions.sort_unstable();
-                            junctions.dedup();
-                            hits.push((molecule.umi_class, molecule.strand_rev, junctions));
-                        }
                     }
-                    Ok(hits)
-                },
-            )
+                    for &(position, shape, _, _) in &molecule.mms {
+                        inspect(position, shape);
+                    }
+                    if !junctions.is_empty() {
+                        junctions.sort_unstable();
+                        junctions.dedup();
+                        hits.push((molecule.umi_class, molecule.strand_rev, junctions));
+                    }
+                }
+                Ok(hits)
+            })
             .collect::<Result<_>>()?
     };
 
@@ -5221,11 +5272,13 @@ fn resolve_transcript_ec_selection(
             let selector_loci = resolved
                 .loci
                 .iter()
-                .map(|locus| crate::archivecmd::transcriptec::TranscriptSelectorLocus {
-                    contig: locus.contig.clone(),
-                    start: locus.start,
-                    end: locus.end,
-                })
+                .map(
+                    |locus| crate::archivecmd::transcriptec::TranscriptSelectorLocus {
+                        contig: locus.contig.clone(),
+                        start: locus.start,
+                        end: locus.end,
+                    },
+                )
                 .collect();
             Ok((
                 selected,
@@ -5817,10 +5870,7 @@ fn build_transcript_ec_envelope(
     parameters.insert("emit_membership".into(), json!(emit_membership));
     parameters.insert("max_ecs".into(), json!(max_ecs));
     parameters.insert("max_memberships".into(), json!(max_memberships));
-    parameters.insert(
-        "max_count_rows".into(),
-        json!(TRANSCRIPT_EC_MAX_COUNT_ROWS),
-    );
+    parameters.insert("max_count_rows".into(), json!(TRANSCRIPT_EC_MAX_COUNT_ROWS));
     parameters.insert("archive_path".into(), json!(archive_path));
     parameters.insert("strand_policy".into(), serde_json::to_value(strand_policy)?);
     let mut warnings = Vec::new();
@@ -6567,7 +6617,13 @@ pub fn run(args: Args) -> Result<()> {
                     .iter()
                     .map(|d| {
                         let mut run = 0i64;
-                        d[..wlen].iter().map(|v| { run += v; run.max(0) as u32 }).collect()
+                        d[..wlen]
+                            .iter()
+                            .map(|v| {
+                                run += v;
+                                run.max(0) as u32
+                            })
+                            .collect()
                     })
                     .collect();
                 let juncs: Vec<Vec<(u32, u32, u64)>> = jcount
@@ -6583,7 +6639,10 @@ pub fn run(args: Args) -> Result<()> {
                         None => Vec::new(),
                     };
                     crate::plots::region_plot(
-                        plot_path, &chrom, start, end,
+                        plot_path,
+                        &chrom,
+                        start,
+                        end,
                         [&cov[0], &cov[1]],
                         [&juncs[0], &juncs[1]],
                         &genes,
@@ -7098,8 +7157,14 @@ pub fn run(args: Args) -> Result<()> {
                 for st in &order {
                     println!(
                         "{chrom}\t{}\t{}\t{}\t{}\t{}\t{}{}{}",
-                        st.lo, st.hi, st.cp, if st.rev { '-' } else { '+' }, st.umis, st.cells,
-                        gsuffix(&st.gc), ip_cols(st)
+                        st.lo,
+                        st.hi,
+                        st.cp,
+                        if st.rev { '-' } else { '+' },
+                        st.umis,
+                        st.cells,
+                        gsuffix(&st.gc),
+                        ip_cols(st)
                     );
                 }
             } else {
@@ -7114,13 +7179,19 @@ pub fn run(args: Args) -> Result<()> {
                 };
                 println!(
                     "apa {locus}: {} sites, {total} UMIs{ipnote} (open {t_open:.2}s, total {:.2}s)",
-                    order.len(), t0.elapsed().as_secs_f32()
+                    order.len(),
+                    t0.elapsed().as_secs_f32()
                 );
                 for st in order.iter().take(12) {
                     println!(
                         "  {chrom}:{}-{} ({}) {} UMIs / {} cells{}{}",
-                        st.lo, st.hi, if st.rev { '-' } else { '+' }, st.umis, st.cells,
-                        gsuffix(&st.gc), ip_cols(st)
+                        st.lo,
+                        st.hi,
+                        if st.rev { '-' } else { '+' },
+                        st.umis,
+                        st.cells,
+                        gsuffix(&st.gc),
+                        ip_cols(st)
                     );
                 }
             }
@@ -7146,11 +7217,20 @@ pub fn run(args: Args) -> Result<()> {
                 let dots: Vec<crate::plots::SiteDot> = by_umis
                     .iter()
                     .map(|st| crate::plots::SiteDot {
-                        cp: st.cp, rev: st.rev, umis: st.umis, ip: st.ip, gc: st.gc.clone(),
+                        cp: st.cp,
+                        rev: st.rev,
+                        umis: st.umis,
+                        ip: st.ip,
+                        gc: st.gc.clone(),
                     })
                     .collect();
                 crate::plots::apa_plot(
-                    plot_path, &chrom, start, end, &dots, &group_names,
+                    plot_path,
+                    &chrom,
+                    start,
+                    end,
+                    &dots,
+                    &group_names,
                     &format!("3'-site usage, {locus}"),
                 )?;
                 eprintln!("wrote {}", plot_path.display());
@@ -7174,8 +7254,17 @@ pub fn run(args: Args) -> Result<()> {
                 &chunks,
                 &chrom_names,
                 ApaTestParams {
-                    gtf, groups, genome, site_gap, min_site_umis, min_gene_umis, tail_extend,
-                    permute, seed, t0, t_open,
+                    gtf,
+                    groups,
+                    genome,
+                    site_gap,
+                    min_site_umis,
+                    min_gene_umis,
+                    tail_extend,
+                    permute,
+                    seed,
+                    t0,
+                    t_open,
                 },
                 &uniform_output,
             )?;
@@ -7305,16 +7394,26 @@ pub fn run(args: Args) -> Result<()> {
                 let unclaimed: Vec<Vec<DiscoveryUnclaimed>> = {
                     let (reader, tables) = la.reader_and_tables();
                     let reader = &*reader;
-                    batch.par_iter().enumerate().map(|(j, info)| {
-                        let i = first + j;
-                        let (compressed, raw_len) = reader.read_compressed_at(&format!("c{i}"))?;
-                        let raw = evidence_io::format::decompress(&compressed, raw_len)?;
-                        let molecules = decode_chunk(&raw, info, None, tables)?;
-                        Ok(discovery_unclaimed(
-                            &molecules, &shapes, patterns.as_deref(), &anno, &anno_of,
-                            claim_mode, solo_strand,
-                        ))
-                    }).collect::<Result<_>>()?
+                    batch
+                        .par_iter()
+                        .enumerate()
+                        .map(|(j, info)| {
+                            let i = first + j;
+                            let (compressed, raw_len) =
+                                reader.read_compressed_at(&format!("c{i}"))?;
+                            let raw = evidence_io::format::decompress(&compressed, raw_len)?;
+                            let molecules = decode_chunk(&raw, info, None, tables)?;
+                            Ok(discovery_unclaimed(
+                                &molecules,
+                                &shapes,
+                                patterns.as_deref(),
+                                &anno,
+                                &anno_of,
+                                claim_mode,
+                                solo_strand,
+                            ))
+                        })
+                        .collect::<Result<_>>()?
                 };
                 la.prefetch_coc(unclaimed.iter().flatten().map(|row| row.4))?;
                 for (j, rows) in unclaimed.into_iter().enumerate() {
@@ -7341,7 +7440,8 @@ pub fn run(args: Args) -> Result<()> {
             if let Some(gtf_out) = &emit_gtf {
                 use std::io::Write as _;
                 let mut w = std::io::BufWriter::new(std::fs::File::create(gtf_out)?);
-                let mut by_pos: Vec<&(u32, u32, u32, bool, usize, usize)> = candidates.iter().collect();
+                let mut by_pos: Vec<&(u32, u32, u32, bool, usize, usize)> =
+                    candidates.iter().collect();
                 by_pos.sort_unstable_by_key(|c2| (c2.0, c2.1));
                 for (k, (ch, s2, e2, rev, _u, _c)) in by_pos.iter().enumerate() {
                     let (cn, st) = (&chrom_names[*ch as usize], if *rev { '-' } else { '+' });
@@ -7354,7 +7454,11 @@ pub fn run(args: Args) -> Result<()> {
                         )?;
                     }
                 }
-                eprintln!("wrote {} candidate loci to {}", candidates.len(), gtf_out.display());
+                eprintln!(
+                    "wrote {} candidate loci to {}",
+                    candidates.len(),
+                    gtf_out.display()
+                );
             }
             if uniform_output.format.is_some() {
                 let summary = json!({
@@ -7399,9 +7503,9 @@ pub fn run(args: Args) -> Result<()> {
                 parameters.insert("annotation_path".into(), json!(gtf));
                 parameters.insert(
                     "annotation_content_blake3".into(),
-                    json!(annotation_content_blake3
-                        .as_deref()
-                        .context("uniform discovery annotation is missing its bound content digest")?),
+                    json!(annotation_content_blake3.as_deref().context(
+                        "uniform discovery annotation is missing its bound content digest"
+                    )?),
                 );
                 parameters.insert("merge_gap".into(), json!(merge_gap));
                 parameters.insert("span_min_umis".into(), json!(min_umis));
@@ -7715,7 +7819,10 @@ pub fn run(args: Args) -> Result<()> {
                 }
             }
             if decode_cells && min_cells > 0 {
-                let keep: Vec<bool> = counts.iter().map(|per_cell| per_cell.len() >= min_cells).collect();
+                let keep: Vec<bool> = counts
+                    .iter()
+                    .map(|per_cell| per_cell.len() >= min_cells)
+                    .collect();
                 selected = selected
                     .into_iter()
                     .zip(&keep)
@@ -7733,11 +7840,8 @@ pub fn run(args: Args) -> Result<()> {
             };
             let (annotation, annotation_content_blake3) = match &gtf {
                 Some(path) => {
-                    let (annotation, digest) = load_junction_annotation(
-                        path,
-                        &chrom,
-                        uniform_output.format.is_some(),
-                    )?;
+                    let (annotation, digest) =
+                        load_junction_annotation(path, &chrom, uniform_output.format.is_some())?;
                     (Some(annotation), digest)
                 }
                 None => (None, None),
@@ -7845,9 +7949,9 @@ pub fn run(args: Args) -> Result<()> {
                     parameters.insert("annotation_path".into(), json!(path));
                     parameters.insert(
                         "annotation_content_blake3".into(),
-                        json!(annotation_content_blake3
-                            .as_deref()
-                            .context("uniform junction annotation is missing its bound content digest")?),
+                        json!(annotation_content_blake3.as_deref().context(
+                            "uniform junction annotation is missing its bound content digest"
+                        )?),
                     );
                 }
                 let context = uniform_query_context(
@@ -8042,7 +8146,11 @@ pub fn run(args: Args) -> Result<()> {
                 eprintln!(
                     "junctions {locus}: {} rows ({} path; open {t_open:.2}s, total {:.2}s)",
                     selected.len(),
-                    if decode_cells { "postings" } else { "index-only" },
+                    if decode_cells {
+                        "postings"
+                    } else {
+                        "index-only"
+                    },
                     t0.elapsed().as_secs_f32()
                 );
             } else if json_output {
@@ -8137,20 +8245,31 @@ pub fn run(args: Args) -> Result<()> {
                 eprintln!(
                     "junctions {locus}: {} rows ({} path; open {t_open:.2}s, total {:.2}s)",
                     selected.len(),
-                    if decode_cells { "postings" } else { "index-only" },
+                    if decode_cells {
+                        "postings"
+                    } else {
+                        "index-only"
+                    },
                     t0.elapsed().as_secs_f32()
                 );
             } else {
                 println!(
                     "junctions {locus}: {} rows ({} path; open {t_open:.2}s, total {:.2}s)",
                     selected.len(),
-                    if decode_cells { "postings" } else { "index-only" },
+                    if decode_cells {
+                        "postings"
+                    } else {
+                        "index-only"
+                    },
                     t0.elapsed().as_secs_f32()
                 );
                 for (index, row) in selected.iter().enumerate() {
                     print!(
                         "  {chrom}:{}-{} support={} chunks={}",
-                        row.donor, row.acceptor, row.supporting_children, row.posts.len()
+                        row.donor,
+                        row.acceptor,
+                        row.supporting_children,
+                        row.posts.len()
                     );
                     if decode_cells {
                         let per_cell = selected_counts[index];
@@ -8532,7 +8651,10 @@ fn parse_graph_design_text(path: &std::path::Path, text: &str) -> Result<Vec<Gra
             bail!("graph design line {line_no} must have four nonempty tab-separated fields");
         }
         if !valid_cohort_identifier(fields[0]) {
-            bail!("graph design line {line_no} has invalid sample ID {:?}", fields[0]);
+            bail!(
+                "graph design line {line_no} has invalid sample ID {:?}",
+                fields[0]
+            );
         }
         if !valid_cohort_identifier(fields[1]) {
             bail!(
@@ -8776,8 +8898,12 @@ fn run_cohort_events(
             archive_bytes,
         });
     }
-    if work.iter().any(|sample| sample.archive_data.genome_sig.is_none())
-        && work.iter().any(|sample| sample.archive_data.genome_sig.is_some())
+    if work
+        .iter()
+        .any(|sample| sample.archive_data.genome_sig.is_none())
+        && work
+            .iter()
+            .any(|sample| sample.archive_data.genome_sig.is_some())
     {
         bail!("cohort samples mix stamped and unstamped genome identities");
     }
@@ -9076,9 +9202,9 @@ fn run_cohort_events(
             parameters.insert("annotation_path".into(), json!(path));
             parameters.insert(
                 "annotation_content_blake3".into(),
-                json!(annotation_content_blake3
-                    .as_deref()
-                    .context("uniform cohort event annotation is missing its bound content digest")?),
+                json!(annotation_content_blake3.as_deref().context(
+                    "uniform cohort event annotation is missing its bound content digest"
+                )?),
             );
         }
         let context = ResultContext {
@@ -9510,7 +9636,9 @@ fn run_cohort_events(
     } else {
         println!(
             "cohort events {locus}: {} retained events across {} samples ({:.2}s)",
-            retained.len(), sample_results.len(), t0.elapsed().as_secs_f32(),
+            retained.len(),
+            sample_results.len(),
+            t0.elapsed().as_secs_f32(),
         );
         for &event in retained.iter().take(20) {
             println!("  {}", keys[event].id());
@@ -9518,15 +9646,20 @@ fn run_cohort_events(
                 let counts = sample.results[event].totals;
                 println!(
                     "    {}\t{} informative\tusage {}",
-                    sample.id, counts.informative(),
-                    counts.usage().map_or_else(|| "NA".to_owned(), |usage| format!("{usage:.4}")),
+                    sample.id,
+                    counts.informative(),
+                    counts
+                        .usage()
+                        .map_or_else(|| "NA".to_owned(), |usage| format!("{usage:.4}")),
                 );
             }
         }
     }
     eprintln!(
         "cohort event engine: {} events retained across {} samples in {:.2}s",
-        retained.len(), sample_results.len(), t0.elapsed().as_secs_f32(),
+        retained.len(),
+        sample_results.len(),
+        t0.elapsed().as_secs_f32(),
     );
     Ok(())
 }
@@ -11065,7 +11198,8 @@ pub fn run_federate(args: FederateArgs) -> Result<()> {
     }
     println!(
         "federated {} archives: {grand_umis} UMIs across {grand_cells} cells total ({:.2}s)",
-        args.archives.len(), t0.elapsed().as_secs_f32()
+        args.archives.len(),
+        t0.elapsed().as_secs_f32()
     );
     Ok(())
 }
@@ -11111,11 +11245,15 @@ fn has_junction(
     acceptor: u32,
 ) -> Result<bool> {
     for blocks in shape.blocks.windows(2) {
-        let donor_offset = blocks[0].0.checked_add(blocks[0].1)
+        let donor_offset = blocks[0]
+            .0
+            .checked_add(blocks[0].1)
             .context("junction donor offset overflow")?;
-        let observed_donor = pos.checked_add(donor_offset)
+        let observed_donor = pos
+            .checked_add(donor_offset)
             .context("junction genomic donor overflow")?;
-        let observed_acceptor = pos.checked_add(blocks[1].0)
+        let observed_acceptor = pos
+            .checked_add(blocks[1].0)
             .context("junction genomic acceptor overflow")?;
         if observed_donor == donor && observed_acceptor == acceptor {
             return Ok(true);
@@ -11354,7 +11492,8 @@ fn apa_test(
         uniform_output.format.is_some(),
         "APA-test",
     )?;
-    let (group_names, cell_group, group_source_content_blake3) = if uniform_output.format.is_some() {
+    let (group_names, cell_group, group_source_content_blake3) = if uniform_output.format.is_some()
+    {
         let (names, mapping, digest) = load_groups_strict(la, &p.groups)?;
         (names, mapping, Some(digest))
     } else {
@@ -11384,8 +11523,10 @@ fn apa_test(
         ent.3 = ent.3.max(e);
     }
     // Archive chrom id -> gene windows sorted by lo, with a running-max hi for interval stabbing.
-    let anno_of: Vec<Option<u32>> =
-        chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
+    let anno_of: Vec<Option<u32>> = chrom_names
+        .iter()
+        .map(|n| anno.chrom_ids.get(n).copied())
+        .collect();
     let mut per_chrom: Vec<Vec<GeneWin>> = (0..chrom_names.len()).map(|_| Vec::new()).collect();
     for (gene, (ac, rev, lo, hi)) in &span {
         if let Some(cid) = anno_of.iter().position(|a| *a == Some(*ac)) {
@@ -11440,7 +11581,10 @@ fn apa_test(
                 }
                 let w = &wins[k];
                 if w.rev == m.strand_rev && tp < w.hi && tp >= w.lo {
-                    pts_of.entry(w.gene).or_default().push((tp, m.strand_rev, cell, m.umi_class));
+                    pts_of
+                        .entry(w.gene)
+                        .or_default()
+                        .push((tp, m.strand_rev, cell, m.umi_class));
                 }
             }
         }
@@ -11458,9 +11602,9 @@ fn apa_test(
     }
     let mut rows: Vec<Row> = Vec::new();
     let process = |gene: u32,
-                       pts: &mut Vec<(u32, bool, u32, u32)>,
-                       seq: Option<&[u8]>,
-                       rows: &mut Vec<Row>| {
+                   pts: &mut Vec<(u32, bool, u32, u32)>,
+                   seq: Option<&[u8]>,
+                   rows: &mut Vec<Row>| {
         let sites = call_sites(pts, p.site_gap, &cell_group, group_names.len(), seq);
         let ip_dropped = sites.iter().filter(|st| st.ip).count();
         let kept: Vec<&SiteCall> = sites
@@ -11541,7 +11685,10 @@ fn apa_test(
             return Err(e);
         }
         if let Some(missed) = genes_by_chrom.keys().next() {
-            bail!("contig {missed} with tested genes not found in {}", fasta.display());
+            bail!(
+                "contig {missed} with tested genes not found in {}",
+                fasta.display()
+            );
         }
     } else {
         let genes: Vec<u32> = pts_of.keys().copied().collect();
@@ -11770,7 +11917,11 @@ fn export_igv(
     for (si, name) in [(0usize, "plus"), (1, "minus")] {
         let path = PathBuf::from(format!("{}.{}.bedgraph", prefix.display(), name));
         let mut w = std::io::BufWriter::new(std::fs::File::create(&path)?);
-        writeln!(w, "track type=bedGraph name=\"molecule coverage ({})\"", if si == 0 { "+" } else { "-" })?;
+        writeln!(
+            w,
+            "track type=bedGraph name=\"molecule coverage ({})\"",
+            if si == 0 { "+" } else { "-" }
+        )?;
         let cv = &cov[si];
         let mut i = 0usize;
         while i < cv.len() {
@@ -11780,7 +11931,12 @@ fn export_igv(
                 j += 1;
             }
             if v > 0 {
-                writeln!(w, "{chrom}\t{}\t{}\t{v}", start as usize + i, start as usize + j + 1)?;
+                writeln!(
+                    w,
+                    "{chrom}\t{}\t{}\t{v}",
+                    start as usize + i,
+                    start as usize + j + 1
+                )?;
             }
             i = j + 1;
         }
@@ -11799,7 +11955,8 @@ fn export_igv(
             writeln!(
                 w,
                 "{chrom}\t{bs}\t{be}\tJUNC{k:05}\t{}\t{strand}\t{bs}\t{be}\t0,0,0\t2\t20,20\t0,{}",
-                n.min(&1000), ac - bs
+                n.min(&1000),
+                ac - bs
             )?;
             k += 1;
         }
@@ -12020,10 +12177,10 @@ mod junction_listing_tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let original = b"chr1\tt\texon\t1\t10\t.\t+\t.\tgene_id \"G_OLD\"; transcript_id \"T_OLD\";\n";
+        let original =
+            b"chr1\tt\texon\t1\t10\t.\t+\t.\tgene_id \"G_OLD\"; transcript_id \"T_OLD\";\n";
         std::fs::write(&path, original).unwrap();
-        let (annotation, digest) =
-            load_query_annotation(&path, "test annotation", true).unwrap();
+        let (annotation, digest) = load_query_annotation(&path, "test annotation", true).unwrap();
 
         std::fs::write(
             &path,
@@ -12301,24 +12458,8 @@ mod junction_listing_tests {
         );
         assert!(bulk_packed[0].cells.is_empty());
         assert_eq!(
-            event_json(
-                &event,
-                &bulk_packed[0],
-                &[],
-                None,
-                &bulk_scope,
-                &[],
-                20,
-            ),
-            event_json(
-                &event,
-                &bulk_reference[0],
-                &[],
-                None,
-                &bulk_scope,
-                &[],
-                20,
-            ),
+            event_json(&event, &bulk_packed[0], &[], None, &bulk_scope, &[], 20,),
+            event_json(&event, &bulk_reference[0], &[], None, &bulk_scope, &[], 20,),
         );
     }
 
@@ -12360,13 +12501,7 @@ mod junction_listing_tests {
     #[test]
     fn cohort_row_gate_cli_defaults_off_and_rejects_negative_values() {
         let args = CohortArgs::try_parse_from([
-            "cohort",
-            "events",
-            "chr1:1-2",
-            "--sample",
-            "D0=a.aie",
-            "--sample",
-            "D1=b.aie",
+            "cohort", "events", "chr1:1-2", "--sample", "D0=a.aie", "--sample", "D1=b.aie",
         ])
         .unwrap();
         let min_row_informative = match args.what {
@@ -12539,15 +12674,13 @@ mod junction_listing_tests {
     #[test]
     fn cohort_named_paths_are_strict_and_deterministic() {
         assert_eq!(
-            parse_named_paths(&["D0=/tmp/d0.aie".to_owned()], "sample")
-                .unwrap(),
+            parse_named_paths(&["D0=/tmp/d0.aie".to_owned()], "sample").unwrap(),
             vec![("D0".to_owned(), PathBuf::from("/tmp/d0.aie"))]
         );
-        assert!(parse_named_paths(
-            &["D0=/tmp/a".to_owned(), "D0=/tmp/b".to_owned()],
-            "sample",
-        )
-        .is_err());
+        assert!(
+            parse_named_paths(&["D0=/tmp/a".to_owned(), "D0=/tmp/b".to_owned()], "sample",)
+                .is_err()
+        );
         assert!(parse_named_paths(&["bad/id=/tmp/a".to_owned()], "sample").is_err());
         assert!(parse_named_paths(&["D0".to_owned()], "sample").is_err());
     }

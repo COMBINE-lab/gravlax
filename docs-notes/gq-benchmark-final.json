@@ -1,0 +1,203 @@
+{
+  "method": "one warmup; randomized interleaving; warm filesystem cache; four Rayon threads; complete processes and JSON output; exact Truth count equivalence required on every run",
+  "binary_sha256": "a7d2d1d3dde05a96a1c4d6a0cb12b8aa6c90f100f52d2a037d28f73aa1425bba",
+  "repeats": 5,
+  "experiments": [
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "record_marginals",
+      "states": {
+        "false": 53936
+      },
+      "median_ms": {
+        "cooccur": 16.398009,
+        "gq": 76.111849
+      },
+      "runs_ms": {
+        "cooccur": [
+          16.914398,
+          16.398009,
+          16.665503,
+          16.164648,
+          16.350869
+        ],
+        "gq": [
+          76.653975,
+          76.852184,
+          75.520218,
+          75.991969,
+          76.111849
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 533918
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "same_observation",
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "median_ms": {
+        "gq": 82.086615,
+        "cooccur": 16.811563
+      },
+      "runs_ms": {
+        "gq": [
+          82.086615,
+          83.298129,
+          81.18724,
+          82.107957,
+          81.620974
+        ],
+        "cooccur": [
+          17.289923,
+          16.811563,
+          17.555313,
+          16.65041,
+          16.713826
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 716526
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "case": "nonvacuous_universal",
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "median_ms": {
+        "cooccur": 17.152376,
+        "gq": 82.46862
+      },
+      "runs_ms": {
+        "cooccur": [
+          16.993276,
+          17.40719,
+          16.979155,
+          17.236923,
+          17.152376
+        ],
+        "gq": [
+          82.147818,
+          82.097321,
+          82.524885,
+          82.46862,
+          82.829703
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 824398
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "record_marginals",
+      "states": {
+        "false": 53936
+      },
+      "median_ms": {
+        "cooccur": 18.505923,
+        "gq": 85.737151
+      },
+      "runs_ms": {
+        "cooccur": [
+          18.715248,
+          18.420115,
+          18.626235,
+          18.137529,
+          18.505923
+        ],
+        "gq": [
+          85.737151,
+          85.3577,
+          86.546139,
+          85.886967,
+          85.276047
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 615103
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "same_observation",
+      "states": {
+        "false": 44906,
+        "true": 9030
+      },
+      "median_ms": {
+        "gq": 92.415457,
+        "cooccur": 19.660462
+      },
+      "runs_ms": {
+        "gq": [
+          92.416358,
+          94.082477,
+          90.85008,
+          90.938142,
+          92.415457
+        ],
+        "cooccur": [
+          19.660462,
+          20.13674,
+          19.144686,
+          20.147335,
+          19.32727
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 851467
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "case": "nonvacuous_universal",
+      "states": {
+        "false": 47634,
+        "true": 6302
+      },
+      "median_ms": {
+        "gq": 93.103853,
+        "cooccur": 19.739881
+      },
+      "runs_ms": {
+        "gq": [
+          92.760717,
+          93.103853,
+          92.855369,
+          93.644167,
+          93.635173
+        ],
+        "cooccur": [
+          20.198623,
+          19.641504,
+          19.739881,
+          19.816296,
+          19.371597
+        ]
+      },
+      "gq_work": {
+        "decoded_chunks": 14,
+        "decoded_records": 54173,
+        "expression_steps": 959339
+      }
+    }
+  ]
+}

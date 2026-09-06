@@ -33,8 +33,8 @@ used an annotation. This page describes the format at the level a user or tool a
    - genomic chunks and cell postings support region and APA scans without a
      whole-archive decode.
 3. **Access is genome-major.** Replay is a sequential genome-ordered scan;
-   junction/region/discovery queries are range reads; per-cell access goes
-   through postings, never a scan.
+   junction/region/discovery queries are range reads; cell postings support scoped
+   access. Complete-cell closure in GQ currently requires an explicit full scan.
 4. **Evolution is explicit.** A versioned container and named sections allow
    optional evidence to be added. The current core is intentionally lossy:
    barcode correction is fixed at ingest, sequence and qualities are absent, and most
@@ -67,8 +67,9 @@ among them:
 - **Junction chains, two representatives each.** Unique-mapping reads group
   into loci (single-linkage, 2 kb gap) and, within a locus, into junction
   chains keyed by absolute junction coordinates. Each chain stores its two
-  span-extreme reads — the most-contained and most-extended — plus the chain
-  read count. These do not establish every intermediate aligned-block overlap;
+  representatives at the minimum and maximum under `(start, Reverse(end))`
+  ordering, plus the chain read count. These are not global bounds on omitted
+  ends and do not establish every intermediate aligned-block overlap;
   negative overlap predicates can therefore remain indeterminate. Chains are position-sorted and the span-minimum representative
   comes first, so the anchor offset of the first representative is implied
   and never stored.
@@ -109,8 +110,10 @@ footer         section directory (name, offset, raw length, compressed length)
 
 ### Experimental archive improvements
 
-The `astra-improvements` branch adds four opt-in ingest switches. Existing
+Version 0.2.0 adds four opt-in ingest switches. Existing
 archives remain readable; omitting the switches preserves the default encoding.
+The producer version recorded in authenticated provenance changes across releases,
+so unchanged encoding does not imply identical whole-file bytes or content roots.
 
 - `--access-index` embeds root-authenticated `index.access` postings for repeated
   UMI classes, aligned-block tiles, and exact junctions in unique, direct and

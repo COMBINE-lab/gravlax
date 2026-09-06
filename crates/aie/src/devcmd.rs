@@ -31,6 +31,8 @@ enum Command {
     StructuralBench(crate::structuralbench::Args),
     /// Measure exact compact-base plus sparse geometry/count corrections.
     SparseBench(crate::sparsebench::Args),
+    /// Evaluate exact path/length geometry, independent streams, and geometry sharing.
+    PathBench(crate::pathbench::Args),
     /// Run multimapper-recovery modes and masked-evidence scoring.
     Em(crate::archivecmd::EmArgs),
 }
@@ -47,6 +49,7 @@ pub fn run(args: Args) -> Result<()> {
         Command::Debug(args) => crate::debugcmd::run(args),
         Command::StructuralBench(args) => crate::structuralbench::run(args),
         Command::SparseBench(args) => crate::sparsebench::run(args),
+        Command::PathBench(args) => crate::pathbench::run(args),
         Command::Em(args) => crate::archivecmd::run_em(args),
     }
 }
