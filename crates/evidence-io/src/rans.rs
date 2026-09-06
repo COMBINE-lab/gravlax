@@ -180,7 +180,6 @@ pub fn decode_limited(payload: &[u8], t: &Table, max_values: usize) -> Result<Ve
     let mut body = &payload[start + 8..sym_end];
     let extras = &payload[sym_end..];
     let (mut bitpos, mut out) = (0usize, Vec::with_capacity(n));
-    let mut syms = Vec::with_capacity(n);
     for _ in 0..n {
         let slot = (x & (SCALE as u64 - 1)) as usize;
         let s = t.lookup[slot] as usize;
@@ -191,9 +190,8 @@ pub fn decode_limited(payload: &[u8], t: &Table, max_values: usize) -> Result<Ve
             body = rest;
             x = (x << 8) | b as u64;
         }
-        syms.push(s);
-    }
-    for s in syms {
+        // Expand immediately using the independent extra-bit cursor, avoiding an
+        // intermediate usize vector and a second pass over every symbol.
         if s < 128 {
             out.push(s as u64);
         } else {

@@ -26,7 +26,10 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+pub(super) mod engine;
+
 const MAX_PREDICATES: usize = 64;
+const MAX_EXPRESSION_BYTES: usize = 4096;
 const NEGATIVE_TERM_SEMANTICS: &str =
     "not observed in the selected retained archive evidence unit; not biological absence";
 const UMI_CLASS_IDENTITY: &str = "the default molecule_record evaluates only uniquely mapped, locus-resolved archive records for a barcode-corrected cell and exact raw UMI value; archive-wide exact raw-UMI-value-class union is explicit because same-value collisions can combine distinct physical molecules; one-mismatch UMI edges are not collapsed";
@@ -76,7 +79,7 @@ enum PlacementScopeArg {
     Direct,
     /// Inspect every retained multimapper alternative for junction and aligned-block predicates;
     /// archive-anchor regions remain record-anchor tests. An indexed junction universe then
-    /// requires --allow-full-scan because archive v2 has no alternative-placement postings.
+    /// requires --allow-full-scan unless the archive has optional access-index postings.
     All,
 }
 
@@ -92,9 +95,19 @@ impl PlacementScopeArg {
 
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Named predicate NAME=KIND:chrom:start-end[:+|-]; KIND is region, junction, or terminal.
+    /// Named region/junction/terminal/start/end predicate NAME=KIND:chrom:start-end[:strand].
+    /// overlap and junction-near append /N bases; path/subpath accept comma-separated junctions.
     #[arg(long = "predicate", required = true)]
     predicates: Vec<String>,
+    /// Evaluate --where across the record, or within any/all individual retained placements.
+    #[arg(long, value_enum, default_value_t = engine::MatchWithin::Record)]
+    match_within: engine::MatchWithin,
+    /// Print the logical plan and initial chunk routes without decoding molecule payloads.
+    #[arg(long)]
+    explain: bool,
+    /// Execution backend for reproducible differential benchmarks.
+    #[arg(long, value_enum, default_value_t = engine::Engine::Auto, hide = true)]
+    engine: engine::Engine,
     /// Boolean expression over predicate names using !, &, |, and parentheses.
     #[arg(long = "where")]
     expression: String,
@@ -144,6 +157,17 @@ pub(super) fn validate(args: &Args) -> Result<()> {
         bail!("cooccur requires --format text, --format tsv, or --format json");
     }
     super::validate_uniform_output_flags(&args.output, false, false)?;
+    if args.explain
+        && (args.output.output.is_some()
+            || args.output.format != Some(super::UniformQueryFormat::Json))
+    {
+        bail!("--explain requires --format json and writes to stdout (no --output)");
+    }
+    if args.match_within != engine::MatchWithin::Record
+        && args.unit != EvidenceUnitArg::MoleculeRecord
+    {
+        bail!("--match-within placement quantifiers currently require --unit molecule-record");
+    }
     if args.max_chunks == 0 {
         bail!("--max-chunks must be at least 1");
     }
@@ -156,17 +180,21 @@ pub(super) fn validate(args: &Args) -> Result<()> {
     if args.max_pattern_rows == 0 {
         bail!("--max-pattern-rows must be at least 1");
     }
-    if args.unit == EvidenceUnitArg::UmiClass && !args.allow_full_scan {
-        bail!("--unit umi-class requires --allow-full-scan for exact cross-record evaluation");
-    }
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 enum PredicateKind {
     Region,
     Junction,
     Terminal,
+    Overlap,
+    Start,
+    End,
+    JunctionNear,
+    Path,
+    Subpath,
 }
 
 impl PredicateKind {
@@ -175,11 +203,17 @@ impl PredicateKind {
             Self::Region => "region",
             Self::Junction => "junction",
             Self::Terminal => "terminal",
+            Self::Overlap => "overlap",
+            Self::Start => "start",
+            Self::End => "end",
+            Self::JunctionNear => "junction_near",
+            Self::Path => "path",
+            Self::Subpath => "subpath",
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 struct Predicate {
     name: String,
     kind: PredicateKind,
@@ -189,6 +223,8 @@ struct Predicate {
     start: u32,
     end: u32,
     strand_rev: Option<bool>,
+    threshold: u32,
+    path: Vec<(u32, u32)>,
 }
 
 fn valid_name(name: &str) -> bool {
@@ -238,34 +274,13 @@ fn parse_predicates(values: &[String], chrom_names: &[String]) -> Result<Vec<Pre
             let (kind, locus) = descriptor
                 .split_once(':')
                 .context("predicate must include region:, junction:, or terminal:")?;
-            let kind = match kind {
-                "region" => PredicateKind::Region,
-                "junction" => PredicateKind::Junction,
-                "terminal" | "terminal-tail" => PredicateKind::Terminal,
-                _ => bail!("predicate {name} has unknown kind {kind:?}"),
-            };
-            let (chrom, start, end, strand_rev) = parse_stranded_locus(locus)
-                .with_context(|| format!("invalid predicate {name}"))?;
-            let chrom_id = chrom_names
-                .iter()
-                .position(|candidate| candidate == &chrom)
-                .map(|index| index as u32)
-                .with_context(|| format!("predicate {name} names unknown chromosome {chrom}"))?;
-            Ok(Predicate {
-                name: name.to_owned(),
-                kind,
-                locus: locus.to_owned(),
-                chrom,
-                chrom_id,
-                start,
-                end,
-                strand_rev,
-            })
+            engine::parse_atom(name, kind, locus, chrom_names)
         })
         .collect()
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "op", content = "args", rename_all = "snake_case")]
 enum Expression {
     Predicate(usize),
     Not(Box<Expression>),
@@ -323,6 +338,16 @@ impl TruthValue {
 }
 
 impl Expression {
+    fn referenced_mask(&self) -> u64 {
+        match self {
+            Self::Predicate(index) => 1_u64 << index,
+            Self::Not(value) => value.referenced_mask(),
+            Self::And(left, right) | Self::Or(left, right) => {
+                left.referenced_mask() | right.referenced_mask()
+            }
+        }
+    }
+
     fn evaluate(&self, observed_mask: u64, completeness_mask: u64) -> TruthValue {
         match self {
             Self::Predicate(index) => {
@@ -362,6 +387,13 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse(mut self) -> Result<Expression> {
+        if self.source.len() > MAX_EXPRESSION_BYTES {
+            bail!("--where exceeds {MAX_EXPRESSION_BYTES} bytes");
+        }
+        // Bound both recursive parsing and the resulting left-deep evaluation tree.
+        if self.source.bytes().filter(|b| b"!&|(".contains(b)).count() > 128 {
+            bail!("--where exceeds 128 operators/parentheses");
+        }
         let expression = self.parse_or()?;
         self.skip_space();
         if self.position != self.source.len() {
@@ -581,8 +613,7 @@ impl MatchContext<'_> {
     }
 
     fn absence_is_complete(&self, predicate: &Predicate, molecule: &MolRec) -> bool {
-        if predicate.kind != PredicateKind::Region
-            || self.region_match != RegionMatchArg::AlignedBlock
+        if !engine::needs_full_geometry(predicate, self.region_match)
             || predicate.chrom_id != molecule.chrom
             || !strand_matches(predicate.strand_rev, molecule.strand_rev)
         {
@@ -624,7 +655,14 @@ impl MatchContext<'_> {
                     && strand_matches(predicate.strand_rev, tail.strand_rev)
                     && interval_contains(predicate, tail.cleavage_anchor)
             })),
-            PredicateKind::Region | PredicateKind::Junction => {
+            PredicateKind::Region
+            | PredicateKind::Junction
+            | PredicateKind::Overlap
+            | PredicateKind::Start
+            | PredicateKind::End
+            | PredicateKind::JunctionNear
+            | PredicateKind::Path
+            | PredicateKind::Subpath => {
                 let mut matched = false;
                 let mut inspect = |chrom: u32,
                                    position: u32,
@@ -681,7 +719,7 @@ impl MatchContext<'_> {
                             }
                             contains
                         }
-                        PredicateKind::Terminal => unreachable!(),
+                        _ => engine::matches_shape(predicate, position, shape)?,
                     };
                     Ok(())
                 };
@@ -739,6 +777,7 @@ struct RecordHit {
     class: u32,
     mask: u64,
     completeness_mask: u64,
+    placement_selection: Option<TruthValue>,
 }
 
 struct ScanRequest<'a> {
@@ -753,6 +792,10 @@ struct ScanRequest<'a> {
     patterns: Option<&'a [Vec<PatAlt>]>,
     terminal: &'a TerminalEvidence,
     max_records: usize,
+    scope: &'a super::QueryScope,
+    expression: &'a Expression,
+    match_within: engine::MatchWithin,
+    engine: engine::Engine,
 }
 
 fn scan_records(la: &mut LazyArchive, request: &ScanRequest<'_>) -> Result<Vec<RecordHit>> {
@@ -795,11 +838,38 @@ fn scan_records(la: &mut LazyArchive, request: &ScanRequest<'_>) -> Result<Vec<R
                 shapes: request.shapes,
                 patterns: request.patterns,
             };
+            let mut compiled = engine::CompiledMatcher::new(&matcher);
+            if request.scope.selected.is_some() {
+                la.prefetch_coc(molecules.iter().map(|molecule| molecule.umi_class))?;
+            }
+            let selected_classes = if request.scope.selected.is_some() {
+                Some(
+                    molecules
+                        .iter()
+                        .map(|molecule| {
+                            Ok((
+                                molecule.umi_class,
+                                request
+                                    .scope
+                                    .includes(la.cell_of_cached(molecule.umi_class)?),
+                            ))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        .filter_map(|(class, selected)| selected.then_some(class))
+                        .collect::<FxHashSet<_>>(),
+                )
+            } else {
+                None
+            };
             let mut chunk_hits: Vec<RecordHit> = molecules
                 .iter()
                 .enumerate()
                 .filter(|(_, molecule)| {
                     (request.placements != PlacementScopeArg::Unique || !molecule.chains.is_empty())
+                        && selected_classes
+                            .as_ref()
+                            .is_none_or(|classes| classes.contains(&molecule.umi_class))
                         && request
                             .candidate_classes
                             .is_none_or(|classes| classes.contains(&molecule.umi_class))
@@ -807,12 +877,15 @@ fn scan_records(la: &mut LazyArchive, request: &ScanRequest<'_>) -> Result<Vec<R
                 .map(|(local_record, molecule)| -> Result<RecordHit> {
                     let local_record = u32::try_from(local_record)
                         .context("chunk molecule ordinal exceeds u32")?;
-                    let (mask, completeness_mask) = matcher.masks(
+                    let (mask, completeness_mask, placement_selection) = compiled.masks(
                         molecule,
                         tails_by_record
                             .get(&local_record)
                             .map(Vec::as_slice)
                             .unwrap_or_default(),
+                        request.expression,
+                        request.match_within,
+                        request.engine,
                     )?;
                     Ok(RecordHit {
                         chunk: chunk_index as u32,
@@ -823,6 +896,7 @@ fn scan_records(la: &mut LazyArchive, request: &ScanRequest<'_>) -> Result<Vec<R
                         class: molecule.umi_class,
                         mask,
                         completeness_mask,
+                        placement_selection,
                     })
                 })
                 .collect::<Result<_>>()?;
@@ -886,13 +960,40 @@ fn route_universe(
     chunks: &[ChunkInfo],
     terminal: &TerminalEvidence,
 ) -> Result<(Vec<usize>, Option<&'static str>)> {
-    let reason = universe_route_full_scan_reason(args, universe);
+    let mode = match args.placements {
+        PlacementScopeArg::Unique => 0,
+        PlacementScopeArg::Direct => 1,
+        PlacementScopeArg::All => 2,
+    };
+    let indexed = if universe.kind == PredicateKind::Junction
+        || (universe.kind == PredicateKind::Region
+            && args.region_match == RegionMatchArg::AlignedBlock)
+    {
+        la.access_index()?.map(|index| {
+            index.geometry_chunks(
+                universe.kind == PredicateKind::Junction,
+                mode,
+                universe.chrom_id,
+                universe.start,
+                universe.end,
+            )
+        })
+    } else {
+        None
+    };
+    let reason = if indexed.is_some() {
+        None
+    } else {
+        universe_route_full_scan_reason(args, universe)
+    };
     if !args.allow_full_scan {
         if let Some(message) = reason {
             bail!("{message}; rerun with --allow-full-scan");
         }
     }
-    let mut selected = if reason.is_some() {
+    let mut selected = if let Some(indexed) = indexed {
+        indexed
+    } else if reason.is_some() {
         (0..chunks.len()).collect::<Vec<_>>()
     } else {
         match universe.kind {
@@ -917,6 +1018,7 @@ fn route_universe(
                     .unwrap_or_default()
             }
             PredicateKind::Terminal => terminal.routed_chunks(universe)?,
+            _ => bail!("--universe must name region, junction, or terminal; use other geometry predicates in --where"),
         }
     };
     selected.sort_unstable();
@@ -970,7 +1072,9 @@ fn evaluate_record_units(
                 contributing_records: 1,
                 mask: record.mask,
                 completeness_mask: record.completeness_mask,
-                selection: expression.evaluate(record.mask, record.completeness_mask),
+                selection: record
+                    .placement_selection
+                    .unwrap_or_else(|| expression.evaluate(record.mask, record.completeness_mask)),
             })
         })
         .collect()
@@ -1151,6 +1255,8 @@ struct Summary<'a> {
     multimapper_alternative_semantics: &'static str,
     jointly_realizable_multimapper_placement_claimed: bool,
     umi_class_identity: &'static str,
+    match_within: engine::MatchWithin,
+    placement_quantifier_semantics: &'static str,
 }
 
 pub(super) struct RunContext<'a> {
@@ -1178,6 +1284,9 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         .map(|(index, predicate)| (predicate.name.clone(), index))
         .collect();
     let expression = ExpressionParser::new(&args.expression, &names).parse()?;
+    if args.match_within != engine::MatchWithin::Record {
+        engine::validate_local_expression(&expression, &predicates, args.region_match)?;
+    }
     let universe_index = names
         .get(&args.universe)
         .copied()
@@ -1188,14 +1297,45 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         .iter()
         .any(|predicate| predicate.kind == PredicateKind::Terminal);
     let terminal = TerminalEvidence::open(la, terminal_required, args.max_terminal_events)?;
-    let (selected_chunks, _) = route_universe(&args, universe, la, chunks, &terminal)?;
-    let full_scan_reason = full_scan_reason(&args, universe);
+    let indexed_access = la.access_index()?.is_some();
+    if args.unit == EvidenceUnitArg::UmiClass && !args.allow_full_scan && !indexed_access {
+        bail!("--unit umi-class requires --allow-full-scan or an archive with --access-index for exact cross-record evaluation");
+    }
+    let (selected_chunks, route_reason) = route_universe(&args, universe, la, chunks, &terminal)?;
+    let full_scan_reason = if indexed_access {
+        None
+    } else {
+        full_scan_reason(&args, universe)
+    };
     if full_scan_reason.is_some() && chunks.len() > args.max_chunks {
         bail!(
             "cooccur exact full scan needs {} chunks, exceeding --max-chunks {}; raise the explicit bound or choose a routed evidence unit",
             chunks.len(),
             args.max_chunks
         );
+    }
+    let mut scope = load_query_scope(la, &args.scope)?;
+    scope.ensure_resolved_mapping_digest()?;
+    if args.explain {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "schema": "gravlax.query.cooccur.plan.v1",
+                "predicates": predicates, "expression": expression,
+                "universe_index": universe_index, "evidence_unit": args.unit.name(),
+                "match_within": args.match_within, "placements": args.placements.name(),
+                "region_match": args.region_match.name(), "cell_scope": scope.provenance_json(),
+                "initial_chunks": selected_chunks, "archive_chunks": chunks.len(),
+                "initial_candidate_records_upper_bound": selected_chunks.iter().map(|&i| u64::from(chunks[i].n_mols)).sum::<u64>(),
+                "class_closure": if args.unit == EvidenceUnitArg::UmiClass { "data-dependent additional routes after universe witnesses" } else { "not required" },
+                "access_index_available": indexed_access, "full_scan_reason": route_reason,
+                "expression_route_pruning": "disabled: all universe patterns are part of the result",
+                "cell_filter_stage": "before geometry matching; original record ordinals preserved",
+                "molecule_payloads_decoded": 0,
+                "geometry_cache_entry_cap_per_chunk": 65536
+            }))?
+        );
+        return Ok(());
     }
     let global_offsets = global_record_offsets(chunks)?;
     let shapes = la.shapes()?;
@@ -1214,6 +1354,10 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         patterns: patterns.as_deref().map(Vec::as_slice),
         terminal: &terminal,
         max_records: args.max_evidence_records,
+        scope: &scope,
+        expression: &expression,
+        match_within: args.match_within,
+        engine: args.engine,
     };
     let candidate_records = scan_records(la, &candidate_scan)?;
     let (mut units, chunks_read) = match args.unit {
@@ -1228,9 +1372,17 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
                 .map(|record| record.class)
                 .collect();
             let routed: FxHashSet<usize> = selected_chunks.iter().copied().collect();
-            let remaining_chunks: Vec<usize> = (0..chunks.len())
+            let class_chunks = match la.access_index()? {
+                Some(index) => index.class_chunks(classes.iter().copied())?,
+                None => (0..chunks.len()).collect(),
+            };
+            let remaining_chunks: Vec<usize> = class_chunks
+                .into_iter()
                 .filter(|chunk| !routed.contains(chunk))
                 .collect();
+            if selected_chunks.len() + remaining_chunks.len() > args.max_chunks {
+                bail!("exact class routes exceed --max-chunks {}", args.max_chunks);
+            }
             let mut all_records = candidate_records.clone();
             let chunks_read = if classes.is_empty() {
                 selected_chunks.len()
@@ -1249,6 +1401,10 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
                     max_records: args
                         .max_evidence_records
                         .saturating_sub(candidate_records.len()),
+                    scope: &scope,
+                    expression: &expression,
+                    match_within: args.match_within,
+                    engine: args.engine,
                 };
                 all_records.extend(scan_records(la, &all_scan)?);
                 selected_chunks.len() + remaining_chunks.len()
@@ -1265,8 +1421,6 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
             )
         }
     };
-    let mut scope = load_query_scope(la, &args.scope)?;
-    scope.ensure_resolved_mapping_digest()?;
     units.retain(|unit| scope.includes(unit.cell));
     let cell_dictionary = la.cells()?.to_vec();
     units.sort_unstable_by_key(|unit| {
@@ -1337,6 +1491,8 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         },
         jointly_realizable_multimapper_placement_claimed: false,
         umi_class_identity: UMI_CLASS_IDENTITY,
+        match_within: args.match_within,
+        placement_quantifier_semantics: "any/all evaluate the complete expression on each retained placement independently; all is non-vacuous; omitted unique geometries make geometry-sensitive unwitnessed any or unrefuted all unknown; junction paths are invariant within a retained chain; pattern masks remain record-level marginal observations",
     };
     let predicate_schema = TableSchema::new(
         "gravlax.query.cooccur.predicates.v1",
@@ -1356,8 +1512,16 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
         TableSemantics::new(RowSemantics::Sequence)
             .ordered_by([gravlax_output::OrderKey::ascending("predicate_index")]),
     )?;
+    let mut pattern_key = vec!["aggregation", "entity", "pattern_mask", "completeness_mask"];
+    let pattern_schema_id = if args.match_within == engine::MatchWithin::Record {
+        "gravlax.query.cooccur.patterns.v1"
+    } else {
+        // Equal marginal masks can have different placement-local truth values.
+        pattern_key.push("selection_state");
+        "gravlax.query.cooccur.patterns.v2"
+    };
     let pattern_schema = TableSchema::new(
-        "gravlax.query.cooccur.patterns.v1",
+        pattern_schema_id,
         vec![
             Field::new("aggregation", DataType::String),
             Field::new("entity", DataType::String),
@@ -1371,12 +1535,7 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
             Field::new("scope_cells", DataType::UInt64).nullable(),
         ],
     )?
-    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key([
-        "aggregation",
-        "entity",
-        "pattern_mask",
-        "completeness_mask",
-    ]))?;
+    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(pattern_key))?;
     let membership_schema = TableSchema::new(
         "gravlax.query.cooccur.memberships.v1",
         vec![
@@ -1398,10 +1557,12 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
     .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["unit_id"]))?;
     let mut parameters = BTreeMap::new();
     parameters.insert("expression".into(), json!(args.expression));
+    parameters.insert("match_within".into(), json!(args.match_within));
     parameters.insert("universe".into(), json!(args.universe));
     parameters.insert("evidence_unit".into(), json!(args.unit.name()));
     parameters.insert("region_match".into(), json!(args.region_match.name()));
     parameters.insert("placement_scope".into(), json!(args.placements.name()));
+    parameters.insert("access_index".into(), json!(indexed_access));
     parameters.insert("cell_scope".into(), scope.provenance_json());
     parameters.insert("aggregation".into(), json!(scope.aggregation_name()));
     parameters.insert("max_chunks".into(), json!(args.max_chunks));
@@ -1461,6 +1622,12 @@ pub(super) fn run(context: RunContext<'_>, args: Args) -> Result<()> {
                         row.string(match predicate.kind {
                             PredicateKind::Region => args.region_match.name(),
                             PredicateKind::Junction => "exact retained junction boundaries",
+                            PredicateKind::Overlap => "at least /N bases in one retained aligned block",
+                            PredicateKind::Start => "leftmost aligned-block start boundary in interval (genomic, not transcriptional)",
+                            PredicateKind::End => "rightmost aligned-block exclusive end boundary in interval (genomic, not transcriptional)",
+                            PredicateKind::JunctionNear => "both junction boundaries within explicit /N bases; no merging",
+                            PredicateKind::Path => "consecutive observed junctions on one retained placement in genomic order",
+                            PredicateKind::Subpath => "ordered observed junction subsequence on one retained placement in genomic order",
                             PredicateKind::Terminal => {
                                 "lossless terminal-tail cleavage anchor in interval"
                             }
@@ -1864,6 +2031,7 @@ mod tests {
             Box::new(Expression::Predicate(1)),
         );
         let first_locus = RecordHit {
+            placement_selection: None,
             chunk: 0,
             local_record: 0,
             global_record: 0,
@@ -1872,6 +2040,7 @@ mod tests {
             completeness_mask: 0b11,
         };
         let second_locus = RecordHit {
+            placement_selection: None,
             chunk: 1,
             local_record: 0,
             global_record: 1,

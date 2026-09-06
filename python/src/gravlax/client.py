@@ -86,6 +86,46 @@ def _nonnegative(value: int, where: str) -> int:
     return value
 
 
+def _gq_args(
+    action: str, query: PathToken, *,
+    bindings: Optional[Mapping[str, PathToken]] = None,
+    project: Optional[PathToken] = None,
+    metadata: Optional[PathToken] = None,
+    allow_full_scan: bool = False,
+    max_chunks: int = 4096,
+    max_records: int = 1_000_000,
+    max_steps: int = 100_000_000,
+    max_rows: int = 100_000,
+    max_terminal_events: int = 1_000_000,
+    parallel_decode: bool = False,
+) -> list[PathToken]:
+    if not isinstance(allow_full_scan, bool):
+        raise TypeError("allow_full_scan must be bool")
+    if not isinstance(parallel_decode, bool):
+        raise TypeError("parallel_decode must be bool")
+    args: list[PathToken] = ["gq", action]
+    for alias, path in (bindings or {}).items():
+        if not isinstance(alias, str) or not alias.isascii() or not alias.isidentifier():
+            raise ValueError("GQ source aliases must be ASCII identifiers")
+        args.append(_option("bind", f"{alias}={_token(path, 'archive')}"))
+    if project is not None:
+        args.append(_option("project", project))
+    if metadata is not None:
+        args.append(_option("metadata", metadata))
+    if allow_full_scan:
+        args.append("--allow-full-scan")
+    if parallel_decode:
+        args.append("--parallel-decode")
+    for name, value in (
+        ("max-chunks", max_chunks), ("max-records", max_records),
+        ("max-steps", max_steps), ("max-rows", max_rows),
+    ):
+        args.append(_option(name, str(_positive(value, name))))
+    args.append(_option("max-terminal-events", str(_nonnegative(max_terminal_events, "max_terminal_events"))))
+    args.extend(["--", _token(query, "query")])
+    return args
+
+
 def _uniform_count_query_args(
     archive: PathToken,
     command: str,
@@ -771,6 +811,31 @@ class Client:
         """
 
         return self.run_to_file(args, output, replace=replace, timeout=timeout)
+
+    def gq_validate(self, query: PathToken, **options: Any) -> Any:
+        """Validate a GQ document; unbound validation is syntax/type checking only."""
+
+        return self.run_json(_gq_args("validate", query, **options))
+
+    def gq_explain(self, query: PathToken, **options: Any) -> Any:
+        """Inspect GQ resource requirements, initial routes, closure, and budgets."""
+
+        return self.run_json(_gq_args("explain", query, **options))
+
+    def gq_run(self, query: PathToken, **options: Any) -> UniformResultBundle:
+        """Execute GQ and return its typed tables, Truth states, and provenance."""
+
+        return self.result_bundle(_gq_args("run", query, **options))
+
+    def gq_run_to_file(
+        self, query: PathToken, output: PathToken, *, replace: bool = False,
+        **options: Any,
+    ) -> FileCommandResult:
+        """Execute GQ and publish its result atomically without materializing Python rows."""
+
+        return self.result_bundle_to_file(
+            _gq_args("run", query, **options), output, replace=replace
+        )
 
     def query_region(
         self,

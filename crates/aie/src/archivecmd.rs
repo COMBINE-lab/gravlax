@@ -86,6 +86,21 @@ pub struct IngestArgs {
     /// regional reads; the ingest report prints the resulting archive size.
     #[arg(long, default_value_t = 4)]
     pub chunk_mb: u32,
+    /// Add optional class, aligned-block and all-alternative junction chunk routes.
+    #[arg(long)]
+    pub access_index: bool,
+    /// Target records per access unit within a genomic bin (0 keeps legacy bins).
+    /// Equal-anchor records stay together, so a single pileup can exceed the target.
+    #[arg(long, default_value_t = 0)]
+    pub chunk_records: usize,
+    /// Preserve every distinct accepted unique-read geometry and its exact multiplicity.
+    /// This does not restore sequences, qualities or missing multimapper alignments.
+    #[arg(long)]
+    pub geometry_fidelity: bool,
+    /// Select cell-map and factored-shape encodings by final compressed frame size.
+    /// Experimental, opt-in; older readers may reject newly selected encodings.
+    #[arg(long)]
+    pub compression_tuning: bool,
     /// Reference FASTA (plain or gzipped) to bind for sequence-consulting queries. Gravlax hashes
     /// its exact bytes and normalized contigs; its relationship to the alignment is explicitly
     /// caller-declared rather than inferred. Hashing runs concurrently with extraction.
@@ -166,6 +181,9 @@ pub struct ReplayRowsArgs {
     /// Interpret `input` as a BAM and extract rows on the fly (the regression reference path).
     #[arg(long, conflicts_with = "from_molecule_bam")]
     pub from_bam: bool,
+    /// Retain distinct unique geometries in the direct-BAM regression reference.
+    #[arg(long, requires = "from_bam")]
+    pub geometry_fidelity: bool,
     /// Interpret input as `export-molecule-bam` output. This path consumes opaque UMI-class ids
     /// and explicit 1MM edges; no whitelist or unavailable nucleotide UMI value is invented.
     #[arg(long, conflicts_with = "from_bam")]
@@ -247,6 +265,7 @@ fn prepare_terminal_tails(
     x: &Extracted,
     tails: &ExtractedTerminalTails,
     chunk_bp: u32,
+    chunk_records: usize,
 ) -> Result<PreparedTerminalTails> {
     let mut sections = Vec::new();
     let mut routes = Vec::new();
@@ -263,6 +282,9 @@ fn prepare_terminal_tails(
         while molecule_end < x.mols.len()
             && x.mols[molecule_end].chrom == chrom
             && x.mols[molecule_end].anchor() < bin_end
+            && (chunk_records == 0
+                || molecule_end - molecule_start < chunk_records
+                || x.mols[molecule_end].anchor() == x.mols[molecule_end - 1].anchor())
         {
             molecule_end += 1;
         }
@@ -356,6 +378,9 @@ fn prepare_terminal_tails(
 
 #[derive(Clone, Copy, Default)]
 struct ArchiveExtensions<'a> {
+    access_index: bool,
+    chunk_records: usize,
+    compression_tuning: bool,
     alignment_provenance: Option<&'a AlignmentProvenanceManifest>,
     junction_catalogue_bytes: Option<&'a [u8]>,
     terminal_tails: Option<&'a ExtractedTerminalTails>,
@@ -414,7 +439,7 @@ fn write_archive_sections(
     }
     let prepared_tails = extensions
         .terminal_tails
-        .map(|tails| prepare_terminal_tails(x, tails, chunk_bp))
+        .map(|tails| prepare_terminal_tails(x, tails, chunk_bp, extensions.chunk_records))
         .transpose()?;
 
     let mut meta = serde_json::Map::new();
@@ -428,6 +453,18 @@ fn write_archive_sections(
     meta.insert("chunk_streams".into(), serde_json::json!(10u32));
     meta.insert("coc_block".into(), serde_json::json!(COC_BLOCK));
     meta.insert("codec".into(), serde_json::json!("rans2"));
+    if extensions.access_index {
+        meta.insert(
+            "access_index".into(),
+            serde_json::json!(crate::accessindex::SCHEMA),
+        );
+    }
+    if extensions.chunk_records != 0 {
+        meta.insert(
+            "chunk_record_target".into(),
+            serde_json::json!(extensions.chunk_records),
+        );
+    }
     if let Some(sig) = genome_sig {
         meta.insert("genome_sig".into(), serde_json::to_value(sig)?);
     }
@@ -488,7 +525,10 @@ fn write_archive_sections(
         put_varint(&mut pat, pdef.len() as u64);
         for a in pdef {
             let same = a.shape == SAME_SHAPE;
-            put_varint(&mut pat, ((a.chrom as u64) << 2) | ((same as u64) << 1) | (a.strand_flip as u64));
+            put_varint(
+                &mut pat,
+                ((a.chrom as u64) << 2) | ((same as u64) << 1) | (a.strand_flip as u64),
+            );
             put_svarint(&mut pat, a.offset);
             if !same {
                 put_varint(&mut pat, a.shape as u64);
@@ -544,9 +584,20 @@ fn write_archive_sections(
         let bin_start = (x.mols[i].anchor() / chunk_bp) * chunk_bp;
         let bin_end = bin_start + chunk_bp;
         let mut j = i;
-        while j < x.mols.len() && x.mols[j].chrom == chrom && x.mols[j].anchor() < bin_end {
+        while j < x.mols.len()
+            && x.mols[j].chrom == chrom
+            && x.mols[j].anchor() < bin_end
+            && (extensions.chunk_records == 0
+                || j - i < extensions.chunk_records
+                || x.mols[j].anchor() == x.mols[j - 1].anchor())
+        {
             j += 1;
         }
+        let bin_start = if extensions.chunk_records == 0 {
+            bin_start
+        } else {
+            x.mols[i].anchor()
+        };
         let mols = &x.mols[i..j];
 
         let (mut anchor_s, mut layout_s) = (Vec::new(), Vec::new());
@@ -623,8 +674,16 @@ fn write_archive_sections(
         evidence_io::rans::count(&mm_w_v, &mut rans_counts[4]);
         pending.push(PendingChunk {
             idx: chunk_idx,
-            anchor_s, layout_s, rep_shape_s, mm_shape_s, mm_pat_s,
-            class_v, weight_v, rep_pos_v, mm_pos_v, mm_w_v,
+            anchor_s,
+            layout_s,
+            rep_shape_s,
+            mm_shape_s,
+            mm_pat_s,
+            class_v,
+            weight_v,
+            rep_pos_v,
+            mm_pos_v,
+            mm_w_v,
         });
         let max_anchor = mols.last().map(|m| m.anchor()).unwrap_or(bin_start);
         let n_cells_chunk = {
@@ -632,8 +691,12 @@ fn write_archive_sections(
             set.len() as u32
         };
         chunk_meta.push(ChunkMeta {
-            chrom, bin_start, n_mols: mols.len() as u32, class_base,
-            max_anchor, n_cells: n_cells_chunk,
+            chrom,
+            bin_start,
+            n_mols: mols.len() as u32,
+            class_base,
+            max_anchor,
+            n_cells: n_cells_chunk,
         });
         chunk_idx += 1;
         i = j;
@@ -669,7 +732,10 @@ fn write_archive_sections(
             // Candidate B: rANS over absolute ids with the global coc table.
             let mut bpay = vec![1u8];
             evidence_io::rans::encode(vals, &tables[5], &mut bpay);
-            (format!("coc.{b}"), if bpay.len() < a.len() { bpay } else { a })
+            (
+                format!("coc.{b}"),
+                if bpay.len() < a.len() { bpay } else { a },
+            )
         })
         .collect();
     let assembled: Vec<(String, Vec<u8>)> = pending
@@ -712,6 +778,10 @@ fn write_archive_sections(
         put_varint(&mut cm, c.n_cells as u64);
     }
     sections.push(("index.chunks".into(), cm));
+    if extensions.access_index {
+        let index = crate::accessindex::Index::build(x, chunk_meta.iter().map(|c| c.n_mols))?;
+        sections.push((crate::accessindex::SECTION.into(), index.encode()));
+    }
     sections.extend(coc_blocks);
     if let Some(prepared) = prepared_tails {
         sections.push((
@@ -787,13 +857,73 @@ fn write_archive_sections(
     sections.push(("edges".into(), edg));
 
     // One parallel compression pass, then a serial ordered write.
-    let compressed: Vec<(String, usize, Vec<u8>)> = sections
-        .into_par_iter()
-        .map(|(name, raw)| {
-            let comp = evidence_io::format::compress(&raw, level)?;
-            Ok((name, raw.len(), comp))
-        })
-        .collect::<Result<_>>()?;
+    // Fine access units must not multiply simultaneous high-level zstd contexts
+    // with the host's CPU count. Keep default construction unchanged, and bound
+    // the opt-in fine-chunk path to four compression workers.
+    let compress_sections = || {
+        sections
+            .into_par_iter()
+            .map(|(name, raw)| {
+                let block = name
+                    .strip_prefix("coc.")
+                    .and_then(|v| v.parse::<usize>().ok());
+                let is_shapes = name == "shapes";
+                let mut best = (name, raw.len(), evidence_io::format::compress(&raw, level)?);
+                if extensions.compression_tuning {
+                    let mut consider = |name: String, candidate: Vec<u8>| -> Result<()> {
+                        if candidate == raw {
+                            return Ok(());
+                        }
+                        let comp = evidence_io::format::compress(&candidate, level)?;
+                        // Inline header and authenticated directory both repeat the section name.
+                        if comp.len() + 2 * name.len() < best.2.len() + 2 * best.0.len() {
+                            best = (name, candidate.len(), comp);
+                        }
+                        Ok(())
+                    };
+                    if let Some(block) = block {
+                        let start = block * COC_BLOCK as usize;
+                        let vals = &coc_u64[start..coc_u64.len().min(start + COC_BLOCK as usize)];
+                        let mut delta = vec![0];
+                        put_varint(&mut delta, vals[0]);
+                        for pair in vals.windows(2) {
+                            put_svarint(&mut delta, pair[1] as i64 - pair[0] as i64);
+                        }
+                        let mut rans = vec![1];
+                        evidence_io::rans::encode(vals, &tables[5], &mut rans);
+                        let mut runs = vec![2];
+                        let mut i = 0;
+                        while i < vals.len() {
+                            let mut j = i + 1;
+                            while j < vals.len() && vals[j] == vals[i] {
+                                j += 1;
+                            }
+                            put_varint(&mut runs, vals[i]);
+                            put_varint(&mut runs, (j - i) as u64);
+                            i = j;
+                        }
+                        for candidate in [delta, rans, runs] {
+                            consider(format!("coc.{block}"), candidate)?;
+                        }
+                    } else if is_shapes {
+                        consider(
+                            crate::shapecodec::SECTION.into(),
+                            crate::shapecodec::encode(&x.shapes)?,
+                        )?;
+                    }
+                }
+                Ok(best)
+            })
+            .collect::<Result<Vec<(String, usize, Vec<u8>)>>>()
+    };
+    let compressed = if extensions.chunk_records != 0 || extensions.compression_tuning {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(rayon::current_num_threads().min(4))
+            .build()?
+            .install(compress_sections)?
+    } else {
+        compress_sections()?
+    };
     for (name, raw_len, comp) in &compressed {
         w.section_precompressed(name, *raw_len as u64, comp)?;
     }
@@ -894,17 +1024,25 @@ fn check_provenance_layout(meta: &serde_json::Value, ingest: &IngestProvenance) 
 pub fn read_rans_tables(r: &mut SectionReader) -> Result<Vec<evidence_io::rans::Table>> {
     let raw = r.read("rans.tables")?;
     let mut c = Cursor::new(&raw);
-    let tables: Vec<_> =
-        (0..6).map(|_| evidence_io::rans::Table::deserialize(&mut c)).collect::<Result<_>>()?;
+    let tables: Vec<_> = (0..6)
+        .map(|_| evidence_io::rans::Table::deserialize(&mut c))
+        .collect::<Result<_>>()?;
     if !c.is_empty() {
-        bail!("rans.tables has {} trailing bytes", raw.len() - c.position());
+        bail!(
+            "rans.tables has {} trailing bytes",
+            raw.len() - c.position()
+        );
     }
     Ok(tables)
 }
 
 /// Decode one coc block. First byte tags the codec the writer chose for this block:
 /// 0 = absolute-then-deltas, 1 = rANS over absolute ids (global coc table).
-fn decode_coc_block(comp: &[u8], raw_len: usize, coc_table: &evidence_io::rans::Table) -> Result<Vec<u32>> {
+fn decode_coc_block(
+    comp: &[u8],
+    raw_len: usize,
+    coc_table: &evidence_io::rans::Table,
+) -> Result<Vec<u32>> {
     let raw = evidence_io::format::decompress(comp, raw_len)?;
     if raw.is_empty() {
         return Ok(Vec::new());
@@ -930,6 +1068,19 @@ fn decode_coc_block(comp: &[u8], raw_len: usize, coc_table: &evidence_io::rans::
             .into_iter()
             .map(|v| u32::try_from(v).context("cell id exceeds u32"))
             .collect(),
+        2 => {
+            let mut c = Cursor::new(&raw[1..]);
+            let mut out = Vec::new();
+            while !c.is_empty() {
+                let value = u32::try_from(c.varint()?).context("cell id exceeds u32")?;
+                let count = usize::try_from(c.varint()?).context("cell run exceeds usize")?;
+                if count == 0 || count > COC_BLOCK as usize - out.len() {
+                    bail!("invalid cell run length");
+                }
+                out.resize(out.len() + count, value);
+            }
+            Ok(out)
+        }
         b => bail!("unknown coc block codec {b}"),
     }
 }
@@ -955,6 +1106,14 @@ fn decode_shapes(raw: &[u8]) -> Result<Vec<Shape>> {
         shapes.push(Shape { blocks });
     }
     Ok(shapes)
+}
+
+fn read_shapes(reader: &mut SectionReader) -> Result<Vec<Shape>> {
+    match (reader.has("shapes"), reader.has(crate::shapecodec::SECTION)) {
+        (true, false) => decode_shapes(&reader.read("shapes")?),
+        (false, true) => crate::shapecodec::decode(&reader.read(crate::shapecodec::SECTION)?),
+        _ => bail!("archive must have exactly one supported shape dictionary"),
+    }
 }
 
 fn decode_patterns(raw: &[u8]) -> Result<Vec<Vec<PatAlt>>> {
@@ -1021,8 +1180,10 @@ pub fn read_dicts(r: &mut SectionReader) -> Result<Dicts> {
     // Layout guard: a reader decoding the wrong number of per-chunk streams produces garbage, not
     // an error — learned the hard way when a rebuilt binary read an older archive mid-analysis.
     check_layout(&meta)?;
-    let chrom_names: Vec<String> =
-        String::from_utf8_lossy(&r.read("chroms")?).lines().map(|s| s.to_string()).collect();
+    let chrom_names: Vec<String> = String::from_utf8_lossy(&r.read("chroms")?)
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
     let cells_raw = r.read("cells")?;
     if cells_raw.len() % 4 != 0 {
         bail!("cells section has {} trailing byte(s)", cells_raw.len() % 4);
@@ -1033,7 +1194,7 @@ pub fn read_dicts(r: &mut SectionReader) -> Result<Dicts> {
         .iter()
         .map(|&bytes| u32::from_le_bytes(bytes))
         .collect();
-    let shapes = decode_shapes(&r.read("shapes")?)?;
+    let shapes = read_shapes(r)?;
     let patterns = decode_patterns(&r.read("patterns")?)?;
     let rans_tables = read_rans_tables(r)?;
     let n_classes = required_meta_u32(&meta, "classes")?;
@@ -1091,6 +1252,70 @@ pub struct TerminalTailRecord {
     pub signal: TerminalTailSignal,
 }
 
+/// Projection sufficient to resolve sparse tail attachments. The complete chunk
+/// payload remains authenticated, but unrelated child geometry is not decoded.
+pub struct MoleculeIdentity {
+    pub class: u32,
+    pub anchor: u32,
+    pub reverse: bool,
+}
+
+pub fn decode_chunk_identities(
+    raw: &[u8],
+    info: &ChunkInfo,
+    tables: &[evidence_io::rans::Table],
+) -> Result<Vec<MoleculeIdentity>> {
+    let mut c = Cursor::new(raw);
+    let mut streams = [&[][..]; 10];
+    for stream in &mut streams {
+        let len = usize::try_from(c.varint()?).context("chunk stream length overflow")?;
+        *stream = c.take(len)?;
+    }
+    if !c.is_empty() {
+        bail!("chunk has trailing bytes");
+    }
+    let table = tables.first().context("missing class rANS table")?;
+    let classes = evidence_io::rans::decode_limited(streams[1], table, info.n_mols as usize)?;
+    if classes.len() != info.n_mols as usize || streams[2].len() < info.n_mols as usize * 3 {
+        bail!("identity projection cardinality mismatch");
+    }
+    let mut anchors = Cursor::new(streams[0]);
+    let mut layout = Cursor::new(streams[2]);
+    let (mut anchor, mut next) = (info.bin_start, info.class_base);
+    let mut out = Vec::with_capacity(classes.len());
+    for token in classes {
+        anchor = anchor
+            .checked_add(u32::try_from(anchors.varint()?)?)
+            .context("anchor overflow")?;
+        if anchor > info.max_anchor {
+            bail!("anchor outside chunk envelope");
+        }
+        let class = if token == 0 {
+            let class = next;
+            next = next.checked_add(1).context("class overflow")?;
+            class
+        } else {
+            next.checked_sub(u32::try_from(token)?)
+                .context("class backreference underflow")?
+        };
+        let strand = layout.byte()?;
+        let chains = layout.varint()?;
+        let mms = layout.varint()?;
+        if strand > 1 || (chains == 0 && mms == 0) {
+            bail!("invalid projected molecule layout");
+        }
+        out.push(MoleculeIdentity {
+            class,
+            anchor,
+            reverse: strand != 0,
+        });
+    }
+    if !anchors.is_empty() || !layout.is_empty() {
+        bail!("identity projection has trailing values");
+    }
+    Ok(out)
+}
+
 pub fn read_chunk_index(r: &mut SectionReader) -> Result<Vec<ChunkInfo>> {
     let raw = r.read("index.chunks")?;
     let mut c = Cursor::new(&raw);
@@ -1141,8 +1366,11 @@ pub fn decode_chunk(
         bail!("chunk has {} trailing bytes", raw.len() - top.position());
     }
     let (mut anchor_c, mut layout_c) = (Cursor::new(streams[0]), Cursor::new(streams[2]));
-    let (mut rep_shape_c, mut mm_shape_c, mut mm_pat_c) =
-        (Cursor::new(streams[5]), Cursor::new(streams[7]), Cursor::new(streams[8]));
+    let (mut rep_shape_c, mut mm_shape_c, mut mm_pat_c) = (
+        Cursor::new(streams[5]),
+        Cursor::new(streams[7]),
+        Cursor::new(streams[8]),
+    );
     // The byte-layout stream gives tight bounds for every rANS stream. Probe it before allocating
     // decoded vectors so a corrupt count cannot amplify a small chunk into unbounded work.
     let mut layout_probe = Cursor::new(streams[2]);
@@ -1152,10 +1380,16 @@ pub fn decode_chunk(
     let (mut n_chains_total, mut n_mms_total, mut mols_with_chains) = (0usize, 0usize, 0usize);
     for _ in 0..info.n_mols {
         layout_probe.byte()?;
-        let n_chains = usize::try_from(layout_probe.varint()?).context("chain count is too large")?;
-        let n_mms = usize::try_from(layout_probe.varint()?).context("multimapper count is too large")?;
-        n_chains_total = n_chains_total.checked_add(n_chains).context("chain count overflow")?;
-        n_mms_total = n_mms_total.checked_add(n_mms).context("multimapper count overflow")?;
+        let n_chains =
+            usize::try_from(layout_probe.varint()?).context("chain count is too large")?;
+        let n_mms =
+            usize::try_from(layout_probe.varint()?).context("multimapper count is too large")?;
+        n_chains_total = n_chains_total
+            .checked_add(n_chains)
+            .context("chain count overflow")?;
+        n_mms_total = n_mms_total
+            .checked_add(n_mms)
+            .context("multimapper count overflow")?;
         mols_with_chains += usize::from(n_chains > 0);
     }
     if !layout_probe.is_empty() {
@@ -1165,7 +1399,10 @@ pub fn decode_chunk(
     let class_v = evidence_io::rans::decode_limited(streams[1], &tables[0], info.n_mols as usize)?;
     let weight_v = evidence_io::rans::decode_limited(streams[3], &tables[1], n_chains_total)?;
     if weight_v.len() != n_chains_total {
-        bail!("weight stream has {} values for {n_chains_total} chains", weight_v.len());
+        bail!(
+            "weight stream has {} values for {n_chains_total} chains",
+            weight_v.len()
+        );
     }
     let n_reps_total = weight_v.iter().try_fold(0usize, |sum, w| {
         sum.checked_add(if w & 1 == 1 { 2 } else { 1 })
@@ -1174,8 +1411,7 @@ pub fn decode_chunk(
     let n_rep_positions = n_reps_total
         .checked_sub(mols_with_chains)
         .context("representative elision count underflow")?;
-    let rep_pos_v =
-        evidence_io::rans::decode_limited(streams[4], &tables[2], n_rep_positions)?;
+    let rep_pos_v = evidence_io::rans::decode_limited(streams[4], &tables[2], n_rep_positions)?;
     let mm_pos_v = evidence_io::rans::decode_limited(streams[6], &tables[3], n_mms_total)?;
     let mm_w_v = evidence_io::rans::decode_limited(streams[9], &tables[4], n_mms_total)?;
     if class_v.len() != info.n_mols as usize {
@@ -1191,7 +1427,9 @@ pub fn decode_chunk(
     let (mut lanchor, mut next_class) = (info.bin_start, info.class_base);
     for _ in 0..info.n_mols {
         let anchor_delta = u32::try_from(anchor_c.varint()?).context("anchor delta exceeds u32")?;
-        let anchor = lanchor.checked_add(anchor_delta).context("anchor coordinate overflow")?;
+        let anchor = lanchor
+            .checked_add(anchor_delta)
+            .context("anchor coordinate overflow")?;
         lanchor = anchor;
         let ctok = *class_v.get(ci).context("class stream underrun")?;
         ci += 1;
@@ -1201,7 +1439,9 @@ pub fn decode_chunk(
             id
         } else {
             let backref = u32::try_from(ctok).context("UMI class back-reference exceeds u32")?;
-            next_class.checked_sub(backref).context("UMI class back-reference underflow")?
+            next_class
+                .checked_sub(backref)
+                .context("UMI class back-reference underflow")?
         };
         let cell = match cell_of_class {
             Some(t) => *t
@@ -1212,13 +1452,12 @@ pub fn decode_chunk(
         let strand_rev = layout_c.byte()? != 0;
         let n_chains = usize::try_from(layout_c.varint()?).context("chain count is too large")?;
         let elide_first_rep = n_chains > 0;
-        let n_mms = usize::try_from(layout_c.varint()?).context("multimapper count is too large")?;
+        let n_mms =
+            usize::try_from(layout_c.varint()?).context("multimapper count is too large")?;
         if n_chains > weight_v.len().saturating_sub(wi) {
             bail!("chunk declares more chains than the weight stream contains");
         }
-        if n_mms > mm_pos_v.len().saturating_sub(mpi)
-            || n_mms > mm_w_v.len().saturating_sub(mwi)
-        {
+        if n_mms > mm_pos_v.len().saturating_sub(mpi) || n_mms > mm_w_v.len().saturating_sub(mwi) {
             bail!("chunk declares more multimappers than its value streams contain");
         }
         let mut chains: SmallVec<[MolChain; 1]> = SmallVec::with_capacity(n_chains);
@@ -1234,11 +1473,15 @@ pub fn decode_chunk(
                     anchor
                 } else {
                     let delta = u32::try_from(
-                        *rep_pos_v.get(rpi).context("representative-position stream underrun")?,
+                        *rep_pos_v
+                            .get(rpi)
+                            .context("representative-position stream underrun")?,
                     )
                     .context("representative-position delta exceeds u32")?;
                     rpi += 1;
-                    anchor.checked_add(delta).context("representative position overflow")?
+                    anchor
+                        .checked_add(delta)
+                        .context("representative position overflow")?
                 };
                 first_rep = false;
                 let shape = u32::try_from(rep_shape_c.varint()?)
@@ -1250,23 +1493,36 @@ pub fn decode_chunk(
         let mut mms: SmallVec<[(u32, u32, u32, u32); 1]> = SmallVec::with_capacity(n_mms);
         for _ in 0..n_mms {
             let delta = u32::try_from(
-                *mm_pos_v.get(mpi).context("multimapper-position stream underrun")?,
+                *mm_pos_v
+                    .get(mpi)
+                    .context("multimapper-position stream underrun")?,
             )
             .context("multimapper-position delta exceeds u32")?;
-            let mp = anchor.checked_add(delta).context("multimapper position overflow")?;
+            let mp = anchor
+                .checked_add(delta)
+                .context("multimapper position overflow")?;
             mpi += 1;
             let mw = u32::try_from(
-                *mm_w_v.get(mwi).context("multimapper-weight stream underrun")?,
+                *mm_w_v
+                    .get(mwi)
+                    .context("multimapper-weight stream underrun")?,
             )
             .context("multimapper weight exceeds u32")?;
             mwi += 1;
-            let shape = u32::try_from(mm_shape_c.varint()?)
-                .context("multimapper shape id exceeds u32")?;
-            let pattern = u32::try_from(mm_pat_c.varint()?)
-                .context("multimapper pattern id exceeds u32")?;
+            let shape =
+                u32::try_from(mm_shape_c.varint()?).context("multimapper shape id exceeds u32")?;
+            let pattern =
+                u32::try_from(mm_pat_c.varint()?).context("multimapper pattern id exceeds u32")?;
             mms.push((mp, shape, pattern, mw));
         }
-        mols.push(MolRec { cell, umi_class, chrom: info.chrom, strand_rev, chains, mms });
+        mols.push(MolRec {
+            cell,
+            umi_class,
+            chrom: info.chrom,
+            strand_rev,
+            chains,
+            mms,
+        });
     }
     if ci != class_v.len()
         || wi != weight_v.len()
@@ -1302,6 +1558,8 @@ pub fn decode_chunk(
 /// query-open cost flat as archives grow; eager loading took 0.69 s on an approximately
 /// 100-million-molecule benchmark archive.
 pub struct LazyArchive {
+    access_index: Option<crate::accessindex::Index>,
+    has_access_index: bool,
     r: SectionReader,
     pub chrom_names: Vec<String>,
     pub chrom_digest: String,
@@ -1333,6 +1591,27 @@ fn archive_capabilities(
     Option<GenomeReferenceBinding>,
 )> {
     let has_provenance_section = reader.has(ALIGNMENT_PROVENANCE_SECTION);
+    let has_access = reader.has(crate::accessindex::SECTION);
+    if meta.get("access_index").is_some() != has_access
+        || meta
+            .get("access_index")
+            .is_some_and(|v| v.as_str() != Some(crate::accessindex::SCHEMA))
+        || (has_access && reader.content_commitment().is_none())
+    {
+        bail!("partial or unsupported access-index capability");
+    }
+    if has_access && verify_declared_payloads {
+        let chunks = read_chunk_index(reader)?;
+        let chroms = std::str::from_utf8(&reader.read("chroms")?)?
+            .lines()
+            .count();
+        crate::accessindex::Index::decode(
+            &reader.read(crate::accessindex::SECTION)?,
+            chunks.len(),
+            required_meta_u32(meta, "classes")?,
+            chroms,
+        )?;
+    }
     let has_catalogue_section = reader.has(JUNCTION_CATALOGUE_SECTION);
     let has_tail_index = reader.has(terminal_tail::TERMINAL_TAIL_INDEX_SECTION);
     let tail_section_count = reader
@@ -1546,11 +1825,23 @@ fn archive_capabilities(
 }
 
 impl LazyArchive {
+    pub fn class_count(&self) -> u32 {
+        self.n_classes
+    }
     pub fn open(path: &Path) -> Result<LazyArchive> {
         let mut r = SectionReader::open(path)?;
         let meta: serde_json::Value = serde_json::from_slice(&r.read("meta")?)?;
         check_layout(&meta)?;
         let (_, terminal_tail, _) = archive_capabilities(&mut r, &meta, false)?;
+        let has_access_index = r.has(crate::accessindex::SECTION);
+        if meta.get("access_index").is_some() != has_access_index
+            || meta
+                .get("access_index")
+                .is_some_and(|v| v.as_str() != Some(crate::accessindex::SCHEMA))
+            || (has_access_index && r.content_commitment().is_none())
+        {
+            bail!("partial or unsupported access-index capability");
+        }
         let chrom_bytes = r.read("chroms")?;
         let chrom_text = std::str::from_utf8(&chrom_bytes)
             .context("archive chromosome dictionary is not UTF-8")?;
@@ -1561,6 +1852,8 @@ impl LazyArchive {
             .get("genome_sig")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
         Ok(LazyArchive {
+            access_index: None,
+            has_access_index,
             r,
             chrom_names,
             chrom_digest,
@@ -1634,6 +1927,27 @@ impl LazyArchive {
         molecule_base: u64,
         molecules: &[MolRec],
     ) -> Result<Vec<TerminalTailRecord>> {
+        let identities = molecules
+            .iter()
+            .map(|m| MoleculeIdentity {
+                class: m.umi_class,
+                anchor: m.anchor(),
+                reverse: m.strand_rev,
+            })
+            .collect::<Vec<_>>();
+        if molecules.iter().any(|m| m.chrom != info.chrom) {
+            bail!("terminal-tail molecule chromosome mismatch");
+        }
+        self.terminal_tail_records_projected(route, info, molecule_base, &identities)
+    }
+
+    pub fn terminal_tail_records_projected(
+        &mut self,
+        route: TerminalTailRoute,
+        info: &ChunkInfo,
+        molecule_base: u64,
+        molecules: &[MoleculeIdentity],
+    ) -> Result<Vec<TerminalTailRecord>> {
         let known_route = self
             .terminal_tail_routes()?
             .context("terminal-tail capability is unavailable")?
@@ -1654,19 +1968,12 @@ impl LazyArchive {
         let mut max_anchor = 0u32;
         for selected in decoded {
             let molecule = &molecules[selected.local_ordinal as usize];
-            if molecule.chrom != info.chrom {
-                bail!("terminal-tail event is attached to a molecule on another chromosome");
-            }
-            let cell = if molecule.cell == u32::MAX {
-                self.cell_of(molecule.umi_class)?
-            } else {
-                molecule.cell
-            };
+            let cell = self.cell_of(molecule.class)?;
             for event in selected.events {
-                if event.reverse != molecule.strand_rev {
+                if event.reverse != molecule.reverse {
                     bail!("terminal-tail event strand disagrees with its attached molecule");
                 }
-                let anchor = i64::from(molecule.anchor())
+                let anchor = i64::from(molecule.anchor)
                     .checked_add(event.anchor_delta)
                     .and_then(|value| u32::try_from(value).ok())
                     .context("terminal-tail anchor is outside the u32 coordinate range")?;
@@ -1679,9 +1986,9 @@ impl LazyArchive {
                     chunk: route.chunk,
                     local_molecule_ordinal: selected.local_ordinal,
                     cell,
-                    umi_class: molecule.umi_class,
-                    chrom: molecule.chrom,
-                    strand_rev: molecule.strand_rev,
+                    umi_class: molecule.class,
+                    chrom: info.chrom,
+                    strand_rev: molecule.reverse,
                     anchor,
                     signal: event.signal,
                 });
@@ -1698,6 +2005,22 @@ impl LazyArchive {
 
     pub fn reader(&mut self) -> &mut SectionReader {
         &mut self.r
+    }
+
+    pub fn access_index(&mut self) -> Result<Option<&crate::accessindex::Index>> {
+        if self.has_access_index && self.access_index.is_none() {
+            let chunks = read_chunk_index(&mut self.r)?;
+            let raw = self.r.read(crate::accessindex::SECTION)?;
+            let index = crate::accessindex::Index::decode(
+                &raw,
+                chunks.len(),
+                self.n_classes,
+                self.chrom_names.len(),
+            )?;
+            index.validate_bases(chunks.iter().map(|c| c.class_base))?;
+            self.access_index = Some(index);
+        }
+        Ok(self.access_index.as_ref())
     }
 
     /// Split borrow for parallel chunk decode: the reader (mutable, for compressed reads) and the
@@ -1726,8 +2049,7 @@ impl LazyArchive {
 
     pub fn shapes(&mut self) -> Result<std::sync::Arc<Vec<Shape>>> {
         if self.shapes.is_none() {
-            let raw = self.r.read("shapes")?;
-            self.shapes = Some(std::sync::Arc::new(decode_shapes(&raw)?));
+            self.shapes = Some(std::sync::Arc::new(read_shapes(&mut self.r)?));
         }
         Ok(self.shapes.clone().unwrap())
     }
@@ -1838,17 +2160,35 @@ impl StreamingReplayArchive {
         let d = read_dicts(&mut reader)?;
         let chunks = read_chunk_index(&mut reader)?;
         let edges = read_edges(&mut reader)?;
-        let Dicts { cells, shapes, patterns, chrom_names, cell_of_class, rans_tables,
-            n_classes, n_mols } = d;
+        let Dicts {
+            cells,
+            shapes,
+            patterns,
+            chrom_names,
+            cell_of_class,
+            rans_tables,
+            n_classes,
+            n_mols,
+        } = d;
         let indexed_mols: usize = chunks.iter().map(|c| c.n_mols as usize).sum();
         if indexed_mols != n_mols {
             bail!("molecule count mismatch: {indexed_mols} indexed vs {n_mols} in meta");
         }
         Ok(Self {
-            reader, chunks,
-            x: Extracted { mols: Vec::new(), edges, cells, shapes, patterns, n_classes,
-                chrom_names },
-            cell_of_class, rans_tables, n_mols,
+            reader,
+            chunks,
+            x: Extracted {
+                mols: Vec::new(),
+                edges,
+                cells,
+                shapes,
+                patterns,
+                n_classes,
+                chrom_names,
+            },
+            cell_of_class,
+            rans_tables,
+            n_mols,
         })
     }
 
@@ -1865,17 +2205,24 @@ impl StreamingReplayArchive {
         let mut decoded_mols = 0usize;
         for (batch_no, batch) in self.chunks.chunks(batch_size).enumerate() {
             let first = batch_no * batch_size;
-            let decoded: Vec<Vec<MolRec>> = batch.par_iter().enumerate().map(|(j, info)| {
-                let i = first + j;
-                let (comp, raw_len) = self.reader.read_compressed_at(&format!("c{i}"))?;
-                let raw = evidence_io::format::decompress(&comp, raw_len)?;
-                decode_chunk(&raw, info, Some(&self.cell_of_class), &self.rans_tables)
-            }).collect::<Result<_>>()?;
+            let decoded: Vec<Vec<MolRec>> = batch
+                .par_iter()
+                .enumerate()
+                .map(|(j, info)| {
+                    let i = first + j;
+                    let (comp, raw_len) = self.reader.read_compressed_at(&format!("c{i}"))?;
+                    let raw = evidence_io::format::decompress(&comp, raw_len)?;
+                    decode_chunk(&raw, info, Some(&self.cell_of_class), &self.rans_tables)
+                })
+                .collect::<Result<_>>()?;
             decoded_mols += decoded.iter().map(Vec::len).sum::<usize>();
             replay.add_archive_chunks(&decoded);
         }
         if decoded_mols != self.n_mols {
-            bail!("molecule count mismatch: {decoded_mols} decoded vs {} in meta", self.n_mols);
+            bail!(
+                "molecule count mismatch: {decoded_mols} decoded vs {} in meta",
+                self.n_mols
+            );
         }
         Ok(replay.finish())
     }
@@ -1954,7 +2301,10 @@ fn read_archive_from_reader(r: &mut SectionReader) -> Result<Extracted> {
         .collect::<Result<_>>()?;
     let total: usize = per_chunk.iter().map(|v| v.len()).sum();
     if total != d.n_mols {
-        bail!("molecule count mismatch: {total} decoded vs {} in meta", d.n_mols);
+        bail!(
+            "molecule count mismatch: {total} decoded vs {} in meta",
+            d.n_mols
+        );
     }
     // Parallel move-concat into one Vec: on an approximately 100-million-molecule benchmark
     // archive, serial `extend` walked about 9 GB of records.
@@ -1972,10 +2322,18 @@ fn read_archive_from_reader(r: &mut SectionReader) -> Result<Extracted> {
         per_chunk.into_par_iter().zip(offsets).for_each(|(v, off)| {
             let mut v = std::mem::ManuallyDrop::new(v);
             unsafe {
-                std::ptr::copy_nonoverlapping(v.as_ptr(), (base_addr as *mut MolRec).add(off), v.len());
+                std::ptr::copy_nonoverlapping(
+                    v.as_ptr(),
+                    (base_addr as *mut MolRec).add(off),
+                    v.len(),
+                );
                 // Free the source allocation without dropping the moved-out records.
                 let (ptr, cap) = (v.as_mut_ptr(), v.capacity());
-                drop(Vec::from_raw_parts(ptr as *mut std::mem::MaybeUninit<MolRec>, 0, cap));
+                drop(Vec::from_raw_parts(
+                    ptr as *mut std::mem::MaybeUninit<MolRec>,
+                    0,
+                    cap,
+                ));
             }
         });
         unsafe { mols.set_len(total) };
@@ -2230,14 +2588,10 @@ pub fn run_em(args: EmArgs) -> Result<()> {
     if !args.global_alpha.is_finite() || args.global_alpha < 0.0 {
         bail!("--global-alpha must be finite and non-negative");
     }
-    if !args.convex_cell_weight.is_finite()
-        || !(0.0..=1.0).contains(&args.convex_cell_weight)
-    {
+    if !args.convex_cell_weight.is_finite() || !(0.0..=1.0).contains(&args.convex_cell_weight) {
         bail!("--convex-cell-weight must be finite and between 0 and 1");
     }
-    if !args.convex_group_weight.is_finite()
-        || !(0.0..=1.0).contains(&args.convex_group_weight)
-    {
+    if !args.convex_group_weight.is_finite() || !(0.0..=1.0).contains(&args.convex_group_weight) {
         bail!("--convex-group-weight must be finite and between 0 and 1");
     }
     if args.convex_cell_weight + args.convex_group_weight > 1.0 {
@@ -2277,10 +2631,16 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         let x = read_archive(&args.archive)?;
         let m = crate::rows::em_star_matrix(&x, &anno);
         let out_dir = args.emit.as_ref().context("--star requires --emit")?;
-        let barcodes = args.barcodes.as_ref().context("--star requires --barcodes")?;
+        let barcodes = args
+            .barcodes
+            .as_ref()
+            .context("--star requires --barcodes")?;
         let bc_text = std::fs::read_to_string(barcodes)?;
-        let out_barcodes: Vec<&str> =
-            bc_text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        let out_barcodes: Vec<&str> = bc_text
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
         let mut bc_col: HbMap<u32, u32> = HbMap::new(); // get-only after build: order never observed
         for (i, b) in out_barcodes.iter().enumerate() {
             if let Some(p) = umi::pack(b.as_bytes()) {
@@ -2288,7 +2648,8 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             }
         }
         std::fs::create_dir_all(out_dir)?;
-        let mut feat = std::io::BufWriter::new(std::fs::File::create(out_dir.join("features.tsv"))?);
+        let mut feat =
+            std::io::BufWriter::new(std::fs::File::create(out_dir.join("features.tsv"))?);
         for (id, name) in anno.gene_ids.iter().zip(&anno.gene_names) {
             writeln!(feat, "{id}\t{name}\tGene Expression")?;
         }
@@ -2296,7 +2657,9 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         let mut triplets: Vec<(u32, u32, f64)> = Vec::with_capacity(m.len());
         for ((cell, gene), v) in m {
             let packed = x.cells[cell as usize];
-            let Some(col) = bc_col.get(&packed) else { bail!("barcode not in output list") };
+            let Some(col) = bc_col.get(&packed) else {
+                bail!("barcode not in output list")
+            };
             triplets.push((gene, *col, v));
         }
         triplets.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
@@ -2304,7 +2667,13 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             std::io::BufWriter::new(std::fs::File::create(out_dir.join("UniqueAndMult-EM.mtx"))?);
         writeln!(mtx, "%%MatrixMarket matrix coordinate real general")?;
         writeln!(mtx, "%")?;
-        writeln!(mtx, "{} {} {}", anno.gene_ids.len(), out_barcodes.len(), triplets.len())?;
+        writeln!(
+            mtx,
+            "{} {} {}",
+            anno.gene_ids.len(),
+            out_barcodes.len(),
+            triplets.len()
+        )?;
         // Parallel line formatting; the float keeps std's {:.6} formatter for identical bytes.
         let blocks: Vec<String> = triplets
             .par_chunks(1 << 20)
@@ -2324,7 +2693,11 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         }
         mtx.flush()?;
         feat.flush()?;
-        eprintln!("wrote UniqueAndMult-EM ({} entries) to {}", triplets.len(), out_dir.display());
+        eprintln!(
+            "wrote UniqueAndMult-EM ({} entries) to {}",
+            triplets.len(),
+            out_dir.display()
+        );
         exit_without_teardown();
     }
     let mut cals: Vec<(String, [[u64; 2]; 10], f64, u64)> = Vec::new();
@@ -2335,7 +2708,11 @@ pub fn run_em(args: EmArgs) -> Result<()> {
     let (recovered, cells) = if args.eager {
         let x = read_archive(&args.archive)?;
         let recovered = crate::rows::em_experiment(
-            &x, &anno, args.mask, args.seed, args.alpha,
+            &x,
+            &anno,
+            args.mask,
+            args.seed,
+            args.alpha,
             args.plot.is_some().then_some(&mut cals),
         );
         (recovered, x.cells)
@@ -2372,7 +2749,11 @@ pub fn run_em(args: EmArgs) -> Result<()> {
                 "hierarchical EM: {} groups, {} scored cells{}",
                 groups.names.len(),
                 group_eval_cells,
-                if args.collapse_groups { " (collapse control)" } else { "" }
+                if args.collapse_groups {
+                    " (collapse control)"
+                } else {
+                    ""
+                }
             );
         } else {
             group_eval_cells = cells.len();
@@ -2513,10 +2894,16 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         let Some(rec) = recovered else {
             bail!("--emit requires --mask 0 (the impact run produces the layer)");
         };
-        let barcodes = args.barcodes.as_ref().context("--emit requires --barcodes")?;
+        let barcodes = args
+            .barcodes
+            .as_ref()
+            .context("--emit requires --barcodes")?;
         let bc_text = std::fs::read_to_string(barcodes)?;
-        let out_barcodes: Vec<&str> =
-            bc_text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        let out_barcodes: Vec<&str> = bc_text
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
         let mut bc_col: HbMap<u32, u32> = HbMap::new(); // get-only after build: order never observed
         for (i, b) in out_barcodes.iter().enumerate() {
             if let Some(p) = umi::pack(b.as_bytes()) {
@@ -2524,7 +2911,8 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             }
         }
         std::fs::create_dir_all(out_dir)?;
-        let mut feat = std::io::BufWriter::new(std::fs::File::create(out_dir.join("features.tsv"))?);
+        let mut feat =
+            std::io::BufWriter::new(std::fs::File::create(out_dir.join("features.tsv"))?);
         for (id, name) in anno.gene_ids.iter().zip(&anno.gene_names) {
             writeln!(feat, "{id}\t{name}\tGene Expression")?;
         }
@@ -2532,14 +2920,25 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         let mut triplets: Vec<(u32, u32, f64)> = Vec::with_capacity(rec.len());
         for ((cell, gene), v) in rec {
             let packed = cells[cell as usize];
-            let Some(col) = bc_col.get(&packed) else { bail!("barcode not in output list") };
+            let Some(col) = bc_col.get(&packed) else {
+                bail!("barcode not in output list")
+            };
             triplets.push((gene, *col, v));
         }
         triplets.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
         let mut mtx = std::io::BufWriter::new(std::fs::File::create(out_dir.join("em.mtx"))?);
         writeln!(mtx, "%%MatrixMarket matrix coordinate real general")?;
-        writeln!(mtx, "% additive EM-recovered multimapper layer; exact-replay matrices unchanged")?;
-        writeln!(mtx, "{} {} {}", anno.gene_ids.len(), out_barcodes.len(), triplets.len())?;
+        writeln!(
+            mtx,
+            "% additive EM-recovered multimapper layer; exact-replay matrices unchanged"
+        )?;
+        writeln!(
+            mtx,
+            "{} {} {}",
+            anno.gene_ids.len(),
+            out_barcodes.len(),
+            triplets.len()
+        )?;
         // Parallel line formatting; the float keeps std's {:.4} formatter for identical bytes.
         let blocks: Vec<String> = triplets
             .par_chunks(1 << 20)
@@ -2559,7 +2958,11 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         }
         mtx.flush()?;
         feat.flush()?;
-        eprintln!("wrote {} recovered entries to {}", triplets.len(), out_dir.display());
+        eprintln!(
+            "wrote {} recovered entries to {}",
+            triplets.len(),
+            out_dir.display()
+        );
     }
     exit_without_teardown();
 }
@@ -2944,6 +3347,7 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         &whitelist_snapshot.0,
         args.locus_gap,
         args.terminal_tails,
+        args.geometry_fidelity,
     )?;
     let x = archive_extraction.evidence;
     let terminal_tails = archive_extraction.terminal_tails;
@@ -2955,7 +3359,12 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
     };
     eprintln!(
         "extracted: {} molecules, {} edges, {} cells, {} shapes, {} patterns, {} classes ({:.1}s)",
-        x.mols.len(), x.edges.len(), x.cells.len(), x.shapes.len(), x.patterns.len(), x.n_classes,
+        x.mols.len(),
+        x.edges.len(),
+        x.cells.len(),
+        x.shapes.len(),
+        x.patterns.len(),
+        x.n_classes,
         t0.elapsed().as_secs_f32()
     );
     if !reporting {
@@ -2987,7 +3396,11 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
                     missing[0]
                 );
             }
-            eprintln!("genome signature: {} contigs, digest {}", sig.contigs.len(), &sig.digest[..16]);
+            eprintln!(
+                "genome signature: {} contigs, digest {}",
+                sig.contigs.len(),
+                &sig.digest[..16]
+            );
             Some(sig)
         }
         None => None,
@@ -3080,7 +3493,12 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
             molecule_codec: "rans2".into(),
             barcode_correction: "unique-hamming1-quality-pseudocount-v1".into(),
             umi_classes: "global-cell-umi-equivalence-with-1mm-edges-v1".into(),
-            unique_chain_reduction: "junction-chain-span-extremes-v1".into(),
+            unique_chain_reduction: if args.geometry_fidelity {
+                "distinct-unique-geometries-v1"
+            } else {
+                "junction-chain-span-extremes-v1"
+            }
+            .into(),
             multimapper_reduction: "primary-relative-placement-pattern-v1".into(),
             terminal_tail_rule: args
                 .terminal_tails
@@ -3092,7 +3510,8 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
         terminal_tails
             .as_ref()
             .map(|tails| {
-                prepare_terminal_tails(&x, tails, chunk_bp).map(|prepared| prepared.metadata)
+                prepare_terminal_tails(&x, tails, chunk_bp, args.chunk_records)
+                    .map(|prepared| prepared.metadata)
             })
             .transpose()?
     } else {
@@ -3109,6 +3528,9 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
                 chunk_bp,
                 genome_sig.as_ref(),
                 ArchiveExtensions {
+                    access_index: args.access_index,
+                    chunk_records: args.chunk_records,
+                    compression_tuning: args.compression_tuning,
                     alignment_provenance: Some(&manifest),
                     junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
                     terminal_tails: terminal_tails.as_ref(),
@@ -3145,6 +3567,9 @@ pub fn run_ingest(args: IngestArgs) -> Result<()> {
             chunk_bp,
             genome_sig.as_ref(),
             ArchiveExtensions {
+                access_index: args.access_index,
+                chunk_records: args.chunk_records,
+                compression_tuning: args.compression_tuning,
                 alignment_provenance: Some(&manifest),
                 junction_catalogue_bytes: junction_catalogue_bytes.as_deref(),
                 terminal_tails: terminal_tails.as_ref(),
@@ -3344,8 +3769,11 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
     };
     let t0 = std::time::Instant::now();
     let solo_strand = args.solo_strand.into();
-    let streaming_gene = !args.from_bam && !args.from_molecule_bam && !args.eager
-        && !args.velocity && !args.audit_multigene;
+    let streaming_gene = !args.from_bam
+        && !args.from_molecule_bam
+        && !args.eager
+        && !args.velocity
+        && !args.audit_multigene;
     if streaming_gene {
         let archive = StreamingReplayArchive::open(&args.input)?;
         let t_open = t0.elapsed().as_secs_f32();
@@ -3413,10 +3841,16 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             .as_ref()
             .context("--whitelist required with --from-bam")?;
         if let Some((whitelist_text, _)) = &whitelist_snapshot {
-            let (extracted, identity) =
-                extract_rows_with_identity(&args.input, whitelist_text, args.locus_gap)?;
+            let (extracted, identity) = extract_rows_with_identity(
+                &args.input,
+                whitelist_text,
+                args.locus_gap,
+                args.geometry_fidelity,
+            )?;
             raw_input_identity = Some(report_file_identity(identity));
             extracted
+        } else if args.geometry_fidelity {
+            crate::rows::extract_rows_fidelity(&args.input, wl, args.locus_gap)?
         } else {
             extract_rows(&args.input, wl, args.locus_gap)?
         }
@@ -3814,11 +4248,14 @@ fn preflight_artifact_report(
             }
             if let Some(output) = output {
                 let output_key = canonical_destination_key(output)?;
-                if primary_outputs.iter().try_fold(false, |collision, primary| {
-                    Ok::<_, OutputError>(
-                        collision || canonical_destination_key(primary)? == output_key,
-                    )
-                })? {
+                if primary_outputs
+                    .iter()
+                    .try_fold(false, |collision, primary| {
+                        Ok::<_, OutputError>(
+                            collision || canonical_destination_key(primary)? == output_key,
+                        )
+                    })?
+                {
                     bail!(
                         "operation report path must differ from the primary artifact path {}",
                         output.display()
@@ -3890,9 +4327,8 @@ fn report_file_identity(identity: ConsumedFileIdentity) -> FileContentIdentity {
     }
 }
 
-type GenomeInputHandle = std::thread::JoinHandle<
-    Result<(evidence_io::genome::GenomeSig, FileContentIdentity)>,
->;
+type GenomeInputHandle =
+    std::thread::JoinHandle<Result<(evidence_io::genome::GenomeSig, FileContentIdentity)>>;
 
 fn start_genome_input(path: &Path) -> Result<GenomeInputHandle> {
     // Open both streams before the consuming work starts and prove they name the same immutable
@@ -3909,12 +4345,18 @@ fn start_genome_input(path: &Path) -> Result<GenomeInputHandle> {
         .with_context(|| format!("opening {} for genome identity", path.display()))?;
     let identity_before = identity_file.metadata()?;
     if !archive_metadata_matches(&signature_before, &identity_before)? {
-        bail!("{} changed while its input snapshot was opened", path.display());
+        bail!(
+            "{} changed while its input snapshot was opened",
+            path.display()
+        );
     }
     let path_before = std::fs::metadata(path)
         .with_context(|| format!("checking genome input {}", path.display()))?;
     if !archive_metadata_matches(&signature_before, &path_before)? {
-        bail!("{} was replaced while its input snapshot was opened", path.display());
+        bail!(
+            "{} was replaced while its input snapshot was opened",
+            path.display()
+        );
     }
     let path = path.to_owned();
     Ok(std::thread::spawn(move || {
@@ -3932,10 +4374,16 @@ fn start_genome_input(path: &Path) -> Result<GenomeInputHandle> {
         let signature = signature?;
         let signature_after = signature_after?;
         if !archive_metadata_matches(&signature_before, &signature_after)? {
-            bail!("{} changed while its genome signature was computed", path.display());
+            bail!(
+                "{} changed while its genome signature was computed",
+                path.display()
+            );
         }
         if !archive_metadata_matches(&signature_after, &path_after?)? {
-            bail!("{} was replaced while its genome signature was computed", path.display());
+            bail!(
+                "{} was replaced while its genome signature was computed",
+                path.display()
+            );
         }
         Ok((signature, report_file_identity(identity?)))
     }))
@@ -4121,11 +4569,7 @@ fn preflight_replay_metadata(
             let output_key = output_name
                 .map(|name| std::fs::canonicalize(output_parent).map(|parent| parent.join(name)))
                 .transpose()?;
-            output_key.is_some_and(|key| {
-                component_names
-                    .iter()
-                    .any(|name| key == root.join(name))
-            })
+            output_key.is_some_and(|key| component_names.iter().any(|name| key == root.join(name)))
         } else {
             false
         };
@@ -4214,12 +4658,18 @@ fn validate_archive_input(
 ) -> Result<()> {
     let after = reader.file_metadata()?;
     if !archive_metadata_matches(before, &after)? {
-        bail!("{} changed while its archive content was consumed", path.display());
+        bail!(
+            "{} changed while its archive content was consumed",
+            path.display()
+        );
     }
     let path_after = std::fs::metadata(path)
         .with_context(|| format!("rechecking consumed archive {}", path.display()))?;
     if !archive_metadata_matches(&after, &path_after)? {
-        bail!("{} was replaced while its archive content was consumed", path.display());
+        bail!(
+            "{} was replaced while its archive content was consumed",
+            path.display()
+        );
     }
     Ok(())
 }
@@ -4466,11 +4916,7 @@ fn digest_hex(digest: [u8; 32]) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn temporary_section_writer(
-    out: &Path,
-    tag: &str,
-    level: i32,
-) -> Result<(PathBuf, SectionWriter)> {
+fn temporary_section_writer(out: &Path, tag: &str, level: i32) -> Result<(PathBuf, SectionWriter)> {
     let file_name = out
         .file_name()
         .context("archive output has no file name")?
@@ -5147,10 +5593,8 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
             if let Some(out) = args.out.as_deref() {
                 let mut source = r.try_clone_file()?;
                 source.seek(SeekFrom::Start(0))?;
-                let outcome = publish_file_no_clobber(
-                    out,
-                    Durability::FileAndDirectory,
-                    |writer| {
+                let outcome =
+                    publish_file_no_clobber(out, Durability::FileAndDirectory, |writer| {
                         std::io::copy(&mut source, writer)?;
                         validate_archive_input(&r, &source_before, &args.archive).map_err(
                             |error| {
@@ -5160,8 +5604,7 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
                             },
                         )?;
                         Ok(())
-                    },
-                )?;
+                    })?;
                 for warning in outcome.warnings {
                     eprintln!("warning: {warning}");
                 }
@@ -5195,7 +5638,11 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
             }
             return Ok(());
         }
-        eprintln!("replacing existing genome signature (digest {} -> {})", &prev.digest[..16], &sig.digest[..16]);
+        eprintln!(
+            "replacing existing genome signature (digest {} -> {})",
+            &prev.digest[..16],
+            &sig.digest[..16]
+        );
     }
     meta.insert("genome_sig".into(), serde_json::to_value(&sig)?);
     if let Some(binding) = &target_binding {
@@ -5224,7 +5671,9 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
         if output_reader.content_commitment() != Some(commitment) {
             bail!("stamped archive differs from its computed root commitment");
         }
-        let output_identity = reporting.then(|| archive_identity(&output_reader)).transpose()?;
+        let output_identity = reporting
+            .then(|| archive_identity(&output_reader))
+            .transpose()?;
         let sections = reporting.then(|| output_reader.entries().to_vec());
         if args.out.is_some() {
             let outcome = install_open_file_no_clobber(
@@ -5307,6 +5756,30 @@ pub fn run_stamp_genome(args: StampGenomeArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod astra_codec_tests {
+    use super::*;
+
+    #[test]
+    fn cell_runs_roundtrip_and_reject_invalid_expansion() {
+        let table = evidence_io::rans::Table::from_counts(&[0; evidence_io::rans::NSYM]).unwrap();
+        let decode = |raw: &[u8]| {
+            decode_coc_block(
+                &evidence_io::format::compress(raw, 1).unwrap(),
+                raw.len(),
+                &table,
+            )
+        };
+        assert_eq!(decode(&[2, 7, 3, 9, 1]).unwrap(), vec![7, 7, 7, 9]);
+        assert!(decode(&[2, 7]).is_err());
+        assert!(decode(&[2, 7, 0]).is_err());
+        assert!(decode(&[99]).is_err());
+        let mut overflow = vec![2, 7];
+        put_varint(&mut overflow, COC_BLOCK as u64 + 1);
+        assert!(decode(&overflow).is_err());
+    }
 }
 
 #[cfg(all(test, unix))]

@@ -324,6 +324,13 @@ class DistributionTests(unittest.TestCase):
             portability,
         )
         self.assertIn("--target ${{ matrix.target }}", portability)
+        self.assertEqual(portability.count("allocator: system"), 5)
+        self.assertEqual(portability.count("allocator: mimalloc"), 2)
+        self.assertIn('--features "${{ matrix.features }}"', portability)
+        self.assertIn('--no-default-features', portability)
+        self.assertIn('python packaging/gq_smoke.py', portability)
+        for target in ['x86_64-unknown-linux-gnu', 'x86_64-apple-darwin', 'aarch64-apple-darwin']:
+            self.assertIn(target, portability)
         self.assertGreaterEqual(portability.count('"${binary}" --version'), 2)
         self.assertEqual(portability.count('"${binary}" completions bash'), 2)
         self.assertIn("readelf --program-headers", portability)

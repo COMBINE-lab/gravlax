@@ -1,5 +1,7 @@
 //! `aie` — annotation-independent evidence toolkit.
 
+mod accessindex;
+mod allocator;
 mod apastats;
 mod archivecmd;
 mod assigndiff;
@@ -15,9 +17,11 @@ mod explorer;
 mod extendcmd;
 mod gatec;
 mod gated;
+mod gq;
 mod graph;
 mod ingestcmd;
 mod moleculebam;
+mod pathbench;
 mod plancmd;
 mod plots;
 mod projectcmd;
@@ -25,17 +29,20 @@ mod querycmd;
 mod replaycmd;
 mod resolvecmd;
 mod rows;
+mod shapecodec;
 mod shaperoute;
 mod sigstats;
+mod sparsebench;
 mod sparseout;
+mod structuralbench;
 mod viz;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use gravlax_output::{
-    canonical_destination_key, publish_file_no_clobber, reported_output_path, DataType,
-    Durability, Field, OutputError, OutputFormat, Producer, Provenance, ResultContext,
-    RowSemantics, SelectionSummary, StreamingBundleWriter, TableSchema, TableSemantics,
+    canonical_destination_key, publish_file_no_clobber, reported_output_path, DataType, Durability,
+    Field, OutputError, OutputFormat, Producer, Provenance, ResultContext, RowSemantics,
+    SelectionSummary, StreamingBundleWriter, TableSchema, TableSemantics,
 };
 use serde::Serialize;
 use serde_json::json;
@@ -44,7 +51,11 @@ use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "aie", version, about = "Annotation-independent molecular evidence for scRNA-seq")]
+#[command(
+    name = "aie",
+    version,
+    about = "Annotation-independent molecular evidence for scRNA-seq"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -52,6 +63,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Validate, explain, and execute a composable Gravlax query (.gq).
+    Gq(gq::Args),
     /// Create and manage a portable analysis project with named input resources.
     Project(projectcmd::Args),
     /// Validate or run a versioned YAML/JSON analysis plan.
@@ -278,9 +291,9 @@ fn run_compile_annotation(args: CompileAnnotationArgs) -> Result<()> {
     let parsed = t0.elapsed();
     let mut compiled_artifact = None;
     let publication = publish_file_no_clobber(&args.out, Durability::Flush, |writer| {
-        let artifact = annotation
-            .write_compiled_to(writer)
-            .map_err(|error| OutputError::Sink(format!("writing compiled annotation: {error:#}")))?;
+        let artifact = annotation.write_compiled_to(writer).map_err(|error| {
+            OutputError::Sink(format!("writing compiled annotation: {error:#}"))
+        })?;
         compiled_artifact = Some(artifact);
         Ok(())
     })?;
@@ -358,10 +371,17 @@ fn main() -> Result<()> {
     // Shared interactive host: default the rayon pool to 24 threads (the project's standing
     // thread-count discipline) unless the user overrides via RAYON_NUM_THREADS.
     if std::env::var_os("RAYON_NUM_THREADS").is_none() {
-        let n = std::thread::available_parallelism().map(|p| p.get()).unwrap_or(8).min(24);
-        rayon::ThreadPoolBuilder::new().num_threads(n).build_global().ok();
+        let n = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(8)
+            .min(24);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build_global()
+            .ok();
     }
     match Cli::parse().cmd {
+        Cmd::Gq(a) => gq::run(a),
         Cmd::Project(a) => projectcmd::run(a),
         Cmd::Plan(a) => plancmd::run(a),
         Cmd::Doctor(a) => doctor::run(a),

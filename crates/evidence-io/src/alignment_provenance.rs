@@ -313,7 +313,8 @@ impl AlignmentProvenanceManifest {
             || self.ingest.molecule_codec != "rans2"
             || self.ingest.barcode_correction != "unique-hamming1-quality-pseudocount-v1"
             || self.ingest.umi_classes != "global-cell-umi-equivalence-with-1mm-edges-v1"
-            || self.ingest.unique_chain_reduction != "junction-chain-span-extremes-v1"
+            || !matches!(self.ingest.unique_chain_reduction.as_str(),
+                "junction-chain-span-extremes-v1" | "distinct-unique-geometries-v1")
             || self.ingest.multimapper_reduction != "primary-relative-placement-pattern-v1"
         {
             bail!("alignment provenance contains invalid ingest parameters");

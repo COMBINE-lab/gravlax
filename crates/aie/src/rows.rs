@@ -3380,7 +3380,12 @@ fn bam_reader_mt(
 
 pub fn extract_rows(bam_path: &PathBuf, whitelist: &PathBuf, locus_gap: u32) -> Result<Extracted> {
     let wl = load_whitelist(whitelist)?;
-    Ok(extract_rows_inner(bam_path, wl, locus_gap, false, false, false)?.0)
+    Ok(extract_rows_inner(bam_path, wl, locus_gap, false, false, false, false)?.0)
+}
+
+pub fn extract_rows_fidelity(bam_path: &PathBuf, whitelist: &PathBuf, locus_gap: u32) -> Result<Extracted> {
+    let wl = load_whitelist(whitelist)?;
+    Ok(extract_rows_inner(bam_path, wl, locus_gap, false, false, false, true)?.0)
 }
 
 /// Reporting path: parse the exact whitelist snapshot supplied by the caller and derive the BAM
@@ -3389,10 +3394,11 @@ pub(crate) fn extract_rows_with_identity(
     bam_path: &PathBuf,
     whitelist_text: &str,
     locus_gap: u32,
+    geometry_fidelity: bool,
 ) -> Result<(Extracted, ConsumedFileIdentity)> {
     let wl = parse_whitelist_text_strict(whitelist_text)?;
     let (extracted, identity, _, _) =
-        extract_rows_inner(bam_path, wl, locus_gap, true, false, false)?;
+        extract_rows_inner(bam_path, wl, locus_gap, true, false, false, geometry_fidelity)?;
     Ok((
         extracted,
         identity.expect("reporting extraction requested a BAM identity"),
@@ -3406,10 +3412,11 @@ pub(crate) fn extract_rows_for_archive(
     whitelist_text: &str,
     locus_gap: u32,
     terminal_tails: bool,
+    geometry_fidelity: bool,
 ) -> Result<ArchiveExtraction> {
     let wl = parse_whitelist_text_strict(whitelist_text)?;
     let (evidence, identity, tails, programs) =
-        extract_rows_inner(bam_path, wl, locus_gap, true, terminal_tails, true)?;
+        extract_rows_inner(bam_path, wl, locus_gap, true, terminal_tails, true, geometry_fidelity)?;
     Ok(ArchiveExtraction {
         evidence,
         terminal_tails: tails,
@@ -3468,6 +3475,7 @@ fn extract_rows_inner(
     capture_identity: bool,
     capture_terminal_tails: bool,
     capture_bam_programs: bool,
+    geometry_fidelity: bool,
 ) -> Result<ExtractRowsInnerOutput> {
     let source = if capture_identity {
         let file = File::open(bam_path)
@@ -3829,6 +3837,7 @@ fn extract_rows_inner(
             // (umi, chain) -> (contained idx, extended idx, count)
             let mut chains: FxHashMap<ChainKey, ChainExtrema> = FxHashMap::default();
             for (li, r) in locus.iter().enumerate() {
+                if geometry_fidelity { break; }
                 let sh = &shapes[r.shape as usize];
                 let ch = chain_hash(r.pos, sh);
                 let end = end_of(r.pos, sh);
@@ -3846,6 +3855,22 @@ fn extract_rows_inner(
             }
             // One MolRec per UMI in this locus, gathering all its chains.
             let mut per_umi: FxHashMap<u32, SmallVec<[MolChain; 1]>> = FxHashMap::default();
+            if geometry_fidelity {
+                // Sparse replacement: each distinct geometry is stored once with its exact
+                // multiplicity. Single-geometry chains retain precisely their original form.
+                // No hash of a junction chain is used to decide geometry equality.
+                let mut geometries = std::collections::BTreeMap::new();
+                for read in locus {
+                    let count = geometries.entry((read.umi, read.pos, read.shape)).or_insert(0u32);
+                    *count = count.checked_add(1).context("geometry multiplicity overflow")?;
+                }
+                for ((u, pos, shape), weight) in geometries {
+                    per_umi.entry(u).or_default().push(MolChain {
+                        weight,
+                        reps: SmallVec::from_slice(&[(pos, shape)]),
+                    });
+                }
+            }
             let mut per_umi_tails: FxHashMap<u32, Vec<(u32, RawTerminalTailSignal)>> =
                 FxHashMap::default();
             if capture_terminal_tails {
@@ -3865,6 +3890,7 @@ fn extract_rows_inner(
             let mut items: Vec<(ChainKey, ChainExtrema)> = chains.into_iter().collect();
             items.sort_unstable_by_key(|((u, ch), _)| (*u, *ch));
             for ((u, _ch), (ci, ei, w)) in items {
+                if geometry_fidelity { continue; }
                 // Span-minimum (extended) rep first: with chains position-sorted below, the
                 // molecule's first stored rep is then its anchor and the serialization elides it.
                 let mut reps = SmallVec::new();

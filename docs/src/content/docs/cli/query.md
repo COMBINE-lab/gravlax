@@ -200,8 +200,8 @@ physical-molecule proof.
 
 Regions use archive-anchor membership by default. `--region-match
 aligned-block` tests overlap with retained aligned blocks and requires
-`--allow-full-scan` when it defines the universe because archive v2 has no
-complete block-overlap posting index. Multimappers are excluded by default.
+`--allow-full-scan` when it defines the universe unless the archive has the
+optional access index. Multimappers are excluded by default.
 `--placements direct` and `--placements all` are explicit diagnostic modes:
 `direct` uses the stored BAM-primary placement, while `all` is existential per
 junction or aligned-block predicate across retained alternatives. Archive-anchor
@@ -209,7 +209,76 @@ region predicates always test the record anchor and are unaffected by this
 option. Neither multimapper mode proves that a truth vector belongs to one
 physical molecule, and two true predicates in `all` mode do not assert one
 jointly realizable alternative placement. An all-alternative junction universe
-also requires an explicit full scan.
+also requires an explicit full scan without the optional access index.
+
+### Placement-local expressions and richer geometry
+
+`--match-within any-placement` evaluates the complete `--where` expression on
+each individual retained placement, accepting a record if one satisfies it.
+`--match-within all-placements` requires every retained placement to satisfy it
+and is false on an empty placement set. The default remains `record`.
+These options currently require `--unit molecule-record`. Use `--placements`
+to select unique, direct, or all-retained-alternative evidence as before.
+
+```sh
+aie query sample.aie cooccur \
+  --predicate u=region:chr1:100-400 \
+  --predicate exon=overlap:chr1:225-250:+/12 \
+  --predicate splice=junction:chr1:125-225:+ \
+  --universe u --where 'exon & splice' \
+  --match-within any-placement --format json
+```
+
+The universe is still record-level. The expression inside a placement quantifier
+may contain only placement-local predicates: anchor regions must instead use
+`--region-match aligned-block`, and terminal predicates are rejected because
+their record attachment does not identify a particular placement.
+
+Additional named predicates:
+
+| Kind/example | Meaning |
+| --- | --- |
+| `overlap:chr1:225-250:+/12` | At least 12 overlapping bases in one aligned block |
+| `start:chr1:100-101:+` | Genomic leftmost aligned-block start in the interval |
+| `end:chr1:250-251:+` | Genomic rightmost exclusive end boundary in the interval |
+| `junction-near:chr1:125-225:+/2` | Both exact boundaries within 2 bases of the request |
+| `path:chr1:125-225,250-350:+` | Consecutive observed junctions on one placement |
+| `subpath:chr1:125-225,450-550:+` | Ordered junction subsequence on one placement; gaps allowed |
+
+The `/N` suffix is required for overlap and junction-near; no implicit tolerance
+or site merging occurs. Overlap N must be positive. Paths have at most 64 junctions
+in increasing **genomic** order on either strand. Endpoint predicates are genomic
+boundaries, not chemistry-aware 5′/3′ ends. A new geometry kind cannot yet serve
+as `--universe`; name a region, exact junction, or terminal universe instead.
+
+Compact chains preserve their exact junction paths, so junction-only quantifiers
+can remain decisive. Omitted read endpoints can make geometry-sensitive tests
+unknown: an unwitnessed existential or unrefuted universal is not silently false
+or true. Full geometry resolves those uncertainties within the retained-evidence
+scope, without asserting biological absence or a true multimapper placement.
+
+Pattern masks remain record-level marginal observations. Under placement
+quantification, equal masks may have different selection states; the patterns
+table uses schema `gravlax.query.cooccur.patterns.v2` and includes selection state
+in its key. Default record queries retain the v1 table schema.
+
+### Execution and explanation
+
+Append `--explain --format json` to inspect the normalized predicate/expression
+plan, initial routes, cell scope, and data-dependent class closure without
+decoding molecule payloads. Explain writes to stdout and cannot use `--output`.
+
+Cell scope is applied before geometry matching, preserving original ordinals
+for terminal attachments. Larger panels use shared exact-junction lookup and a
+bounded per-chunk geometry-mask cache; small panels keep scalar evaluation.
+No additional archive sections or mandatory indexes are required. The hidden
+`--engine scalar|compiled|auto` switch is for reproducible differential benchmarks.
+The current automatic threshold is at least eight total predicates and at least
+seven geometry predicates; it is a performance heuristic, not a semantic setting.
+
+No expression-based chunk pruning is applied to the all-patterns result: false
+patterns and their counts are part of its contract. Cross-chunk class witnesses
+must not be lost by intersecting individual predicate chunk lists.
 
 Terminal predicates require a typed `meta.terminal_tail` capability and the
 corresponding rooted sparse sections. An older archive fails the query instead

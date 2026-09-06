@@ -1,0 +1,519 @@
+{
+  "schema": "gravlax.astra-selective-benchmark.v1",
+  "inputs": {
+    "baseline": {
+      "path": "/tmp/gravlax-astra-baseline/aie",
+      "sha256": "77c03534e6b16cfe7a99f430d740bceca413a7513e3db5a1caa022623e11376b"
+    },
+    "candidate": {
+      "path": "/tmp/gravlax-v016/target/release/aie",
+      "sha256": "bc787907d9a64f4b70099eea22d01fb0821621361dd36202b3ddda224127c89d"
+    },
+    "bam": {
+      "path": "/tmp/gravlax-cd45-case-study/source/ptprc-grch38-complete-multiplicity.bam",
+      "sha256": "08160437eb15566fac851591cde214046507304a5f91685f6203a0f9b8d995cf"
+    },
+    "whitelist": {
+      "path": "/tmp/gravlax-cd45-case-study/source/737K-august-2016.txt",
+      "sha256": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+    },
+    "gtf": {
+      "path": "/tmp/gravlax-cd45-case-study/source/CD45_exons_nochr.hg38.txt",
+      "sha256": "b66c37690b80d25baf5ce72c52323ae2d41fb0ccf238b1b66c2c92a682064637"
+    },
+    "barcodes": {
+      "path": "/tmp/gravlax-cd45-case-study/source/737K-august-2016.txt",
+      "sha256": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+    }
+  },
+  "configurations": {
+    "baseline": {
+      "archive_bytes": 340008,
+      "archive_sha256": "75b7ab2be2550cbc589636b8055bf778285d2daa777e9cfb3a3ad5acaec40486",
+      "ingest": {
+        "seconds": 0.3387859179638326,
+        "peak_rss_kib": 1072764
+      },
+      "query": [
+        {
+          "seconds": 0.018148365896195173,
+          "peak_rss_kib": 24396
+        },
+        {
+          "seconds": 0.018175666918978095,
+          "peak_rss_kib": 27468
+        },
+        {
+          "seconds": 0.018322197953239083,
+          "peak_rss_kib": 25424
+        },
+        {
+          "seconds": 0.0181530830450356,
+          "peak_rss_kib": 24400
+        },
+        {
+          "seconds": 0.018414055928587914,
+          "peak_rss_kib": 26508
+        },
+        {
+          "seconds": 0.017809455981478095,
+          "peak_rss_kib": 24400
+        },
+        {
+          "seconds": 0.01826564292423427,
+          "peak_rss_kib": 24396
+        }
+      ],
+      "query_median_seconds": 0.018175666918978095,
+      "query_median_rss_kib": 24400,
+      "replay": [
+        {
+          "seconds": 0.07185197714716196,
+          "peak_rss_kib": 71940
+        },
+        {
+          "seconds": 0.07338325283490121,
+          "peak_rss_kib": 70916
+        },
+        {
+          "seconds": 0.0723325009457767,
+          "peak_rss_kib": 71944
+        }
+      ],
+      "replay_median_seconds": 0.0723325009457767,
+      "replay_median_rss_kib": 71940,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "reader": {
+      "archive_bytes": 340008,
+      "archive_sha256": "75b7ab2be2550cbc589636b8055bf778285d2daa777e9cfb3a3ad5acaec40486",
+      "ingest": {
+        "seconds": 0.3384635429829359,
+        "peak_rss_kib": 964180
+      },
+      "query": [
+        {
+          "seconds": 0.01833695895038545,
+          "peak_rss_kib": 24648
+        },
+        {
+          "seconds": 0.018758374033495784,
+          "peak_rss_kib": 25676
+        },
+        {
+          "seconds": 0.0180813348852098,
+          "peak_rss_kib": 25676
+        },
+        {
+          "seconds": 0.018128005089238286,
+          "peak_rss_kib": 24648
+        },
+        {
+          "seconds": 0.017443505115807056,
+          "peak_rss_kib": 23124
+        },
+        {
+          "seconds": 0.018147695111110806,
+          "peak_rss_kib": 24652
+        },
+        {
+          "seconds": 0.018261075951159,
+          "peak_rss_kib": 26660
+        }
+      ],
+      "query_median_seconds": 0.018147695111110806,
+      "query_median_rss_kib": 24652,
+      "replay": [
+        {
+          "seconds": 0.07453239290043712,
+          "peak_rss_kib": 72000
+        },
+        {
+          "seconds": 0.07556567899882793,
+          "peak_rss_kib": 70980
+        },
+        {
+          "seconds": 0.07600265694782138,
+          "peak_rss_kib": 71004
+        }
+      ],
+      "replay_median_seconds": 0.07556567899882793,
+      "replay_median_rss_kib": 71004,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "indexed": {
+      "archive_bytes": 384486,
+      "archive_sha256": "8c64e435ff587045032eb20a51abdcd717c7f179f96059d3f646761b7b1078a4",
+      "ingest": {
+        "seconds": 0.34783980110660195,
+        "peak_rss_kib": 373996
+      },
+      "query": [
+        {
+          "seconds": 0.016435846919193864,
+          "peak_rss_kib": 21284
+        },
+        {
+          "seconds": 0.016189014771953225,
+          "peak_rss_kib": 20128
+        },
+        {
+          "seconds": 0.015942635014653206,
+          "peak_rss_kib": 20500
+        },
+        {
+          "seconds": 0.015656644012778997,
+          "peak_rss_kib": 20132
+        },
+        {
+          "seconds": 0.01595602510496974,
+          "peak_rss_kib": 22532
+        },
+        {
+          "seconds": 0.015483834082260728,
+          "peak_rss_kib": 21544
+        },
+        {
+          "seconds": 0.015945177990943193,
+          "peak_rss_kib": 23660
+        }
+      ],
+      "query_median_seconds": 0.015945177990943193,
+      "query_median_rss_kib": 21284,
+      "replay": [
+        {
+          "seconds": 0.07114962907508016,
+          "peak_rss_kib": 76704
+        },
+        {
+          "seconds": 0.07104330905713141,
+          "peak_rss_kib": 76688
+        },
+        {
+          "seconds": 0.07108296919614077,
+          "peak_rss_kib": 75680
+        }
+      ],
+      "replay_median_seconds": 0.07108296919614077,
+      "replay_median_rss_kib": 76688,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "compressed": {
+      "archive_bytes": 334324,
+      "archive_sha256": "e7195b3c8ce3f4c9bd3818cdbcfb6b1853b9ed434a9894cb073c284e3af0554c",
+      "ingest": {
+        "seconds": 0.33355164690874517,
+        "peak_rss_kib": 375048
+      },
+      "query": [
+        {
+          "seconds": 0.01860751793719828,
+          "peak_rss_kib": 25988
+        },
+        {
+          "seconds": 0.018329658079892397,
+          "peak_rss_kib": 24968
+        },
+        {
+          "seconds": 0.018049848033115268,
+          "peak_rss_kib": 28072
+        },
+        {
+          "seconds": 0.01829604897648096,
+          "peak_rss_kib": 25988
+        },
+        {
+          "seconds": 0.01823983294889331,
+          "peak_rss_kib": 24964
+        },
+        {
+          "seconds": 0.018124090041965246,
+          "peak_rss_kib": 24968
+        },
+        {
+          "seconds": 0.018003187142312527,
+          "peak_rss_kib": 27984
+        }
+      ],
+      "query_median_seconds": 0.01823983294889331,
+      "query_median_rss_kib": 25988,
+      "replay": [
+        {
+          "seconds": 0.07427801005542278,
+          "peak_rss_kib": 65800
+        },
+        {
+          "seconds": 0.07420071400702,
+          "peak_rss_kib": 64844
+        },
+        {
+          "seconds": 0.0747116431593895,
+          "peak_rss_kib": 66940
+        }
+      ],
+      "replay_median_seconds": 0.07427801005542278,
+      "replay_median_rss_kib": 65800,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "fidelity": {
+      "archive_bytes": 466431,
+      "archive_sha256": "b32f9a8362e4ddebe61edd4d8ec0ab22e39bec645164f8332278c73fc2055c7c",
+      "ingest": {
+        "seconds": 0.35770803806371987,
+        "peak_rss_kib": 379416
+      },
+      "query": [
+        {
+          "seconds": 0.01724893180653453,
+          "peak_rss_kib": 22836
+        },
+        {
+          "seconds": 0.0167149780318141,
+          "peak_rss_kib": 20784
+        },
+        {
+          "seconds": 0.01682486291974783,
+          "peak_rss_kib": 21172
+        },
+        {
+          "seconds": 0.016880546929314733,
+          "peak_rss_kib": 22200
+        },
+        {
+          "seconds": 0.017070333007723093,
+          "peak_rss_kib": 23940
+        },
+        {
+          "seconds": 0.017074348870664835,
+          "peak_rss_kib": 21304
+        },
+        {
+          "seconds": 0.016831343062222004,
+          "peak_rss_kib": 22012
+        }
+      ],
+      "query_median_seconds": 0.016880546929314733,
+      "query_median_rss_kib": 22012,
+      "replay": [
+        {
+          "seconds": 0.07314069801941514,
+          "peak_rss_kib": 80812
+        },
+        {
+          "seconds": 0.07261494500562549,
+          "peak_rss_kib": 78956
+        },
+        {
+          "seconds": 0.07309800293296576,
+          "peak_rss_kib": 80544
+        }
+      ],
+      "replay_median_seconds": 0.07309800293296576,
+      "replay_median_rss_kib": 80544,
+      "mex_sha256": {
+        "matrix.mtx": "39217dd78e297e29639bc542e56fcbe86f1bf423bc010130c432b9db2b3db14a",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "all": {
+      "archive_bytes": 460747,
+      "archive_sha256": "45e6a3d6bbd2164f29149e59639bbf94572b87600b99b6f9e037ee5a3ae383ab",
+      "ingest": {
+        "seconds": 0.3764797530602664,
+        "peak_rss_kib": 378872
+      },
+      "query": [
+        {
+          "seconds": 0.017083311919122934,
+          "peak_rss_kib": 22404
+        },
+        {
+          "seconds": 0.017279818188399076,
+          "peak_rss_kib": 23992
+        },
+        {
+          "seconds": 0.01738670887425542,
+          "peak_rss_kib": 22108
+        },
+        {
+          "seconds": 0.017307911068201065,
+          "peak_rss_kib": 25136
+        },
+        {
+          "seconds": 0.017659639939665794,
+          "peak_rss_kib": 24888
+        },
+        {
+          "seconds": 0.017162530915811658,
+          "peak_rss_kib": 21960
+        },
+        {
+          "seconds": 0.016712835058569908,
+          "peak_rss_kib": 22724
+        }
+      ],
+      "query_median_seconds": 0.017279818188399076,
+      "query_median_rss_kib": 22724,
+      "replay": [
+        {
+          "seconds": 0.07301734201610088,
+          "peak_rss_kib": 80488
+        },
+        {
+          "seconds": 0.07429355406202376,
+          "peak_rss_kib": 82760
+        },
+        {
+          "seconds": 0.07365458086133003,
+          "peak_rss_kib": 78876
+        }
+      ],
+      "replay_median_seconds": 0.07365458086133003,
+      "replay_median_rss_kib": 80488,
+      "mex_sha256": {
+        "matrix.mtx": "39217dd78e297e29639bc542e56fcbe86f1bf423bc010130c432b9db2b3db14a",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "compressed-l3": {
+      "archive_bytes": 377509,
+      "archive_sha256": "36c2781543f4e1cb3eb3ae19a5cd07543ab87580f4c2fdb2953838eb9658e38d",
+      "ingest": {
+        "seconds": 0.25960022886283696,
+        "peak_rss_kib": 43332
+      },
+      "query": [
+        {
+          "seconds": 0.018847708124667406,
+          "peak_rss_kib": 20724
+        },
+        {
+          "seconds": 0.019078576937317848,
+          "peak_rss_kib": 20708
+        },
+        {
+          "seconds": 0.01858535408973694,
+          "peak_rss_kib": 20752
+        },
+        {
+          "seconds": 0.019009934039786458,
+          "peak_rss_kib": 20748
+        },
+        {
+          "seconds": 0.018945464864373207,
+          "peak_rss_kib": 20680
+        },
+        {
+          "seconds": 0.01875638193450868,
+          "peak_rss_kib": 20688
+        },
+        {
+          "seconds": 0.018861810211092234,
+          "peak_rss_kib": 21760
+        }
+      ],
+      "query_median_seconds": 0.018861810211092234,
+      "query_median_rss_kib": 20724,
+      "replay": [
+        {
+          "seconds": 0.07563845813274384,
+          "peak_rss_kib": 71232
+        },
+        {
+          "seconds": 0.07626556302420795,
+          "peak_rss_kib": 70236
+        },
+        {
+          "seconds": 0.076278060907498,
+          "peak_rss_kib": 70132
+        }
+      ],
+      "replay_median_seconds": 0.07626556302420795,
+      "replay_median_rss_kib": 70236,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    },
+    "compressed-l9": {
+      "archive_bytes": 361678,
+      "archive_sha256": "7e3c295d0160c30b326aef6bbf7f05ece088d368809246d95d97d0461f46d0b0",
+      "ingest": {
+        "seconds": 0.2595480598974973,
+        "peak_rss_kib": 110748
+      },
+      "query": [
+        {
+          "seconds": 0.018553705886006355,
+          "peak_rss_kib": 22096
+        },
+        {
+          "seconds": 0.019309684867039323,
+          "peak_rss_kib": 22752
+        },
+        {
+          "seconds": 0.018980609020218253,
+          "peak_rss_kib": 22308
+        },
+        {
+          "seconds": 0.018740657018497586,
+          "peak_rss_kib": 23460
+        },
+        {
+          "seconds": 0.018654647981747985,
+          "peak_rss_kib": 23760
+        },
+        {
+          "seconds": 0.018430619966238737,
+          "peak_rss_kib": 22412
+        },
+        {
+          "seconds": 0.01865103212185204,
+          "peak_rss_kib": 23592
+        }
+      ],
+      "query_median_seconds": 0.018654647981747985,
+      "query_median_rss_kib": 22752,
+      "replay": [
+        {
+          "seconds": 0.07519279699772596,
+          "peak_rss_kib": 72136
+        },
+        {
+          "seconds": 0.07588092400692403,
+          "peak_rss_kib": 71096
+        },
+        {
+          "seconds": 0.07727515208534896,
+          "peak_rss_kib": 69068
+        }
+      ],
+      "replay_median_seconds": 0.07588092400692403,
+      "replay_median_rss_kib": 71096,
+      "mex_sha256": {
+        "matrix.mtx": "8c558e172aa4b6fa8835d37bddebdf4a62a55794511d095dbe6d92ed4b61b340",
+        "features.tsv": "c24af181296cb1d919905101a63746d7d9c5de33ddc0382e7a6fcb015e7e0bc2",
+        "barcodes.tsv": "b0dda4b114d8fc7ea8def94fb472e6205c1831a72e3ac245ed13cc332d9f20d1"
+      }
+    }
+  }
+}

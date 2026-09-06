@@ -1,0 +1,6726 @@
+{
+  "method": "warm filesystem cache; one warmup; interleaved randomized order; 4 Rayon threads; complete process including JSON output; all logical rows/counts checked",
+  "provenance": {
+    "host": "nomad01.umiacs.umd.edu",
+    "platform": "Linux-5.14.0-687.39.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "before_binary_sha256": "3a31be96c4c85d662d6e654994000b7a1c3ffda6d401f00a619a38d27818dfe0",
+    "after_binary_sha256": "2d583bbbe3ff833b4d5b348c6c80adab09e8d1cf6f2370741754b76a4421875b",
+    "archives": [
+      {
+        "path": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+        "content_roots": [
+          "aie-directory-root-v2:836e05ad4362341a9613406689d51e599d60acbdb8e9ef8a7709e1b610ec8f1f"
+        ]
+      },
+      {
+        "path": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+        "content_roots": [
+          "aie-directory-root-v2:ee47b5124ef536e22227caaa975497fc132bb0773aad289ec67dff0725315115"
+        ]
+      },
+      {
+        "path": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+        "content_roots": [
+          "aie-directory-root-v2:20e0b97b31d6ec6376896e5c61f0f2d6a52953ea24f511ddcaddbaea99fd150e"
+        ]
+      },
+      {
+        "path": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+        "content_roots": [
+          "aie-directory-root-v2:dfd8e8660a93ecc17382b5879e8bf988579e8619316c77931e93cea339612ad0"
+        ]
+      }
+    ]
+  },
+  "repeats": 11,
+  "results": [
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 2,
+      "logical_sha256": "c4b076c8c179cd7b6ba671bcaaa509c8d1507f51d2dddc3436eca464f879746e",
+      "variants": {
+        "before": {
+          "median_ms": 18.001661,
+          "median_rss_kib": 24300,
+          "samples": [
+            {
+              "ms": 18.26634,
+              "rss_kib": 22648
+            },
+            {
+              "ms": 18.579681,
+              "rss_kib": 24300
+            },
+            {
+              "ms": 18.001661,
+              "rss_kib": 26304
+            },
+            {
+              "ms": 18.462375,
+              "rss_kib": 23704
+            },
+            {
+              "ms": 17.568218,
+              "rss_kib": 27484
+            },
+            {
+              "ms": 18.182743,
+              "rss_kib": 23724
+            },
+            {
+              "ms": 17.585765,
+              "rss_kib": 23824
+            },
+            {
+              "ms": 18.117105,
+              "rss_kib": 22540
+            },
+            {
+              "ms": 17.677042,
+              "rss_kib": 24692
+            },
+            {
+              "ms": 17.691173,
+              "rss_kib": 24300
+            },
+            {
+              "ms": 17.858426,
+              "rss_kib": 29612
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 18.02096,
+          "median_rss_kib": 28088,
+          "samples": [
+            {
+              "ms": 18.60556,
+              "rss_kib": 28152
+            },
+            {
+              "ms": 18.505359,
+              "rss_kib": 29140
+            },
+            {
+              "ms": 17.679276,
+              "rss_kib": 31016
+            },
+            {
+              "ms": 18.262894,
+              "rss_kib": 28624
+            },
+            {
+              "ms": 18.02096,
+              "rss_kib": 28496
+            },
+            {
+              "ms": 18.583307,
+              "rss_kib": 28088
+            },
+            {
+              "ms": 17.565885,
+              "rss_kib": 26976
+            },
+            {
+              "ms": 17.741399,
+              "rss_kib": 26376
+            },
+            {
+              "ms": 18.209134,
+              "rss_kib": 28020
+            },
+            {
+              "ms": 17.541979,
+              "rss_kib": 26976
+            },
+            {
+              "ms": 17.535279,
+              "rss_kib": 27092
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 19.059794,
+          "median_rss_kib": 28284,
+          "samples": [
+            {
+              "ms": 19.223801,
+              "rss_kib": 27976
+            },
+            {
+              "ms": 19.585586,
+              "rss_kib": 27432
+            },
+            {
+              "ms": 19.131783,
+              "rss_kib": 29324
+            },
+            {
+              "ms": 18.630928,
+              "rss_kib": 28312
+            },
+            {
+              "ms": 19.059794,
+              "rss_kib": 27640
+            },
+            {
+              "ms": 19.094486,
+              "rss_kib": 28748
+            },
+            {
+              "ms": 18.972903,
+              "rss_kib": 27896
+            },
+            {
+              "ms": 18.853864,
+              "rss_kib": 28284
+            },
+            {
+              "ms": 20.087481,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 18.841326,
+              "rss_kib": 28992
+            },
+            {
+              "ms": 18.998211,
+              "rss_kib": 29384
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 18.636456,
+          "median_rss_kib": 27676,
+          "samples": [
+            {
+              "ms": 18.854464,
+              "rss_kib": 27076
+            },
+            {
+              "ms": 18.464508,
+              "rss_kib": 27676
+            },
+            {
+              "ms": 18.646872,
+              "rss_kib": 25644
+            },
+            {
+              "ms": 18.449485,
+              "rss_kib": 27904
+            },
+            {
+              "ms": 17.713377,
+              "rss_kib": 25880
+            },
+            {
+              "ms": 18.681144,
+              "rss_kib": 27564
+            },
+            {
+              "ms": 18.643808,
+              "rss_kib": 28828
+            },
+            {
+              "ms": 18.636456,
+              "rss_kib": 28844
+            },
+            {
+              "ms": 18.137816,
+              "rss_kib": 28416
+            },
+            {
+              "ms": 18.263976,
+              "rss_kib": 28416
+            },
+            {
+              "ms": 18.913173,
+              "rss_kib": 27236
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 8,
+      "logical_sha256": "8a6df6f3de366aa183f48e7cdc36415b5b83c7545d28d8f0b0818f382fe0d52a",
+      "variants": {
+        "before": {
+          "median_ms": 23.385427,
+          "median_rss_kib": 24100,
+          "samples": [
+            {
+              "ms": 23.176371,
+              "rss_kib": 29704
+            },
+            {
+              "ms": 23.586819,
+              "rss_kib": 24000
+            },
+            {
+              "ms": 23.227718,
+              "rss_kib": 24384
+            },
+            {
+              "ms": 23.385427,
+              "rss_kib": 24100
+            },
+            {
+              "ms": 23.245785,
+              "rss_kib": 24320
+            },
+            {
+              "ms": 23.154509,
+              "rss_kib": 24304
+            },
+            {
+              "ms": 23.174148,
+              "rss_kib": 23716
+            },
+            {
+              "ms": 23.627831,
+              "rss_kib": 23612
+            },
+            {
+              "ms": 23.741222,
+              "rss_kib": 23944
+            },
+            {
+              "ms": 23.68712,
+              "rss_kib": 27176
+            },
+            {
+              "ms": 23.646639,
+              "rss_kib": 23660
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 24.400154,
+          "median_rss_kib": 28068,
+          "samples": [
+            {
+              "ms": 24.483229,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 23.914613,
+              "rss_kib": 26084
+            },
+            {
+              "ms": 23.493068,
+              "rss_kib": 28084
+            },
+            {
+              "ms": 23.825799,
+              "rss_kib": 28564
+            },
+            {
+              "ms": 24.53703,
+              "rss_kib": 26264
+            },
+            {
+              "ms": 24.045169,
+              "rss_kib": 29268
+            },
+            {
+              "ms": 23.842904,
+              "rss_kib": 25248
+            },
+            {
+              "ms": 24.489217,
+              "rss_kib": 25608
+            },
+            {
+              "ms": 24.400154,
+              "rss_kib": 25392
+            },
+            {
+              "ms": 24.796731,
+              "rss_kib": 28168
+            },
+            {
+              "ms": 24.526574,
+              "rss_kib": 28068
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 21.615121,
+          "median_rss_kib": 28152,
+          "samples": [
+            {
+              "ms": 22.085259,
+              "rss_kib": 28428
+            },
+            {
+              "ms": 21.615121,
+              "rss_kib": 27512
+            },
+            {
+              "ms": 21.66097,
+              "rss_kib": 28152
+            },
+            {
+              "ms": 21.45505,
+              "rss_kib": 29508
+            },
+            {
+              "ms": 21.79366,
+              "rss_kib": 27192
+            },
+            {
+              "ms": 20.830389,
+              "rss_kib": 27076
+            },
+            {
+              "ms": 21.374329,
+              "rss_kib": 29180
+            },
+            {
+              "ms": 21.626348,
+              "rss_kib": 27112
+            },
+            {
+              "ms": 21.331163,
+              "rss_kib": 28332
+            },
+            {
+              "ms": 22.010847,
+              "rss_kib": 27936
+            },
+            {
+              "ms": 21.305284,
+              "rss_kib": 28668
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 21.974051,
+          "median_rss_kib": 28556,
+          "samples": [
+            {
+              "ms": 22.04618,
+              "rss_kib": 27384
+            },
+            {
+              "ms": 22.129776,
+              "rss_kib": 29240
+            },
+            {
+              "ms": 21.489632,
+              "rss_kib": 28556
+            },
+            {
+              "ms": 22.011698,
+              "rss_kib": 27928
+            },
+            {
+              "ms": 22.031808,
+              "rss_kib": 28468
+            },
+            {
+              "ms": 22.156256,
+              "rss_kib": 28876
+            },
+            {
+              "ms": 21.595241,
+              "rss_kib": 28244
+            },
+            {
+              "ms": 21.703645,
+              "rss_kib": 28936
+            },
+            {
+              "ms": 21.974051,
+              "rss_kib": 30996
+            },
+            {
+              "ms": 21.403583,
+              "rss_kib": 28992
+            },
+            {
+              "ms": 21.735272,
+              "rss_kib": 27964
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 32,
+      "logical_sha256": "2992469574884c8c00bf2804a628a8f51f919fc436803f4f5cb31474d397d427",
+      "variants": {
+        "before": {
+          "median_ms": 41.981432,
+          "median_rss_kib": 24040,
+          "samples": [
+            {
+              "ms": 41.745637,
+              "rss_kib": 24148
+            },
+            {
+              "ms": 41.615511,
+              "rss_kib": 23928
+            },
+            {
+              "ms": 42.072078,
+              "rss_kib": 23404
+            },
+            {
+              "ms": 41.790694,
+              "rss_kib": 23396
+            },
+            {
+              "ms": 41.458985,
+              "rss_kib": 24040
+            },
+            {
+              "ms": 41.981432,
+              "rss_kib": 23932
+            },
+            {
+              "ms": 41.37528,
+              "rss_kib": 27124
+            },
+            {
+              "ms": 42.372019,
+              "rss_kib": 24340
+            },
+            {
+              "ms": 42.7576,
+              "rss_kib": 24632
+            },
+            {
+              "ms": 42.123146,
+              "rss_kib": 27068
+            },
+            {
+              "ms": 42.218769,
+              "rss_kib": 23784
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 44.477971,
+          "median_rss_kib": 27844,
+          "samples": [
+            {
+              "ms": 44.893777,
+              "rss_kib": 27312
+            },
+            {
+              "ms": 44.089275,
+              "rss_kib": 27896
+            },
+            {
+              "ms": 44.477971,
+              "rss_kib": 27844
+            },
+            {
+              "ms": 44.961669,
+              "rss_kib": 27352
+            },
+            {
+              "ms": 44.402978,
+              "rss_kib": 27484
+            },
+            {
+              "ms": 43.815613,
+              "rss_kib": 28676
+            },
+            {
+              "ms": 44.960206,
+              "rss_kib": 28324
+            },
+            {
+              "ms": 44.472031,
+              "rss_kib": 28060
+            },
+            {
+              "ms": 44.492813,
+              "rss_kib": 29616
+            },
+            {
+              "ms": 44.661647,
+              "rss_kib": 27496
+            },
+            {
+              "ms": 44.317999,
+              "rss_kib": 27112
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 28.369619,
+          "median_rss_kib": 28212,
+          "samples": [
+            {
+              "ms": 28.322039,
+              "rss_kib": 28772
+            },
+            {
+              "ms": 28.149678,
+              "rss_kib": 27868
+            },
+            {
+              "ms": 28.996854,
+              "rss_kib": 27844
+            },
+            {
+              "ms": 28.326385,
+              "rss_kib": 29996
+            },
+            {
+              "ms": 28.72833,
+              "rss_kib": 27568
+            },
+            {
+              "ms": 28.97457,
+              "rss_kib": 31092
+            },
+            {
+              "ms": 28.102258,
+              "rss_kib": 29220
+            },
+            {
+              "ms": 28.369619,
+              "rss_kib": 28212
+            },
+            {
+              "ms": 28.952988,
+              "rss_kib": 28048
+            },
+            {
+              "ms": 27.862406,
+              "rss_kib": 27972
+            },
+            {
+              "ms": 28.372083,
+              "rss_kib": 29076
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 28.465754,
+          "median_rss_kib": 29212,
+          "samples": [
+            {
+              "ms": 27.544908,
+              "rss_kib": 31840
+            },
+            {
+              "ms": 28.53607,
+              "rss_kib": 28272
+            },
+            {
+              "ms": 28.190891,
+              "rss_kib": 27616
+            },
+            {
+              "ms": 28.513467,
+              "rss_kib": 29212
+            },
+            {
+              "ms": 27.920073,
+              "rss_kib": 27656
+            },
+            {
+              "ms": 28.623862,
+              "rss_kib": 28908
+            },
+            {
+              "ms": 28.253435,
+              "rss_kib": 31828
+            },
+            {
+              "ms": 28.228898,
+              "rss_kib": 29600
+            },
+            {
+              "ms": 28.893789,
+              "rss_kib": 31896
+            },
+            {
+              "ms": 28.465754,
+              "rss_kib": 27952
+            },
+            {
+              "ms": 28.674128,
+              "rss_kib": 31004
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 64,
+      "logical_sha256": "ebe754256ddf5a13553fec58617cd2e460c2eb3726047e9e1ff2c911946cce8a",
+      "variants": {
+        "before": {
+          "median_ms": 67.71947,
+          "median_rss_kib": 23916,
+          "samples": [
+            {
+              "ms": 68.292874,
+              "rss_kib": 23404
+            },
+            {
+              "ms": 67.452308,
+              "rss_kib": 24676
+            },
+            {
+              "ms": 67.3076,
+              "rss_kib": 23844
+            },
+            {
+              "ms": 67.3414,
+              "rss_kib": 23436
+            },
+            {
+              "ms": 67.956557,
+              "rss_kib": 26588
+            },
+            {
+              "ms": 67.715464,
+              "rss_kib": 23916
+            },
+            {
+              "ms": 67.348301,
+              "rss_kib": 23868
+            },
+            {
+              "ms": 67.941704,
+              "rss_kib": 24132
+            },
+            {
+              "ms": 68.315557,
+              "rss_kib": 26600
+            },
+            {
+              "ms": 68.15154,
+              "rss_kib": 23648
+            },
+            {
+              "ms": 67.71947,
+              "rss_kib": 27348
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 72.983976,
+          "median_rss_kib": 24468,
+          "samples": [
+            {
+              "ms": 72.983976,
+              "rss_kib": 24740
+            },
+            {
+              "ms": 72.410782,
+              "rss_kib": 24464
+            },
+            {
+              "ms": 73.195734,
+              "rss_kib": 24512
+            },
+            {
+              "ms": 72.238323,
+              "rss_kib": 23468
+            },
+            {
+              "ms": 73.208914,
+              "rss_kib": 27584
+            },
+            {
+              "ms": 72.52229,
+              "rss_kib": 24328
+            },
+            {
+              "ms": 73.032529,
+              "rss_kib": 26864
+            },
+            {
+              "ms": 73.623999,
+              "rss_kib": 27456
+            },
+            {
+              "ms": 73.647555,
+              "rss_kib": 23456
+            },
+            {
+              "ms": 72.809593,
+              "rss_kib": 23856
+            },
+            {
+              "ms": 72.757345,
+              "rss_kib": 24468
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 38.602505,
+          "median_rss_kib": 24644,
+          "samples": [
+            {
+              "ms": 38.364456,
+              "rss_kib": 23996
+            },
+            {
+              "ms": 38.820052,
+              "rss_kib": 23812
+            },
+            {
+              "ms": 38.227591,
+              "rss_kib": 24668
+            },
+            {
+              "ms": 39.067154,
+              "rss_kib": 26040
+            },
+            {
+              "ms": 39.019203,
+              "rss_kib": 24356
+            },
+            {
+              "ms": 38.602505,
+              "rss_kib": 24644
+            },
+            {
+              "ms": 38.725921,
+              "rss_kib": 27176
+            },
+            {
+              "ms": 38.445809,
+              "rss_kib": 23828
+            },
+            {
+              "ms": 38.454983,
+              "rss_kib": 27560
+            },
+            {
+              "ms": 38.799792,
+              "rss_kib": 24512
+            },
+            {
+              "ms": 38.251867,
+              "rss_kib": 24700
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 38.598108,
+          "median_rss_kib": 24152,
+          "samples": [
+            {
+              "ms": 38.784559,
+              "rss_kib": 23816
+            },
+            {
+              "ms": 38.595054,
+              "rss_kib": 26792
+            },
+            {
+              "ms": 38.485589,
+              "rss_kib": 24228
+            },
+            {
+              "ms": 38.467122,
+              "rss_kib": 24736
+            },
+            {
+              "ms": 38.446561,
+              "rss_kib": 23900
+            },
+            {
+              "ms": 38.598108,
+              "rss_kib": 23984
+            },
+            {
+              "ms": 39.266364,
+              "rss_kib": 27572
+            },
+            {
+              "ms": 39.153935,
+              "rss_kib": 23924
+            },
+            {
+              "ms": 39.113084,
+              "rss_kib": 24084
+            },
+            {
+              "ms": 38.867103,
+              "rss_kib": 24200
+            },
+            {
+              "ms": 38.467642,
+              "rss_kib": 24152
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 2,
+      "logical_sha256": "1fe9088ec360383da0a5d753be779c0901ec4738b2ed2b2bb0b4c44f275c2ec4",
+      "variants": {
+        "before": {
+          "median_ms": 13.511381,
+          "median_rss_kib": 24240,
+          "samples": [
+            {
+              "ms": 13.682669,
+              "rss_kib": 24048
+            },
+            {
+              "ms": 13.313864,
+              "rss_kib": 26444
+            },
+            {
+              "ms": 13.574906,
+              "rss_kib": 25320
+            },
+            {
+              "ms": 13.293563,
+              "rss_kib": 23760
+            },
+            {
+              "ms": 12.808904,
+              "rss_kib": 24704
+            },
+            {
+              "ms": 13.821527,
+              "rss_kib": 24240
+            },
+            {
+              "ms": 13.378572,
+              "rss_kib": 24056
+            },
+            {
+              "ms": 14.076552,
+              "rss_kib": 29396
+            },
+            {
+              "ms": 13.362767,
+              "rss_kib": 23436
+            },
+            {
+              "ms": 13.511381,
+              "rss_kib": 23356
+            },
+            {
+              "ms": 13.979095,
+              "rss_kib": 29392
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 12.727491,
+          "median_rss_kib": 21136,
+          "samples": [
+            {
+              "ms": 12.52748,
+              "rss_kib": 17940
+            },
+            {
+              "ms": 12.706249,
+              "rss_kib": 21328
+            },
+            {
+              "ms": 12.799519,
+              "rss_kib": 21624
+            },
+            {
+              "ms": 12.403283,
+              "rss_kib": 18620
+            },
+            {
+              "ms": 12.797336,
+              "rss_kib": 20960
+            },
+            {
+              "ms": 13.023076,
+              "rss_kib": 21696
+            },
+            {
+              "ms": 12.782774,
+              "rss_kib": 19652
+            },
+            {
+              "ms": 13.017698,
+              "rss_kib": 17408
+            },
+            {
+              "ms": 12.727491,
+              "rss_kib": 21696
+            },
+            {
+              "ms": 12.622193,
+              "rss_kib": 21136
+            },
+            {
+              "ms": 12.709754,
+              "rss_kib": 21428
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 13.082665,
+          "median_rss_kib": 21000,
+          "samples": [
+            {
+              "ms": 12.482742,
+              "rss_kib": 21336
+            },
+            {
+              "ms": 13.047723,
+              "rss_kib": 19428
+            },
+            {
+              "ms": 13.467916,
+              "rss_kib": 20988
+            },
+            {
+              "ms": 13.18492,
+              "rss_kib": 20648
+            },
+            {
+              "ms": 13.041394,
+              "rss_kib": 21000
+            },
+            {
+              "ms": 13.833076,
+              "rss_kib": 21700
+            },
+            {
+              "ms": 13.082665,
+              "rss_kib": 19016
+            },
+            {
+              "ms": 13.006872,
+              "rss_kib": 20180
+            },
+            {
+              "ms": 13.329237,
+              "rss_kib": 21644
+            },
+            {
+              "ms": 13.363598,
+              "rss_kib": 23636
+            },
+            {
+              "ms": 12.568932,
+              "rss_kib": 22516
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 12.510945,
+          "median_rss_kib": 20540,
+          "samples": [
+            {
+              "ms": 12.407289,
+              "rss_kib": 18508
+            },
+            {
+              "ms": 12.249371,
+              "rss_kib": 20848
+            },
+            {
+              "ms": 12.510945,
+              "rss_kib": 22524
+            },
+            {
+              "ms": 13.15908,
+              "rss_kib": 20292
+            },
+            {
+              "ms": 12.60093,
+              "rss_kib": 19428
+            },
+            {
+              "ms": 12.483012,
+              "rss_kib": 21404
+            },
+            {
+              "ms": 12.624657,
+              "rss_kib": 21692
+            },
+            {
+              "ms": 12.422051,
+              "rss_kib": 18928
+            },
+            {
+              "ms": 12.849254,
+              "rss_kib": 19428
+            },
+            {
+              "ms": 12.311354,
+              "rss_kib": 20540
+            },
+            {
+              "ms": 13.491912,
+              "rss_kib": 21544
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 8,
+      "logical_sha256": "c3a205c9b09153aa67247e94193eebe9679107fa474370717eb97882f0a8955a",
+      "variants": {
+        "before": {
+          "median_ms": 18.369995,
+          "median_rss_kib": 24396,
+          "samples": [
+            {
+              "ms": 18.256996,
+              "rss_kib": 23624
+            },
+            {
+              "ms": 18.417567,
+              "rss_kib": 22976
+            },
+            {
+              "ms": 18.069683,
+              "rss_kib": 24408
+            },
+            {
+              "ms": 17.733076,
+              "rss_kib": 23972
+            },
+            {
+              "ms": 18.619581,
+              "rss_kib": 23772
+            },
+            {
+              "ms": 18.130344,
+              "rss_kib": 24396
+            },
+            {
+              "ms": 18.069102,
+              "rss_kib": 27096
+            },
+            {
+              "ms": 18.627213,
+              "rss_kib": 26928
+            },
+            {
+              "ms": 18.369995,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 18.499601,
+              "rss_kib": 25512
+            },
+            {
+              "ms": 18.548704,
+              "rss_kib": 24000
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 13.607726,
+          "median_rss_kib": 21380,
+          "samples": [
+            {
+              "ms": 14.260779,
+              "rss_kib": 21480
+            },
+            {
+              "ms": 13.246933,
+              "rss_kib": 21720
+            },
+            {
+              "ms": 13.228255,
+              "rss_kib": 22236
+            },
+            {
+              "ms": 14.224775,
+              "rss_kib": 21380
+            },
+            {
+              "ms": 13.705824,
+              "rss_kib": 22532
+            },
+            {
+              "ms": 13.114063,
+              "rss_kib": 21616
+            },
+            {
+              "ms": 13.748138,
+              "rss_kib": 21152
+            },
+            {
+              "ms": 13.820477,
+              "rss_kib": 21076
+            },
+            {
+              "ms": 13.055935,
+              "rss_kib": 20500
+            },
+            {
+              "ms": 13.515077,
+              "rss_kib": 19032
+            },
+            {
+              "ms": 13.607726,
+              "rss_kib": 19656
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 13.416198,
+          "median_rss_kib": 20796,
+          "samples": [
+            {
+              "ms": 13.55068,
+              "rss_kib": 21484
+            },
+            {
+              "ms": 12.921192,
+              "rss_kib": 20912
+            },
+            {
+              "ms": 13.091289,
+              "rss_kib": 20796
+            },
+            {
+              "ms": 13.282767,
+              "rss_kib": 20844
+            },
+            {
+              "ms": 13.762479,
+              "rss_kib": 19660
+            },
+            {
+              "ms": 13.416198,
+              "rss_kib": 21140
+            },
+            {
+              "ms": 13.607325,
+              "rss_kib": 20500
+            },
+            {
+              "ms": 13.261125,
+              "rss_kib": 20552
+            },
+            {
+              "ms": 13.728598,
+              "rss_kib": 21728
+            },
+            {
+              "ms": 13.044147,
+              "rss_kib": 18800
+            },
+            {
+              "ms": 13.636369,
+              "rss_kib": 20452
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 13.30487,
+          "median_rss_kib": 20776,
+          "samples": [
+            {
+              "ms": 13.659504,
+              "rss_kib": 21612
+            },
+            {
+              "ms": 13.705373,
+              "rss_kib": 22572
+            },
+            {
+              "ms": 12.690545,
+              "rss_kib": 20548
+            },
+            {
+              "ms": 13.363979,
+              "rss_kib": 20776
+            },
+            {
+              "ms": 12.882794,
+              "rss_kib": 20500
+            },
+            {
+              "ms": 13.30487,
+              "rss_kib": 22036
+            },
+            {
+              "ms": 13.16575,
+              "rss_kib": 20284
+            },
+            {
+              "ms": 13.626254,
+              "rss_kib": 19660
+            },
+            {
+              "ms": 13.552032,
+              "rss_kib": 21032
+            },
+            {
+              "ms": 13.080633,
+              "rss_kib": 17408
+            },
+            {
+              "ms": 13.229928,
+              "rss_kib": 21868
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 32,
+      "logical_sha256": "280cc8953b4040c5129b8e5f1b2e85b799e36e7e6c305a783dd30b3552682cb7",
+      "variants": {
+        "before": {
+          "median_ms": 36.000377,
+          "median_rss_kib": 26508,
+          "samples": [
+            {
+              "ms": 35.714377,
+              "rss_kib": 24724
+            },
+            {
+              "ms": 36.503234,
+              "rss_kib": 24664
+            },
+            {
+              "ms": 36.290825,
+              "rss_kib": 27516
+            },
+            {
+              "ms": 35.592273,
+              "rss_kib": 27220
+            },
+            {
+              "ms": 35.728007,
+              "rss_kib": 24124
+            },
+            {
+              "ms": 36.063563,
+              "rss_kib": 23932
+            },
+            {
+              "ms": 35.979416,
+              "rss_kib": 29412
+            },
+            {
+              "ms": 36.000377,
+              "rss_kib": 27408
+            },
+            {
+              "ms": 36.097494,
+              "rss_kib": 26244
+            },
+            {
+              "ms": 36.107348,
+              "rss_kib": 26508
+            },
+            {
+              "ms": 35.700076,
+              "rss_kib": 27128
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 15.511322,
+          "median_rss_kib": 20564,
+          "samples": [
+            {
+              "ms": 15.580977,
+              "rss_kib": 20564
+            },
+            {
+              "ms": 15.360034,
+              "rss_kib": 17928
+            },
+            {
+              "ms": 16.043153,
+              "rss_kib": 22664
+            },
+            {
+              "ms": 15.422288,
+              "rss_kib": 21020
+            },
+            {
+              "ms": 16.16058,
+              "rss_kib": 19668
+            },
+            {
+              "ms": 15.826175,
+              "rss_kib": 20304
+            },
+            {
+              "ms": 15.555719,
+              "rss_kib": 20204
+            },
+            {
+              "ms": 15.295617,
+              "rss_kib": 21732
+            },
+            {
+              "ms": 15.132631,
+              "rss_kib": 21616
+            },
+            {
+              "ms": 15.511322,
+              "rss_kib": 18964
+            },
+            {
+              "ms": 15.465874,
+              "rss_kib": 20964
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 14.191875,
+          "median_rss_kib": 20500,
+          "samples": [
+            {
+              "ms": 14.036301,
+              "rss_kib": 20704
+            },
+            {
+              "ms": 14.152255,
+              "rss_kib": 19444
+            },
+            {
+              "ms": 14.191875,
+              "rss_kib": 20500
+            },
+            {
+              "ms": 14.668253,
+              "rss_kib": 22656
+            },
+            {
+              "ms": 13.631712,
+              "rss_kib": 18520
+            },
+            {
+              "ms": 14.195501,
+              "rss_kib": 20368
+            },
+            {
+              "ms": 13.822349,
+              "rss_kib": 18956
+            },
+            {
+              "ms": 14.337575,
+              "rss_kib": 20984
+            },
+            {
+              "ms": 14.319858,
+              "rss_kib": 21300
+            },
+            {
+              "ms": 13.721537,
+              "rss_kib": 19448
+            },
+            {
+              "ms": 14.707252,
+              "rss_kib": 21432
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 14.268762,
+          "median_rss_kib": 21160,
+          "samples": [
+            {
+              "ms": 14.326628,
+              "rss_kib": 21716
+            },
+            {
+              "ms": 13.840016,
+              "rss_kib": 20216
+            },
+            {
+              "ms": 14.497496,
+              "rss_kib": 20564
+            },
+            {
+              "ms": 14.391456,
+              "rss_kib": 21488
+            },
+            {
+              "ms": 13.528347,
+              "rss_kib": 22132
+            },
+            {
+              "ms": 14.258846,
+              "rss_kib": 19672
+            },
+            {
+              "ms": 14.655073,
+              "rss_kib": 21160
+            },
+            {
+              "ms": 14.268762,
+              "rss_kib": 21556
+            },
+            {
+              "ms": 14.039355,
+              "rss_kib": 18524
+            },
+            {
+              "ms": 13.964363,
+              "rss_kib": 21216
+            },
+            {
+              "ms": 14.271245,
+              "rss_kib": 17408
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/fidelity.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 64,
+      "logical_sha256": "01f1b227fbfce50339e1c6dddd7aad1ecd5d9f3a85b275a80ab9b4000a0618d1",
+      "variants": {
+        "before": {
+          "median_ms": 61.765286,
+          "median_rss_kib": 24320,
+          "samples": [
+            {
+              "ms": 62.003204,
+              "rss_kib": 24032
+            },
+            {
+              "ms": 61.781971,
+              "rss_kib": 27784
+            },
+            {
+              "ms": 61.302749,
+              "rss_kib": 23384
+            },
+            {
+              "ms": 61.829072,
+              "rss_kib": 24112
+            },
+            {
+              "ms": 61.472396,
+              "rss_kib": 27380
+            },
+            {
+              "ms": 61.518264,
+              "rss_kib": 26332
+            },
+            {
+              "ms": 61.846218,
+              "rss_kib": 29432
+            },
+            {
+              "ms": 62.035272,
+              "rss_kib": 26840
+            },
+            {
+              "ms": 60.663337,
+              "rss_kib": 23664
+            },
+            {
+              "ms": 61.556161,
+              "rss_kib": 23788
+            },
+            {
+              "ms": 61.765286,
+              "rss_kib": 24320
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 18.403305,
+          "median_rss_kib": 19468,
+          "samples": [
+            {
+              "ms": 18.680573,
+              "rss_kib": 19468
+            },
+            {
+              "ms": 18.403305,
+              "rss_kib": 19464
+            },
+            {
+              "ms": 18.409144,
+              "rss_kib": 19172
+            },
+            {
+              "ms": 18.381413,
+              "rss_kib": 18676
+            },
+            {
+              "ms": 18.382875,
+              "rss_kib": 20548
+            },
+            {
+              "ms": 18.93756,
+              "rss_kib": 18540
+            },
+            {
+              "ms": 17.572796,
+              "rss_kib": 19056
+            },
+            {
+              "ms": 18.496366,
+              "rss_kib": 22776
+            },
+            {
+              "ms": 17.96051,
+              "rss_kib": 19688
+            },
+            {
+              "ms": 18.668485,
+              "rss_kib": 23620
+            },
+            {
+              "ms": 18.028371,
+              "rss_kib": 20268
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 15.016958,
+          "median_rss_kib": 18972,
+          "samples": [
+            {
+              "ms": 15.235276,
+              "rss_kib": 20360
+            },
+            {
+              "ms": 14.55341,
+              "rss_kib": 18968
+            },
+            {
+              "ms": 15.394996,
+              "rss_kib": 19172
+            },
+            {
+              "ms": 14.705078,
+              "rss_kib": 18664
+            },
+            {
+              "ms": 15.016958,
+              "rss_kib": 18972
+            },
+            {
+              "ms": 14.871648,
+              "rss_kib": 21632
+            },
+            {
+              "ms": 15.064699,
+              "rss_kib": 18548
+            },
+            {
+              "ms": 15.212032,
+              "rss_kib": 18448
+            },
+            {
+              "ms": 14.747512,
+              "rss_kib": 19468
+            },
+            {
+              "ms": 15.389719,
+              "rss_kib": 19464
+            },
+            {
+              "ms": 14.556083,
+              "rss_kib": 18068
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 15.06538,
+          "median_rss_kib": 19696,
+          "samples": [
+            {
+              "ms": 15.06538,
+              "rss_kib": 22784
+            },
+            {
+              "ms": 15.021144,
+              "rss_kib": 20288
+            },
+            {
+              "ms": 14.464296,
+              "rss_kib": 18476
+            },
+            {
+              "ms": 14.962736,
+              "rss_kib": 19176
+            },
+            {
+              "ms": 15.145341,
+              "rss_kib": 22460
+            },
+            {
+              "ms": 15.096287,
+              "rss_kib": 22556
+            },
+            {
+              "ms": 14.640051,
+              "rss_kib": 19696
+            },
+            {
+              "ms": 14.726079,
+              "rss_kib": 19064
+            },
+            {
+              "ms": 15.238351,
+              "rss_kib": 19176
+            },
+            {
+              "ms": 15.426674,
+              "rss_kib": 23404
+            },
+            {
+              "ms": 15.246112,
+              "rss_kib": 19172
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 2,
+      "logical_sha256": "c4b076c8c179cd7b6ba671bcaaa509c8d1507f51d2dddc3436eca464f879746e",
+      "variants": {
+        "before": {
+          "median_ms": 15.483239,
+          "median_rss_kib": 21732,
+          "samples": [
+            {
+              "ms": 15.37074,
+              "rss_kib": 23680
+            },
+            {
+              "ms": 15.192412,
+              "rss_kib": 20744
+            },
+            {
+              "ms": 16.249093,
+              "rss_kib": 21500
+            },
+            {
+              "ms": 15.483239,
+              "rss_kib": 22368
+            },
+            {
+              "ms": 15.441436,
+              "rss_kib": 20704
+            },
+            {
+              "ms": 15.550762,
+              "rss_kib": 23228
+            },
+            {
+              "ms": 15.889531,
+              "rss_kib": 22004
+            },
+            {
+              "ms": 15.471522,
+              "rss_kib": 21732
+            },
+            {
+              "ms": 15.334245,
+              "rss_kib": 21720
+            },
+            {
+              "ms": 15.820738,
+              "rss_kib": 22772
+            },
+            {
+              "ms": 15.721418,
+              "rss_kib": 21296
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 15.944214,
+          "median_rss_kib": 21880,
+          "samples": [
+            {
+              "ms": 16.070704,
+              "rss_kib": 24624
+            },
+            {
+              "ms": 16.24734,
+              "rss_kib": 21520
+            },
+            {
+              "ms": 15.055696,
+              "rss_kib": 21196
+            },
+            {
+              "ms": 16.18813,
+              "rss_kib": 22184
+            },
+            {
+              "ms": 15.311201,
+              "rss_kib": 21880
+            },
+            {
+              "ms": 15.764183,
+              "rss_kib": 21636
+            },
+            {
+              "ms": 16.096613,
+              "rss_kib": 20776
+            },
+            {
+              "ms": 15.92233,
+              "rss_kib": 21872
+            },
+            {
+              "ms": 16.071815,
+              "rss_kib": 22300
+            },
+            {
+              "ms": 15.944214,
+              "rss_kib": 21920
+            },
+            {
+              "ms": 15.665615,
+              "rss_kib": 24588
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 16.516435,
+          "median_rss_kib": 21816,
+          "samples": [
+            {
+              "ms": 16.519991,
+              "rss_kib": 21480
+            },
+            {
+              "ms": 16.256493,
+              "rss_kib": 21276
+            },
+            {
+              "ms": 16.631228,
+              "rss_kib": 23160
+            },
+            {
+              "ms": 16.777408,
+              "rss_kib": 24572
+            },
+            {
+              "ms": 17.028355,
+              "rss_kib": 21904
+            },
+            {
+              "ms": 16.499199,
+              "rss_kib": 21684
+            },
+            {
+              "ms": 17.029628,
+              "rss_kib": 21816
+            },
+            {
+              "ms": 16.516435,
+              "rss_kib": 22076
+            },
+            {
+              "ms": 16.508863,
+              "rss_kib": 21768
+            },
+            {
+              "ms": 16.092787,
+              "rss_kib": 21932
+            },
+            {
+              "ms": 16.282403,
+              "rss_kib": 21772
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 15.691593,
+          "median_rss_kib": 21920,
+          "samples": [
+            {
+              "ms": 15.21112,
+              "rss_kib": 22472
+            },
+            {
+              "ms": 15.675369,
+              "rss_kib": 21920
+            },
+            {
+              "ms": 15.691593,
+              "rss_kib": 21224
+            },
+            {
+              "ms": 15.835229,
+              "rss_kib": 22252
+            },
+            {
+              "ms": 15.289468,
+              "rss_kib": 22180
+            },
+            {
+              "ms": 16.228352,
+              "rss_kib": 21984
+            },
+            {
+              "ms": 16.20085,
+              "rss_kib": 20888
+            },
+            {
+              "ms": 16.193549,
+              "rss_kib": 21348
+            },
+            {
+              "ms": 15.514887,
+              "rss_kib": 21424
+            },
+            {
+              "ms": 16.231997,
+              "rss_kib": 20384
+            },
+            {
+              "ms": 15.306273,
+              "rss_kib": 22068
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 8,
+      "logical_sha256": "8a6df6f3de366aa183f48e7cdc36415b5b83c7545d28d8f0b0818f382fe0d52a",
+      "variants": {
+        "before": {
+          "median_ms": 19.972008,
+          "median_rss_kib": 21984,
+          "samples": [
+            {
+              "ms": 20.115463,
+              "rss_kib": 22244
+            },
+            {
+              "ms": 19.829783,
+              "rss_kib": 20968
+            },
+            {
+              "ms": 19.592746,
+              "rss_kib": 22428
+            },
+            {
+              "ms": 20.117767,
+              "rss_kib": 20248
+            },
+            {
+              "ms": 19.696012,
+              "rss_kib": 22112
+            },
+            {
+              "ms": 20.268865,
+              "rss_kib": 22412
+            },
+            {
+              "ms": 19.268588,
+              "rss_kib": 21984
+            },
+            {
+              "ms": 19.972008,
+              "rss_kib": 21768
+            },
+            {
+              "ms": 19.994391,
+              "rss_kib": 21596
+            },
+            {
+              "ms": 19.08386,
+              "rss_kib": 23408
+            },
+            {
+              "ms": 20.043455,
+              "rss_kib": 21948
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 20.572191,
+          "median_rss_kib": 22160,
+          "samples": [
+            {
+              "ms": 20.545892,
+              "rss_kib": 22416
+            },
+            {
+              "ms": 20.162143,
+              "rss_kib": 21172
+            },
+            {
+              "ms": 20.92356,
+              "rss_kib": 23128
+            },
+            {
+              "ms": 20.572191,
+              "rss_kib": 22636
+            },
+            {
+              "ms": 20.400212,
+              "rss_kib": 22144
+            },
+            {
+              "ms": 20.036254,
+              "rss_kib": 20560
+            },
+            {
+              "ms": 20.577699,
+              "rss_kib": 22280
+            },
+            {
+              "ms": 19.666828,
+              "rss_kib": 22160
+            },
+            {
+              "ms": 20.648395,
+              "rss_kib": 21712
+            },
+            {
+              "ms": 20.949409,
+              "rss_kib": 22296
+            },
+            {
+              "ms": 20.782597,
+              "rss_kib": 21952
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 18.83793,
+          "median_rss_kib": 22040,
+          "samples": [
+            {
+              "ms": 18.794965,
+              "rss_kib": 21736
+            },
+            {
+              "ms": 18.906042,
+              "rss_kib": 22168
+            },
+            {
+              "ms": 19.03067,
+              "rss_kib": 21828
+            },
+            {
+              "ms": 18.511098,
+              "rss_kib": 22740
+            },
+            {
+              "ms": 19.260316,
+              "rss_kib": 22232
+            },
+            {
+              "ms": 18.605781,
+              "rss_kib": 22420
+            },
+            {
+              "ms": 18.792862,
+              "rss_kib": 20316
+            },
+            {
+              "ms": 18.951031,
+              "rss_kib": 21652
+            },
+            {
+              "ms": 18.294061,
+              "rss_kib": 22076
+            },
+            {
+              "ms": 18.83793,
+              "rss_kib": 22040
+            },
+            {
+              "ms": 19.238734,
+              "rss_kib": 21824
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 18.918661,
+          "median_rss_kib": 21956,
+          "samples": [
+            {
+              "ms": 18.805701,
+              "rss_kib": 22372
+            },
+            {
+              "ms": 19.079694,
+              "rss_kib": 21780
+            },
+            {
+              "ms": 19.025843,
+              "rss_kib": 22364
+            },
+            {
+              "ms": 18.918661,
+              "rss_kib": 21904
+            },
+            {
+              "ms": 18.245949,
+              "rss_kib": 21336
+            },
+            {
+              "ms": 18.965392,
+              "rss_kib": 21448
+            },
+            {
+              "ms": 19.03091,
+              "rss_kib": 21356
+            },
+            {
+              "ms": 18.906853,
+              "rss_kib": 23276
+            },
+            {
+              "ms": 18.942728,
+              "rss_kib": 22204
+            },
+            {
+              "ms": 18.323706,
+              "rss_kib": 21956
+            },
+            {
+              "ms": 18.887254,
+              "rss_kib": 22212
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 32,
+      "logical_sha256": "2992469574884c8c00bf2804a628a8f51f919fc436803f4f5cb31474d397d427",
+      "variants": {
+        "before": {
+          "median_ms": 34.597736,
+          "median_rss_kib": 21968,
+          "samples": [
+            {
+              "ms": 35.003006,
+              "rss_kib": 21968
+            },
+            {
+              "ms": 34.670675,
+              "rss_kib": 20824
+            },
+            {
+              "ms": 35.149346,
+              "rss_kib": 24272
+            },
+            {
+              "ms": 34.376863,
+              "rss_kib": 21992
+            },
+            {
+              "ms": 34.586098,
+              "rss_kib": 20396
+            },
+            {
+              "ms": 35.023877,
+              "rss_kib": 24524
+            },
+            {
+              "ms": 34.026496,
+              "rss_kib": 20904
+            },
+            {
+              "ms": 34.597736,
+              "rss_kib": 22664
+            },
+            {
+              "ms": 33.878343,
+              "rss_kib": 20604
+            },
+            {
+              "ms": 34.370694,
+              "rss_kib": 21896
+            },
+            {
+              "ms": 34.951158,
+              "rss_kib": 24272
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 37.617602,
+          "median_rss_kib": 21972,
+          "samples": [
+            {
+              "ms": 37.153744,
+              "rss_kib": 21972
+            },
+            {
+              "ms": 37.833096,
+              "rss_kib": 24628
+            },
+            {
+              "ms": 37.96828,
+              "rss_kib": 21564
+            },
+            {
+              "ms": 37.524873,
+              "rss_kib": 22724
+            },
+            {
+              "ms": 37.760398,
+              "rss_kib": 22108
+            },
+            {
+              "ms": 36.838569,
+              "rss_kib": 21840
+            },
+            {
+              "ms": 37.294966,
+              "rss_kib": 21852
+            },
+            {
+              "ms": 36.497707,
+              "rss_kib": 21428
+            },
+            {
+              "ms": 37.87529,
+              "rss_kib": 21884
+            },
+            {
+              "ms": 37.639065,
+              "rss_kib": 22796
+            },
+            {
+              "ms": 37.617602,
+              "rss_kib": 21992
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 25.475553,
+          "median_rss_kib": 22244,
+          "samples": [
+            {
+              "ms": 25.160017,
+              "rss_kib": 22668
+            },
+            {
+              "ms": 25.424626,
+              "rss_kib": 22724
+            },
+            {
+              "ms": 25.763947,
+              "rss_kib": 22096
+            },
+            {
+              "ms": 25.593621,
+              "rss_kib": 22044
+            },
+            {
+              "ms": 25.826001,
+              "rss_kib": 22040
+            },
+            {
+              "ms": 25.431927,
+              "rss_kib": 22452
+            },
+            {
+              "ms": 25.715965,
+              "rss_kib": 21636
+            },
+            {
+              "ms": 25.444456,
+              "rss_kib": 22356
+            },
+            {
+              "ms": 25.647402,
+              "rss_kib": 21876
+            },
+            {
+              "ms": 24.964553,
+              "rss_kib": 22244
+            },
+            {
+              "ms": 25.475553,
+              "rss_kib": 22444
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 25.495944,
+          "median_rss_kib": 22100,
+          "samples": [
+            {
+              "ms": 25.534852,
+              "rss_kib": 21228
+            },
+            {
+              "ms": 25.466679,
+              "rss_kib": 22232
+            },
+            {
+              "ms": 26.035125,
+              "rss_kib": 22144
+            },
+            {
+              "ms": 25.125787,
+              "rss_kib": 25608
+            },
+            {
+              "ms": 25.864509,
+              "rss_kib": 22100
+            },
+            {
+              "ms": 25.822004,
+              "rss_kib": 21728
+            },
+            {
+              "ms": 25.636385,
+              "rss_kib": 21804
+            },
+            {
+              "ms": 25.129923,
+              "rss_kib": 21368
+            },
+            {
+              "ms": 25.062681,
+              "rss_kib": 22248
+            },
+            {
+              "ms": 25.495944,
+              "rss_kib": 22320
+            },
+            {
+              "ms": 25.071315,
+              "rss_kib": 21992
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 64,
+      "logical_sha256": "ebe754256ddf5a13553fec58617cd2e460c2eb3726047e9e1ff2c911946cce8a",
+      "variants": {
+        "before": {
+          "median_ms": 55.75683,
+          "median_rss_kib": 22224,
+          "samples": [
+            {
+              "ms": 55.6436,
+              "rss_kib": 22224
+            },
+            {
+              "ms": 55.974829,
+              "rss_kib": 22444
+            },
+            {
+              "ms": 55.75683,
+              "rss_kib": 21980
+            },
+            {
+              "ms": 55.618953,
+              "rss_kib": 24284
+            },
+            {
+              "ms": 55.362377,
+              "rss_kib": 21824
+            },
+            {
+              "ms": 55.7762,
+              "rss_kib": 22356
+            },
+            {
+              "ms": 55.950882,
+              "rss_kib": 22044
+            },
+            {
+              "ms": 56.584747,
+              "rss_kib": 22232
+            },
+            {
+              "ms": 55.220543,
+              "rss_kib": 22764
+            },
+            {
+              "ms": 55.303428,
+              "rss_kib": 21520
+            },
+            {
+              "ms": 55.858984,
+              "rss_kib": 21676
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 61.171492,
+          "median_rss_kib": 22240,
+          "samples": [
+            {
+              "ms": 61.31639,
+              "rss_kib": 21300
+            },
+            {
+              "ms": 61.992879,
+              "rss_kib": 22148
+            },
+            {
+              "ms": 61.140295,
+              "rss_kib": 22440
+            },
+            {
+              "ms": 60.003704,
+              "rss_kib": 22224
+            },
+            {
+              "ms": 61.254096,
+              "rss_kib": 22240
+            },
+            {
+              "ms": 61.443421,
+              "rss_kib": 21968
+            },
+            {
+              "ms": 61.141898,
+              "rss_kib": 22296
+            },
+            {
+              "ms": 61.171492,
+              "rss_kib": 21880
+            },
+            {
+              "ms": 60.806463,
+              "rss_kib": 22388
+            },
+            {
+              "ms": 61.239324,
+              "rss_kib": 22696
+            },
+            {
+              "ms": 61.085363,
+              "rss_kib": 23012
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 35.454656,
+          "median_rss_kib": 22160,
+          "samples": [
+            {
+              "ms": 35.952866,
+              "rss_kib": 21712
+            },
+            {
+              "ms": 35.57693,
+              "rss_kib": 23424
+            },
+            {
+              "ms": 35.368036,
+              "rss_kib": 22876
+            },
+            {
+              "ms": 35.018299,
+              "rss_kib": 22256
+            },
+            {
+              "ms": 35.454656,
+              "rss_kib": 21532
+            },
+            {
+              "ms": 35.427915,
+              "rss_kib": 22160
+            },
+            {
+              "ms": 35.461917,
+              "rss_kib": 23240
+            },
+            {
+              "ms": 35.645643,
+              "rss_kib": 21392
+            },
+            {
+              "ms": 35.607385,
+              "rss_kib": 21384
+            },
+            {
+              "ms": 34.776315,
+              "rss_kib": 22400
+            },
+            {
+              "ms": 35.292321,
+              "rss_kib": 21428
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 35.793807,
+          "median_rss_kib": 22072,
+          "samples": [
+            {
+              "ms": 34.817727,
+              "rss_kib": 22496
+            },
+            {
+              "ms": 36.652179,
+              "rss_kib": 20364
+            },
+            {
+              "ms": 35.428948,
+              "rss_kib": 21904
+            },
+            {
+              "ms": 36.185617,
+              "rss_kib": 22328
+            },
+            {
+              "ms": 36.163934,
+              "rss_kib": 22312
+            },
+            {
+              "ms": 35.793807,
+              "rss_kib": 22072
+            },
+            {
+              "ms": 36.145537,
+              "rss_kib": 20720
+            },
+            {
+              "ms": 35.430399,
+              "rss_kib": 22012
+            },
+            {
+              "ms": 35.885585,
+              "rss_kib": 22224
+            },
+            {
+              "ms": 35.203578,
+              "rss_kib": 22008
+            },
+            {
+              "ms": 35.5831,
+              "rss_kib": 23748
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 2,
+      "logical_sha256": "1fe9088ec360383da0a5d753be779c0901ec4738b2ed2b2bb0b4c44f275c2ec4",
+      "variants": {
+        "before": {
+          "median_ms": 11.341324,
+          "median_rss_kib": 22200,
+          "samples": [
+            {
+              "ms": 11.160081,
+              "rss_kib": 21572
+            },
+            {
+              "ms": 10.522582,
+              "rss_kib": 21720
+            },
+            {
+              "ms": 11.341324,
+              "rss_kib": 24596
+            },
+            {
+              "ms": 11.536648,
+              "rss_kib": 21616
+            },
+            {
+              "ms": 11.343617,
+              "rss_kib": 25596
+            },
+            {
+              "ms": 11.685943,
+              "rss_kib": 22668
+            },
+            {
+              "ms": 11.249095,
+              "rss_kib": 21200
+            },
+            {
+              "ms": 11.112689,
+              "rss_kib": 22200
+            },
+            {
+              "ms": 11.362275,
+              "rss_kib": 22556
+            },
+            {
+              "ms": 11.271128,
+              "rss_kib": 22044
+            },
+            {
+              "ms": 11.472692,
+              "rss_kib": 24532
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 10.622892,
+          "median_rss_kib": 16980,
+          "samples": [
+            {
+              "ms": 10.220687,
+              "rss_kib": 17380
+            },
+            {
+              "ms": 10.343051,
+              "rss_kib": 16356
+            },
+            {
+              "ms": 10.578195,
+              "rss_kib": 18156
+            },
+            {
+              "ms": 11.147883,
+              "rss_kib": 16972
+            },
+            {
+              "ms": 10.829393,
+              "rss_kib": 16980
+            },
+            {
+              "ms": 10.682292,
+              "rss_kib": 16568
+            },
+            {
+              "ms": 10.590113,
+              "rss_kib": 16884
+            },
+            {
+              "ms": 10.765837,
+              "rss_kib": 17376
+            },
+            {
+              "ms": 11.104737,
+              "rss_kib": 17380
+            },
+            {
+              "ms": 10.211253,
+              "rss_kib": 18488
+            },
+            {
+              "ms": 10.622892,
+              "rss_kib": 16572
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 10.575191,
+          "median_rss_kib": 16884,
+          "samples": [
+            {
+              "ms": 10.803204,
+              "rss_kib": 16972
+            },
+            {
+              "ms": 10.575191,
+              "rss_kib": 16884
+            },
+            {
+              "ms": 10.597194,
+              "rss_kib": 15896
+            },
+            {
+              "ms": 11.046009,
+              "rss_kib": 16888
+            },
+            {
+              "ms": 10.271093,
+              "rss_kib": 16884
+            },
+            {
+              "ms": 10.492567,
+              "rss_kib": 15892
+            },
+            {
+              "ms": 10.559607,
+              "rss_kib": 15360
+            },
+            {
+              "ms": 10.863204,
+              "rss_kib": 17376
+            },
+            {
+              "ms": 10.409371,
+              "rss_kib": 16972
+            },
+            {
+              "ms": 10.67424,
+              "rss_kib": 16596
+            },
+            {
+              "ms": 10.455851,
+              "rss_kib": 16448
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 10.665637,
+          "median_rss_kib": 17604,
+          "samples": [
+            {
+              "ms": 10.298264,
+              "rss_kib": 17996
+            },
+            {
+              "ms": 11.265129,
+              "rss_kib": 17380
+            },
+            {
+              "ms": 9.906064,
+              "rss_kib": 18240
+            },
+            {
+              "ms": 11.076325,
+              "rss_kib": 17604
+            },
+            {
+              "ms": 10.665637,
+              "rss_kib": 16568
+            },
+            {
+              "ms": 10.58102,
+              "rss_kib": 18488
+            },
+            {
+              "ms": 10.723504,
+              "rss_kib": 18492
+            },
+            {
+              "ms": 10.546036,
+              "rss_kib": 17604
+            },
+            {
+              "ms": 10.842754,
+              "rss_kib": 16888
+            },
+            {
+              "ms": 10.38216,
+              "rss_kib": 16880
+            },
+            {
+              "ms": 10.727259,
+              "rss_kib": 16572
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 8,
+      "logical_sha256": "c3a205c9b09153aa67247e94193eebe9679107fa474370717eb97882f0a8955a",
+      "variants": {
+        "before": {
+          "median_ms": 15.024008,
+          "median_rss_kib": 21992,
+          "samples": [
+            {
+              "ms": 15.024008,
+              "rss_kib": 22236
+            },
+            {
+              "ms": 14.877738,
+              "rss_kib": 21872
+            },
+            {
+              "ms": 14.967663,
+              "rss_kib": 21992
+            },
+            {
+              "ms": 15.358482,
+              "rss_kib": 21888
+            },
+            {
+              "ms": 14.961865,
+              "rss_kib": 24580
+            },
+            {
+              "ms": 14.362412,
+              "rss_kib": 22356
+            },
+            {
+              "ms": 15.063848,
+              "rss_kib": 21308
+            },
+            {
+              "ms": 14.89241,
+              "rss_kib": 23224
+            },
+            {
+              "ms": 15.165742,
+              "rss_kib": 21700
+            },
+            {
+              "ms": 15.088315,
+              "rss_kib": 21596
+            },
+            {
+              "ms": 15.371532,
+              "rss_kib": 24260
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 11.083086,
+          "median_rss_kib": 16900,
+          "samples": [
+            {
+              "ms": 11.443739,
+              "rss_kib": 16460
+            },
+            {
+              "ms": 11.107222,
+              "rss_kib": 18160
+            },
+            {
+              "ms": 10.895573,
+              "rss_kib": 17604
+            },
+            {
+              "ms": 10.862322,
+              "rss_kib": 17608
+            },
+            {
+              "ms": 10.983745,
+              "rss_kib": 16736
+            },
+            {
+              "ms": 10.560639,
+              "rss_kib": 16572
+            },
+            {
+              "ms": 10.653598,
+              "rss_kib": 16464
+            },
+            {
+              "ms": 11.411139,
+              "rss_kib": 16900
+            },
+            {
+              "ms": 11.443918,
+              "rss_kib": 16364
+            },
+            {
+              "ms": 11.831122,
+              "rss_kib": 17604
+            },
+            {
+              "ms": 11.083086,
+              "rss_kib": 16900
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 10.987412,
+          "median_rss_kib": 17388,
+          "samples": [
+            {
+              "ms": 10.975323,
+              "rss_kib": 18232
+            },
+            {
+              "ms": 11.102064,
+              "rss_kib": 18136
+            },
+            {
+              "ms": 10.931016,
+              "rss_kib": 17024
+            },
+            {
+              "ms": 11.057857,
+              "rss_kib": 17028
+            },
+            {
+              "ms": 11.024376,
+              "rss_kib": 17036
+            },
+            {
+              "ms": 10.987412,
+              "rss_kib": 17388
+            },
+            {
+              "ms": 10.922664,
+              "rss_kib": 17388
+            },
+            {
+              "ms": 11.373622,
+              "rss_kib": 16896
+            },
+            {
+              "ms": 10.908042,
+              "rss_kib": 16576
+            },
+            {
+              "ms": 11.49756,
+              "rss_kib": 17388
+            },
+            {
+              "ms": 10.411634,
+              "rss_kib": 17600
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 11.208154,
+          "median_rss_kib": 17004,
+          "samples": [
+            {
+              "ms": 10.799789,
+              "rss_kib": 15984
+            },
+            {
+              "ms": 11.270688,
+              "rss_kib": 16980
+            },
+            {
+              "ms": 10.99326,
+              "rss_kib": 16900
+            },
+            {
+              "ms": 10.899439,
+              "rss_kib": 16976
+            },
+            {
+              "ms": 11.296366,
+              "rss_kib": 16892
+            },
+            {
+              "ms": 11.221244,
+              "rss_kib": 18636
+            },
+            {
+              "ms": 11.208154,
+              "rss_kib": 17004
+            },
+            {
+              "ms": 11.256677,
+              "rss_kib": 17600
+            },
+            {
+              "ms": 11.000771,
+              "rss_kib": 17388
+            },
+            {
+              "ms": 10.984136,
+              "rss_kib": 18484
+            },
+            {
+              "ms": 11.294694,
+              "rss_kib": 17096
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 32,
+      "logical_sha256": "280cc8953b4040c5129b8e5f1b2e85b799e36e7e6c305a783dd30b3552682cb7",
+      "variants": {
+        "before": {
+          "median_ms": 28.659757,
+          "median_rss_kib": 22384,
+          "samples": [
+            {
+              "ms": 29.17289,
+              "rss_kib": 22308
+            },
+            {
+              "ms": 28.616752,
+              "rss_kib": 24612
+            },
+            {
+              "ms": 28.946568,
+              "rss_kib": 21948
+            },
+            {
+              "ms": 28.892547,
+              "rss_kib": 22384
+            },
+            {
+              "ms": 28.722652,
+              "rss_kib": 21668
+            },
+            {
+              "ms": 28.659757,
+              "rss_kib": 25564
+            },
+            {
+              "ms": 28.654549,
+              "rss_kib": 22408
+            },
+            {
+              "ms": 28.665004,
+              "rss_kib": 24596
+            },
+            {
+              "ms": 28.656922,
+              "rss_kib": 21644
+            },
+            {
+              "ms": 28.581138,
+              "rss_kib": 21856
+            },
+            {
+              "ms": 28.531974,
+              "rss_kib": 23460
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 12.864688,
+          "median_rss_kib": 17400,
+          "samples": [
+            {
+              "ms": 13.070687,
+              "rss_kib": 16908
+            },
+            {
+              "ms": 12.501151,
+              "rss_kib": 17400
+            },
+            {
+              "ms": 12.661051,
+              "rss_kib": 19540
+            },
+            {
+              "ms": 13.002885,
+              "rss_kib": 15904
+            },
+            {
+              "ms": 13.338601,
+              "rss_kib": 18520
+            },
+            {
+              "ms": 12.280468,
+              "rss_kib": 17400
+            },
+            {
+              "ms": 13.080893,
+              "rss_kib": 18424
+            },
+            {
+              "ms": 13.074192,
+              "rss_kib": 17616
+            },
+            {
+              "ms": 12.649773,
+              "rss_kib": 16992
+            },
+            {
+              "ms": 12.864688,
+              "rss_kib": 17400
+            },
+            {
+              "ms": 12.794912,
+              "rss_kib": 18200
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 11.911333,
+          "median_rss_kib": 17000,
+          "samples": [
+            {
+              "ms": 11.39186,
+              "rss_kib": 17104
+            },
+            {
+              "ms": 12.197533,
+              "rss_kib": 17616
+            },
+            {
+              "ms": 11.908669,
+              "rss_kib": 17404
+            },
+            {
+              "ms": 11.957502,
+              "rss_kib": 16992
+            },
+            {
+              "ms": 11.604099,
+              "rss_kib": 16472
+            },
+            {
+              "ms": 11.911333,
+              "rss_kib": 16992
+            },
+            {
+              "ms": 12.006515,
+              "rss_kib": 17000
+            },
+            {
+              "ms": 12.071143,
+              "rss_kib": 18256
+            },
+            {
+              "ms": 11.942048,
+              "rss_kib": 17620
+            },
+            {
+              "ms": 11.619623,
+              "rss_kib": 16584
+            },
+            {
+              "ms": 11.846004,
+              "rss_kib": 16916
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 11.790019,
+          "median_rss_kib": 16908,
+          "samples": [
+            {
+              "ms": 12.007777,
+              "rss_kib": 18316
+            },
+            {
+              "ms": 11.731151,
+              "rss_kib": 18228
+            },
+            {
+              "ms": 11.773565,
+              "rss_kib": 15360
+            },
+            {
+              "ms": 11.758041,
+              "rss_kib": 18108
+            },
+            {
+              "ms": 11.493653,
+              "rss_kib": 18424
+            },
+            {
+              "ms": 11.61799,
+              "rss_kib": 16384
+            },
+            {
+              "ms": 12.043101,
+              "rss_kib": 16376
+            },
+            {
+              "ms": 11.867947,
+              "rss_kib": 16908
+            },
+            {
+              "ms": 11.790019,
+              "rss_kib": 16904
+            },
+            {
+              "ms": 12.032515,
+              "rss_kib": 17400
+            },
+            {
+              "ms": 12.145145,
+              "rss_kib": 16080
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/indexed.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 64,
+      "logical_sha256": "01f1b227fbfce50339e1c6dddd7aad1ecd5d9f3a85b275a80ab9b4000a0618d1",
+      "variants": {
+        "before": {
+          "median_ms": 49.949017,
+          "median_rss_kib": 23072,
+          "samples": [
+            {
+              "ms": 49.32029,
+              "rss_kib": 22240
+            },
+            {
+              "ms": 49.781014,
+              "rss_kib": 24284
+            },
+            {
+              "ms": 49.790288,
+              "rss_kib": 21300
+            },
+            {
+              "ms": 50.450141,
+              "rss_kib": 24628
+            },
+            {
+              "ms": 48.566024,
+              "rss_kib": 23284
+            },
+            {
+              "ms": 49.82476,
+              "rss_kib": 25316
+            },
+            {
+              "ms": 50.193455,
+              "rss_kib": 20988
+            },
+            {
+              "ms": 50.356109,
+              "rss_kib": 21744
+            },
+            {
+              "ms": 50.600878,
+              "rss_kib": 21888
+            },
+            {
+              "ms": 49.949017,
+              "rss_kib": 23072
+            },
+            {
+              "ms": 50.390742,
+              "rss_kib": 24292
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 15.309177,
+          "median_rss_kib": 16936,
+          "samples": [
+            {
+              "ms": 15.039692,
+              "rss_kib": 16396
+            },
+            {
+              "ms": 15.238741,
+              "rss_kib": 16060
+            },
+            {
+              "ms": 15.444722,
+              "rss_kib": 16496
+            },
+            {
+              "ms": 15.168526,
+              "rss_kib": 17524
+            },
+            {
+              "ms": 14.997739,
+              "rss_kib": 15324
+            },
+            {
+              "ms": 14.980623,
+              "rss_kib": 16936
+            },
+            {
+              "ms": 15.309177,
+              "rss_kib": 18532
+            },
+            {
+              "ms": 15.881038,
+              "rss_kib": 18484
+            },
+            {
+              "ms": 15.779666,
+              "rss_kib": 16608
+            },
+            {
+              "ms": 15.440555,
+              "rss_kib": 18444
+            },
+            {
+              "ms": 15.476549,
+              "rss_kib": 17424
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 12.783235,
+          "median_rss_kib": 16632,
+          "samples": [
+            {
+              "ms": 12.50095,
+              "rss_kib": 16616
+            },
+            {
+              "ms": 13.036446,
+              "rss_kib": 17644
+            },
+            {
+              "ms": 13.035314,
+              "rss_kib": 18504
+            },
+            {
+              "ms": 12.724557,
+              "rss_kib": 18332
+            },
+            {
+              "ms": 12.705508,
+              "rss_kib": 15360
+            },
+            {
+              "ms": 12.220808,
+              "rss_kib": 16920
+            },
+            {
+              "ms": 13.373063,
+              "rss_kib": 16488
+            },
+            {
+              "ms": 12.784307,
+              "rss_kib": 15924
+            },
+            {
+              "ms": 12.856495,
+              "rss_kib": 16612
+            },
+            {
+              "ms": 12.783235,
+              "rss_kib": 17644
+            },
+            {
+              "ms": 12.457635,
+              "rss_kib": 16632
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 12.825368,
+          "median_rss_kib": 16928,
+          "samples": [
+            {
+              "ms": 12.75411,
+              "rss_kib": 16496
+            },
+            {
+              "ms": 12.764046,
+              "rss_kib": 18448
+            },
+            {
+              "ms": 13.037347,
+              "rss_kib": 17420
+            },
+            {
+              "ms": 12.6406,
+              "rss_kib": 16608
+            },
+            {
+              "ms": 12.243793,
+              "rss_kib": 16884
+            },
+            {
+              "ms": 13.163698,
+              "rss_kib": 16936
+            },
+            {
+              "ms": 13.141284,
+              "rss_kib": 18532
+            },
+            {
+              "ms": 12.825368,
+              "rss_kib": 16636
+            },
+            {
+              "ms": 12.977307,
+              "rss_kib": 16928
+            },
+            {
+              "ms": 13.244239,
+              "rss_kib": 17644
+            },
+            {
+              "ms": 12.674741,
+              "rss_kib": 15472
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 2,
+      "logical_sha256": "c4b076c8c179cd7b6ba671bcaaa509c8d1507f51d2dddc3436eca464f879746e",
+      "variants": {
+        "before": {
+          "median_ms": 20.03393,
+          "median_rss_kib": 28268,
+          "samples": [
+            {
+              "ms": 19.983545,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 20.03393,
+              "rss_kib": 30312
+            },
+            {
+              "ms": 20.794526,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 19.699887,
+              "rss_kib": 30372
+            },
+            {
+              "ms": 19.787239,
+              "rss_kib": 30344
+            },
+            {
+              "ms": 19.126304,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 20.129555,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 20.315134,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.102684,
+              "rss_kib": 30264
+            },
+            {
+              "ms": 19.25696,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.083465,
+              "rss_kib": 28264
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 20.393672,
+          "median_rss_kib": 26036,
+          "samples": [
+            {
+              "ms": 20.569668,
+              "rss_kib": 25768
+            },
+            {
+              "ms": 20.393672,
+              "rss_kib": 25880
+            },
+            {
+              "ms": 20.492761,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 20.29209,
+              "rss_kib": 26036
+            },
+            {
+              "ms": 19.218143,
+              "rss_kib": 25540
+            },
+            {
+              "ms": 20.037426,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 20.499732,
+              "rss_kib": 25632
+            },
+            {
+              "ms": 20.493462,
+              "rss_kib": 25748
+            },
+            {
+              "ms": 20.376876,
+              "rss_kib": 26104
+            },
+            {
+              "ms": 20.090276,
+              "rss_kib": 26232
+            },
+            {
+              "ms": 20.594926,
+              "rss_kib": 26036
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 22.095955,
+          "median_rss_kib": 27996,
+          "samples": [
+            {
+              "ms": 21.938388,
+              "rss_kib": 28732
+            },
+            {
+              "ms": 22.095955,
+              "rss_kib": 27704
+            },
+            {
+              "ms": 21.412406,
+              "rss_kib": 27388
+            },
+            {
+              "ms": 22.425031,
+              "rss_kib": 27992
+            },
+            {
+              "ms": 22.125539,
+              "rss_kib": 27996
+            },
+            {
+              "ms": 22.44442,
+              "rss_kib": 27620
+            },
+            {
+              "ms": 21.941522,
+              "rss_kib": 28216
+            },
+            {
+              "ms": 21.9271,
+              "rss_kib": 29396
+            },
+            {
+              "ms": 22.103546,
+              "rss_kib": 28172
+            },
+            {
+              "ms": 21.785418,
+              "rss_kib": 28804
+            },
+            {
+              "ms": 22.326281,
+              "rss_kib": 27696
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 20.270937,
+          "median_rss_kib": 25872,
+          "samples": [
+            {
+              "ms": 20.269225,
+              "rss_kib": 28292
+            },
+            {
+              "ms": 20.270937,
+              "rss_kib": 25796
+            },
+            {
+              "ms": 20.550648,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 20.606011,
+              "rss_kib": 28292
+            },
+            {
+              "ms": 20.259951,
+              "rss_kib": 25304
+            },
+            {
+              "ms": 20.351859,
+              "rss_kib": 25872
+            },
+            {
+              "ms": 20.214112,
+              "rss_kib": 25452
+            },
+            {
+              "ms": 20.401043,
+              "rss_kib": 24412
+            },
+            {
+              "ms": 19.699587,
+              "rss_kib": 28336
+            },
+            {
+              "ms": 20.616057,
+              "rss_kib": 25872
+            },
+            {
+              "ms": 20.037916,
+              "rss_kib": 28348
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 8,
+      "logical_sha256": "8a6df6f3de366aa183f48e7cdc36415b5b83c7545d28d8f0b0818f382fe0d52a",
+      "variants": {
+        "before": {
+          "median_ms": 25.74663,
+          "median_rss_kib": 28268,
+          "samples": [
+            {
+              "ms": 25.883567,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 26.003277,
+              "rss_kib": 30312
+            },
+            {
+              "ms": 25.74663,
+              "rss_kib": 30312
+            },
+            {
+              "ms": 24.612444,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 25.782055,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 25.968174,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 24.867197,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 25.710546,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 26.003468,
+              "rss_kib": 28268
+            },
+            {
+              "ms": 24.589549,
+              "rss_kib": 30312
+            },
+            {
+              "ms": 24.487996,
+              "rss_kib": 28268
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 26.042026,
+          "median_rss_kib": 26260,
+          "samples": [
+            {
+              "ms": 26.461036,
+              "rss_kib": 26044
+            },
+            {
+              "ms": 25.1617,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 26.162337,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 26.725865,
+              "rss_kib": 26260
+            },
+            {
+              "ms": 25.915855,
+              "rss_kib": 25548
+            },
+            {
+              "ms": 25.635133,
+              "rss_kib": 25880
+            },
+            {
+              "ms": 25.521282,
+              "rss_kib": 25484
+            },
+            {
+              "ms": 26.042026,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 26.090989,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 27.656346,
+              "rss_kib": 28332
+            },
+            {
+              "ms": 25.932561,
+              "rss_kib": 28336
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 24.029165,
+          "median_rss_kib": 28068,
+          "samples": [
+            {
+              "ms": 23.858288,
+              "rss_kib": 28472
+            },
+            {
+              "ms": 24.172661,
+              "rss_kib": 28068
+            },
+            {
+              "ms": 24.573054,
+              "rss_kib": 27592
+            },
+            {
+              "ms": 24.959125,
+              "rss_kib": 27728
+            },
+            {
+              "ms": 24.448006,
+              "rss_kib": 30412
+            },
+            {
+              "ms": 23.734512,
+              "rss_kib": 30876
+            },
+            {
+              "ms": 24.573635,
+              "rss_kib": 28072
+            },
+            {
+              "ms": 23.165175,
+              "rss_kib": 27652
+            },
+            {
+              "ms": 23.99882,
+              "rss_kib": 28320
+            },
+            {
+              "ms": 22.688907,
+              "rss_kib": 27596
+            },
+            {
+              "ms": 24.029165,
+              "rss_kib": 27444
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 24.134313,
+          "median_rss_kib": 28312,
+          "samples": [
+            {
+              "ms": 24.134313,
+              "rss_kib": 28544
+            },
+            {
+              "ms": 24.58406,
+              "rss_kib": 30448
+            },
+            {
+              "ms": 23.406047,
+              "rss_kib": 28312
+            },
+            {
+              "ms": 24.522278,
+              "rss_kib": 27992
+            },
+            {
+              "ms": 24.040072,
+              "rss_kib": 28428
+            },
+            {
+              "ms": 24.169286,
+              "rss_kib": 28524
+            },
+            {
+              "ms": 24.416669,
+              "rss_kib": 27868
+            },
+            {
+              "ms": 24.000472,
+              "rss_kib": 28024
+            },
+            {
+              "ms": 24.159681,
+              "rss_kib": 27696
+            },
+            {
+              "ms": 23.717206,
+              "rss_kib": 28424
+            },
+            {
+              "ms": 23.290754,
+              "rss_kib": 28064
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 32,
+      "logical_sha256": "2992469574884c8c00bf2804a628a8f51f919fc436803f4f5cb31474d397d427",
+      "variants": {
+        "before": {
+          "median_ms": 44.246772,
+          "median_rss_kib": 28280,
+          "samples": [
+            {
+              "ms": 44.566463,
+              "rss_kib": 28276
+            },
+            {
+              "ms": 44.272602,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 44.685473,
+              "rss_kib": 28276
+            },
+            {
+              "ms": 43.517745,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 43.050281,
+              "rss_kib": 30324
+            },
+            {
+              "ms": 43.955624,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 44.386954,
+              "rss_kib": 28284
+            },
+            {
+              "ms": 44.121114,
+              "rss_kib": 30324
+            },
+            {
+              "ms": 44.579544,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 43.364124,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 44.246772,
+              "rss_kib": 28284
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 46.45691,
+          "median_rss_kib": 26068,
+          "samples": [
+            {
+              "ms": 46.364861,
+              "rss_kib": 26100
+            },
+            {
+              "ms": 46.399824,
+              "rss_kib": 26068
+            },
+            {
+              "ms": 45.457115,
+              "rss_kib": 25528
+            },
+            {
+              "ms": 46.834828,
+              "rss_kib": 26092
+            },
+            {
+              "ms": 46.45691,
+              "rss_kib": 25976
+            },
+            {
+              "ms": 46.740106,
+              "rss_kib": 25548
+            },
+            {
+              "ms": 45.119166,
+              "rss_kib": 26192
+            },
+            {
+              "ms": 46.551653,
+              "rss_kib": 26216
+            },
+            {
+              "ms": 47.490876,
+              "rss_kib": 26060
+            },
+            {
+              "ms": 46.39686,
+              "rss_kib": 28356
+            },
+            {
+              "ms": 47.053999,
+              "rss_kib": 25760
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 31.149284,
+          "median_rss_kib": 28036,
+          "samples": [
+            {
+              "ms": 31.077136,
+              "rss_kib": 30420
+            },
+            {
+              "ms": 31.31905,
+              "rss_kib": 27828
+            },
+            {
+              "ms": 30.771256,
+              "rss_kib": 30500
+            },
+            {
+              "ms": 31.302605,
+              "rss_kib": 28036
+            },
+            {
+              "ms": 31.17968,
+              "rss_kib": 27848
+            },
+            {
+              "ms": 31.268654,
+              "rss_kib": 27984
+            },
+            {
+              "ms": 30.83424,
+              "rss_kib": 27576
+            },
+            {
+              "ms": 31.13321,
+              "rss_kib": 28612
+            },
+            {
+              "ms": 31.149284,
+              "rss_kib": 27628
+            },
+            {
+              "ms": 30.576883,
+              "rss_kib": 28816
+            },
+            {
+              "ms": 31.266561,
+              "rss_kib": 28048
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 30.789834,
+          "median_rss_kib": 28216,
+          "samples": [
+            {
+              "ms": 30.789834,
+              "rss_kib": 28568
+            },
+            {
+              "ms": 29.964951,
+              "rss_kib": 27624
+            },
+            {
+              "ms": 30.626337,
+              "rss_kib": 28608
+            },
+            {
+              "ms": 31.070115,
+              "rss_kib": 28248
+            },
+            {
+              "ms": 30.82085,
+              "rss_kib": 28216
+            },
+            {
+              "ms": 30.556492,
+              "rss_kib": 28672
+            },
+            {
+              "ms": 31.460133,
+              "rss_kib": 28212
+            },
+            {
+              "ms": 31.530218,
+              "rss_kib": 27660
+            },
+            {
+              "ms": 30.620108,
+              "rss_kib": 27656
+            },
+            {
+              "ms": 30.598375,
+              "rss_kib": 28712
+            },
+            {
+              "ms": 31.01388,
+              "rss_kib": 27504
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 64,
+      "logical_sha256": "ebe754256ddf5a13553fec58617cd2e460c2eb3726047e9e1ff2c911946cce8a",
+      "variants": {
+        "before": {
+          "median_ms": 70.040444,
+          "median_rss_kib": 28300,
+          "samples": [
+            {
+              "ms": 69.90492,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 70.034846,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 70.174025,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 70.285773,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 70.110039,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 69.470817,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 69.115271,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 71.245188,
+              "rss_kib": 28296
+            },
+            {
+              "ms": 70.186234,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 70.040444,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 69.900914,
+              "rss_kib": 28304
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 75.304208,
+          "median_rss_kib": 28328,
+          "samples": [
+            {
+              "ms": 73.934597,
+              "rss_kib": 28328
+            },
+            {
+              "ms": 75.865734,
+              "rss_kib": 28380
+            },
+            {
+              "ms": 74.845748,
+              "rss_kib": 26048
+            },
+            {
+              "ms": 74.970646,
+              "rss_kib": 28388
+            },
+            {
+              "ms": 75.290718,
+              "rss_kib": 28332
+            },
+            {
+              "ms": 75.304208,
+              "rss_kib": 28448
+            },
+            {
+              "ms": 75.559043,
+              "rss_kib": 25500
+            },
+            {
+              "ms": 75.481235,
+              "rss_kib": 28436
+            },
+            {
+              "ms": 74.626237,
+              "rss_kib": 25616
+            },
+            {
+              "ms": 75.369256,
+              "rss_kib": 26304
+            },
+            {
+              "ms": 76.455051,
+              "rss_kib": 25912
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 41.015347,
+          "median_rss_kib": 28160,
+          "samples": [
+            {
+              "ms": 39.914421,
+              "rss_kib": 28620
+            },
+            {
+              "ms": 41.281628,
+              "rss_kib": 27980
+            },
+            {
+              "ms": 40.933414,
+              "rss_kib": 28564
+            },
+            {
+              "ms": 41.036679,
+              "rss_kib": 27792
+            },
+            {
+              "ms": 41.386367,
+              "rss_kib": 28032
+            },
+            {
+              "ms": 39.786498,
+              "rss_kib": 27632
+            },
+            {
+              "ms": 40.868887,
+              "rss_kib": 28668
+            },
+            {
+              "ms": 41.842202,
+              "rss_kib": 28288
+            },
+            {
+              "ms": 41.015347,
+              "rss_kib": 28316
+            },
+            {
+              "ms": 40.301112,
+              "rss_kib": 28160
+            },
+            {
+              "ms": 41.577294,
+              "rss_kib": 27756
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 40.976659,
+          "median_rss_kib": 28160,
+          "samples": [
+            {
+              "ms": 40.532891,
+              "rss_kib": 28020
+            },
+            {
+              "ms": 40.278458,
+              "rss_kib": 27896
+            },
+            {
+              "ms": 40.976659,
+              "rss_kib": 28216
+            },
+            {
+              "ms": 41.581801,
+              "rss_kib": 27740
+            },
+            {
+              "ms": 40.983279,
+              "rss_kib": 28140
+            },
+            {
+              "ms": 40.453762,
+              "rss_kib": 28472
+            },
+            {
+              "ms": 41.3621,
+              "rss_kib": 30444
+            },
+            {
+              "ms": 41.622762,
+              "rss_kib": 27700
+            },
+            {
+              "ms": 40.895868,
+              "rss_kib": 28512
+            },
+            {
+              "ms": 41.405585,
+              "rss_kib": 28160
+            },
+            {
+              "ms": 40.567944,
+              "rss_kib": 28500
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 2,
+      "logical_sha256": "1fe9088ec360383da0a5d753be779c0901ec4738b2ed2b2bb0b4c44f275c2ec4",
+      "variants": {
+        "before": {
+          "median_ms": 15.548278,
+          "median_rss_kib": 28264,
+          "samples": [
+            {
+              "ms": 15.31085,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 14.902656,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 14.973913,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 15.548278,
+              "rss_kib": 30288
+            },
+            {
+              "ms": 15.273614,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 14.997739,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 16.095801,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 16.024495,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 16.113748,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 16.526941,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 16.027529,
+              "rss_kib": 28264
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 14.420269,
+          "median_rss_kib": 23892,
+          "samples": [
+            {
+              "ms": 14.994634,
+              "rss_kib": 24056
+            },
+            {
+              "ms": 14.611247,
+              "rss_kib": 23832
+            },
+            {
+              "ms": 14.554761,
+              "rss_kib": 23916
+            },
+            {
+              "ms": 14.625708,
+              "rss_kib": 23876
+            },
+            {
+              "ms": 13.525693,
+              "rss_kib": 23348
+            },
+            {
+              "ms": 13.884182,
+              "rss_kib": 23744
+            },
+            {
+              "ms": 13.6235,
+              "rss_kib": 23476
+            },
+            {
+              "ms": 14.172336,
+              "rss_kib": 23892
+            },
+            {
+              "ms": 14.455182,
+              "rss_kib": 24120
+            },
+            {
+              "ms": 14.420269,
+              "rss_kib": 24000
+            },
+            {
+              "ms": 14.251055,
+              "rss_kib": 26196
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 14.520811,
+          "median_rss_kib": 23876,
+          "samples": [
+            {
+              "ms": 14.538027,
+              "rss_kib": 24156
+            },
+            {
+              "ms": 14.783957,
+              "rss_kib": 24120
+            },
+            {
+              "ms": 14.520811,
+              "rss_kib": 23688
+            },
+            {
+              "ms": 15.069677,
+              "rss_kib": 24004
+            },
+            {
+              "ms": 14.774583,
+              "rss_kib": 23636
+            },
+            {
+              "ms": 13.647456,
+              "rss_kib": 24020
+            },
+            {
+              "ms": 13.56325,
+              "rss_kib": 23808
+            },
+            {
+              "ms": 14.269913,
+              "rss_kib": 23844
+            },
+            {
+              "ms": 14.332908,
+              "rss_kib": 23876
+            },
+            {
+              "ms": 13.454796,
+              "rss_kib": 26192
+            },
+            {
+              "ms": 14.858188,
+              "rss_kib": 23860
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 14.520961,
+          "median_rss_kib": 23952,
+          "samples": [
+            {
+              "ms": 14.797417,
+              "rss_kib": 23808
+            },
+            {
+              "ms": 14.520961,
+              "rss_kib": 23404
+            },
+            {
+              "ms": 14.60032,
+              "rss_kib": 23284
+            },
+            {
+              "ms": 13.664472,
+              "rss_kib": 24152
+            },
+            {
+              "ms": 14.979141,
+              "rss_kib": 24100
+            },
+            {
+              "ms": 13.116857,
+              "rss_kib": 23904
+            },
+            {
+              "ms": 13.624372,
+              "rss_kib": 26196
+            },
+            {
+              "ms": 14.203894,
+              "rss_kib": 24124
+            },
+            {
+              "ms": 14.101108,
+              "rss_kib": 26200
+            },
+            {
+              "ms": 14.732379,
+              "rss_kib": 23952
+            },
+            {
+              "ms": 14.772871,
+              "rss_kib": 23528
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 8,
+      "logical_sha256": "c3a205c9b09153aa67247e94193eebe9679107fa474370717eb97882f0a8955a",
+      "variants": {
+        "before": {
+          "median_ms": 20.581495,
+          "median_rss_kib": 28264,
+          "samples": [
+            {
+              "ms": 20.911582,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 21.077091,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 20.696428,
+              "rss_kib": 30308
+            },
+            {
+              "ms": 19.985498,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 20.789458,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.085588,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.83721,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.581495,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.380131,
+              "rss_kib": 28260
+            },
+            {
+              "ms": 20.271468,
+              "rss_kib": 28264
+            },
+            {
+              "ms": 20.537298,
+              "rss_kib": 28260
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 14.887192,
+          "median_rss_kib": 23784,
+          "samples": [
+            {
+              "ms": 15.296468,
+              "rss_kib": 24048
+            },
+            {
+              "ms": 15.43016,
+              "rss_kib": 23708
+            },
+            {
+              "ms": 13.753555,
+              "rss_kib": 23784
+            },
+            {
+              "ms": 13.708688,
+              "rss_kib": 23352
+            },
+            {
+              "ms": 15.316488,
+              "rss_kib": 23868
+            },
+            {
+              "ms": 13.744252,
+              "rss_kib": 24132
+            },
+            {
+              "ms": 14.806761,
+              "rss_kib": 23208
+            },
+            {
+              "ms": 14.887192,
+              "rss_kib": 23952
+            },
+            {
+              "ms": 15.767608,
+              "rss_kib": 24008
+            },
+            {
+              "ms": 14.923176,
+              "rss_kib": 23392
+            },
+            {
+              "ms": 13.744362,
+              "rss_kib": 23480
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 14.503475,
+          "median_rss_kib": 23444,
+          "samples": [
+            {
+              "ms": 14.742174,
+              "rss_kib": 24048
+            },
+            {
+              "ms": 14.968745,
+              "rss_kib": 23692
+            },
+            {
+              "ms": 13.598231,
+              "rss_kib": 23320
+            },
+            {
+              "ms": 15.342478,
+              "rss_kib": 24064
+            },
+            {
+              "ms": 14.199417,
+              "rss_kib": 23500
+            },
+            {
+              "ms": 14.384745,
+              "rss_kib": 23444
+            },
+            {
+              "ms": 14.503475,
+              "rss_kib": 23456
+            },
+            {
+              "ms": 15.024659,
+              "rss_kib": 23368
+            },
+            {
+              "ms": 14.118375,
+              "rss_kib": 23296
+            },
+            {
+              "ms": 14.126417,
+              "rss_kib": 23416
+            },
+            {
+              "ms": 15.187264,
+              "rss_kib": 23316
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 14.765619,
+          "median_rss_kib": 23836,
+          "samples": [
+            {
+              "ms": 15.005481,
+              "rss_kib": 24132
+            },
+            {
+              "ms": 14.895875,
+              "rss_kib": 24028
+            },
+            {
+              "ms": 14.731598,
+              "rss_kib": 23244
+            },
+            {
+              "ms": 14.6001,
+              "rss_kib": 26232
+            },
+            {
+              "ms": 14.765619,
+              "rss_kib": 23204
+            },
+            {
+              "ms": 14.073658,
+              "rss_kib": 26240
+            },
+            {
+              "ms": 14.418597,
+              "rss_kib": 23512
+            },
+            {
+              "ms": 14.494251,
+              "rss_kib": 23836
+            },
+            {
+              "ms": 15.156377,
+              "rss_kib": 23428
+            },
+            {
+              "ms": 15.221085,
+              "rss_kib": 23412
+            },
+            {
+              "ms": 14.89265,
+              "rss_kib": 26196
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 32,
+      "logical_sha256": "280cc8953b4040c5129b8e5f1b2e85b799e36e7e6c305a783dd30b3552682cb7",
+      "variants": {
+        "before": {
+          "median_ms": 37.454758,
+          "median_rss_kib": 28280,
+          "samples": [
+            {
+              "ms": 37.337631,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 37.888801,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 37.354266,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 37.340475,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 38.777929,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 37.454758,
+              "rss_kib": 28276
+            },
+            {
+              "ms": 38.661103,
+              "rss_kib": 28284
+            },
+            {
+              "ms": 38.176644,
+              "rss_kib": 28276
+            },
+            {
+              "ms": 37.287455,
+              "rss_kib": 28280
+            },
+            {
+              "ms": 36.783436,
+              "rss_kib": 28284
+            },
+            {
+              "ms": 37.737102,
+              "rss_kib": 28280
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 17.013013,
+          "median_rss_kib": 23884,
+          "samples": [
+            {
+              "ms": 17.54294,
+              "rss_kib": 23884
+            },
+            {
+              "ms": 16.017083,
+              "rss_kib": 26216
+            },
+            {
+              "ms": 17.013013,
+              "rss_kib": 23512
+            },
+            {
+              "ms": 16.688104,
+              "rss_kib": 24000
+            },
+            {
+              "ms": 15.93514,
+              "rss_kib": 23884
+            },
+            {
+              "ms": 17.280054,
+              "rss_kib": 24048
+            },
+            {
+              "ms": 15.928811,
+              "rss_kib": 23680
+            },
+            {
+              "ms": 17.200675,
+              "rss_kib": 23692
+            },
+            {
+              "ms": 17.528859,
+              "rss_kib": 23876
+            },
+            {
+              "ms": 17.081125,
+              "rss_kib": 26224
+            },
+            {
+              "ms": 16.01458,
+              "rss_kib": 23424
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 15.728309,
+          "median_rss_kib": 23744,
+          "samples": [
+            {
+              "ms": 15.728309,
+              "rss_kib": 23580
+            },
+            {
+              "ms": 15.605494,
+              "rss_kib": 23668
+            },
+            {
+              "ms": 15.21738,
+              "rss_kib": 26268
+            },
+            {
+              "ms": 16.390776,
+              "rss_kib": 23524
+            },
+            {
+              "ms": 15.737762,
+              "rss_kib": 23896
+            },
+            {
+              "ms": 15.693996,
+              "rss_kib": 23940
+            },
+            {
+              "ms": 15.578794,
+              "rss_kib": 24072
+            },
+            {
+              "ms": 15.013953,
+              "rss_kib": 23504
+            },
+            {
+              "ms": 16.265087,
+              "rss_kib": 23868
+            },
+            {
+              "ms": 16.27363,
+              "rss_kib": 23744
+            },
+            {
+              "ms": 15.782891,
+              "rss_kib": 23708
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 15.365332,
+          "median_rss_kib": 23780,
+          "samples": [
+            {
+              "ms": 14.783206,
+              "rss_kib": 23520
+            },
+            {
+              "ms": 15.228586,
+              "rss_kib": 23736
+            },
+            {
+              "ms": 15.968671,
+              "rss_kib": 24120
+            },
+            {
+              "ms": 15.728329,
+              "rss_kib": 23780
+            },
+            {
+              "ms": 14.847823,
+              "rss_kib": 24096
+            },
+            {
+              "ms": 15.365332,
+              "rss_kib": 23272
+            },
+            {
+              "ms": 16.018776,
+              "rss_kib": 26224
+            },
+            {
+              "ms": 16.017383,
+              "rss_kib": 24000
+            },
+            {
+              "ms": 15.239092,
+              "rss_kib": 23664
+            },
+            {
+              "ms": 15.511582,
+              "rss_kib": 23932
+            },
+            {
+              "ms": 15.362688,
+              "rss_kib": 23448
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-fidelity-default-for-sparse.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 64,
+      "logical_sha256": "01f1b227fbfce50339e1c6dddd7aad1ecd5d9f3a85b275a80ab9b4000a0618d1",
+      "variants": {
+        "before": {
+          "median_ms": 63.931116,
+          "median_rss_kib": 28304,
+          "samples": [
+            {
+              "ms": 64.04596,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 63.931116,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 64.341164,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 64.742809,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 62.892714,
+              "rss_kib": 30348
+            },
+            {
+              "ms": 63.068738,
+              "rss_kib": 30328
+            },
+            {
+              "ms": 64.084477,
+              "rss_kib": 30332
+            },
+            {
+              "ms": 63.435841,
+              "rss_kib": 28308
+            },
+            {
+              "ms": 62.714625,
+              "rss_kib": 28304
+            },
+            {
+              "ms": 63.654661,
+              "rss_kib": 28300
+            },
+            {
+              "ms": 64.266161,
+              "rss_kib": 28304
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 20.164858,
+          "median_rss_kib": 23896,
+          "samples": [
+            {
+              "ms": 20.367343,
+              "rss_kib": 24148
+            },
+            {
+              "ms": 19.202048,
+              "rss_kib": 23896
+            },
+            {
+              "ms": 20.437388,
+              "rss_kib": 24212
+            },
+            {
+              "ms": 20.256856,
+              "rss_kib": 24108
+            },
+            {
+              "ms": 20.341213,
+              "rss_kib": 23884
+            },
+            {
+              "ms": 19.84114,
+              "rss_kib": 24204
+            },
+            {
+              "ms": 19.948852,
+              "rss_kib": 23668
+            },
+            {
+              "ms": 20.194452,
+              "rss_kib": 23668
+            },
+            {
+              "ms": 19.072613,
+              "rss_kib": 23656
+            },
+            {
+              "ms": 20.164858,
+              "rss_kib": 24012
+            },
+            {
+              "ms": 19.108877,
+              "rss_kib": 23512
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 16.730518,
+          "median_rss_kib": 23732,
+          "samples": [
+            {
+              "ms": 16.650387,
+              "rss_kib": 23688
+            },
+            {
+              "ms": 16.682104,
+              "rss_kib": 23732
+            },
+            {
+              "ms": 17.477652,
+              "rss_kib": 26240
+            },
+            {
+              "ms": 16.566581,
+              "rss_kib": 26232
+            },
+            {
+              "ms": 16.59939,
+              "rss_kib": 23900
+            },
+            {
+              "ms": 16.873493,
+              "rss_kib": 23676
+            },
+            {
+              "ms": 17.285793,
+              "rss_kib": 23280
+            },
+            {
+              "ms": 16.730518,
+              "rss_kib": 23260
+            },
+            {
+              "ms": 15.67638,
+              "rss_kib": 23912
+            },
+            {
+              "ms": 16.828424,
+              "rss_kib": 26236
+            },
+            {
+              "ms": 16.75921,
+              "rss_kib": 23536
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 16.741264,
+          "median_rss_kib": 23860,
+          "samples": [
+            {
+              "ms": 16.867223,
+              "rss_kib": 23556
+            },
+            {
+              "ms": 16.615875,
+              "rss_kib": 23740
+            },
+            {
+              "ms": 16.857659,
+              "rss_kib": 24136
+            },
+            {
+              "ms": 16.741264,
+              "rss_kib": 23860
+            },
+            {
+              "ms": 16.948705,
+              "rss_kib": 23416
+            },
+            {
+              "ms": 16.259428,
+              "rss_kib": 23456
+            },
+            {
+              "ms": 16.555053,
+              "rss_kib": 24112
+            },
+            {
+              "ms": 15.747868,
+              "rss_kib": 23924
+            },
+            {
+              "ms": 16.58618,
+              "rss_kib": 26232
+            },
+            {
+              "ms": 17.319414,
+              "rss_kib": 24024
+            },
+            {
+              "ms": 16.814724,
+              "rss_kib": 23540
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 2,
+      "logical_sha256": "c4b076c8c179cd7b6ba671bcaaa509c8d1507f51d2dddc3436eca464f879746e",
+      "variants": {
+        "before": {
+          "median_ms": 16.538328,
+          "median_rss_kib": 25332,
+          "samples": [
+            {
+              "ms": 16.076092,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 16.43376,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 16.782505,
+              "rss_kib": 25328
+            },
+            {
+              "ms": 15.644893,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 16.91188,
+              "rss_kib": 27372
+            },
+            {
+              "ms": 16.732901,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 16.422223,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 15.832646,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 16.598679,
+              "rss_kib": 25328
+            },
+            {
+              "ms": 16.538328,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 16.782996,
+              "rss_kib": 25332
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 16.823828,
+          "median_rss_kib": 23008,
+          "samples": [
+            {
+              "ms": 16.591758,
+              "rss_kib": 23356
+            },
+            {
+              "ms": 16.469534,
+              "rss_kib": 22412
+            },
+            {
+              "ms": 16.823828,
+              "rss_kib": 21556
+            },
+            {
+              "ms": 17.078391,
+              "rss_kib": 22376
+            },
+            {
+              "ms": 16.304496,
+              "rss_kib": 23300
+            },
+            {
+              "ms": 16.912291,
+              "rss_kib": 23236
+            },
+            {
+              "ms": 16.965891,
+              "rss_kib": 23000
+            },
+            {
+              "ms": 16.342253,
+              "rss_kib": 23008
+            },
+            {
+              "ms": 17.242468,
+              "rss_kib": 25364
+            },
+            {
+              "ms": 16.309103,
+              "rss_kib": 22400
+            },
+            {
+              "ms": 17.063319,
+              "rss_kib": 23368
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 17.239213,
+          "median_rss_kib": 23152,
+          "samples": [
+            {
+              "ms": 17.696171,
+              "rss_kib": 22880
+            },
+            {
+              "ms": 17.239213,
+              "rss_kib": 22096
+            },
+            {
+              "ms": 16.524387,
+              "rss_kib": 23152
+            },
+            {
+              "ms": 16.897759,
+              "rss_kib": 22844
+            },
+            {
+              "ms": 17.747819,
+              "rss_kib": 23232
+            },
+            {
+              "ms": 17.160795,
+              "rss_kib": 23312
+            },
+            {
+              "ms": 16.669035,
+              "rss_kib": 25368
+            },
+            {
+              "ms": 17.751375,
+              "rss_kib": 22628
+            },
+            {
+              "ms": 17.274857,
+              "rss_kib": 25368
+            },
+            {
+              "ms": 16.960484,
+              "rss_kib": 22472
+            },
+            {
+              "ms": 17.825515,
+              "rss_kib": 23156
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 16.582735,
+          "median_rss_kib": 23004,
+          "samples": [
+            {
+              "ms": 15.9014,
+              "rss_kib": 22936
+            },
+            {
+              "ms": 15.708709,
+              "rss_kib": 22744
+            },
+            {
+              "ms": 16.714103,
+              "rss_kib": 22700
+            },
+            {
+              "ms": 16.582735,
+              "rss_kib": 23388
+            },
+            {
+              "ms": 16.71271,
+              "rss_kib": 25364
+            },
+            {
+              "ms": 17.041465,
+              "rss_kib": 22532
+            },
+            {
+              "ms": 16.573261,
+              "rss_kib": 25468
+            },
+            {
+              "ms": 16.898921,
+              "rss_kib": 22964
+            },
+            {
+              "ms": 16.614914,
+              "rss_kib": 23312
+            },
+            {
+              "ms": 16.142201,
+              "rss_kib": 23352
+            },
+            {
+              "ms": 16.144615,
+              "rss_kib": 23004
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 8,
+      "logical_sha256": "8a6df6f3de366aa183f48e7cdc36415b5b83c7545d28d8f0b0818f382fe0d52a",
+      "variants": {
+        "before": {
+          "median_ms": 20.364749,
+          "median_rss_kib": 25340,
+          "samples": [
+            {
+              "ms": 20.364749,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 20.259139,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 20.854476,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 20.3057,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 20.137136,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 21.179375,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 20.084577,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 20.756027,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 20.11325,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 20.700504,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 20.939323,
+              "rss_kib": 25340
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 21.52812,
+          "median_rss_kib": 23352,
+          "samples": [
+            {
+              "ms": 21.085293,
+              "rss_kib": 22508
+            },
+            {
+              "ms": 21.230011,
+              "rss_kib": 22800
+            },
+            {
+              "ms": 21.531705,
+              "rss_kib": 23352
+            },
+            {
+              "ms": 21.633849,
+              "rss_kib": 23220
+            },
+            {
+              "ms": 21.360017,
+              "rss_kib": 22400
+            },
+            {
+              "ms": 21.78102,
+              "rss_kib": 25396
+            },
+            {
+              "ms": 21.702793,
+              "rss_kib": 25480
+            },
+            {
+              "ms": 20.56523,
+              "rss_kib": 22404
+            },
+            {
+              "ms": 21.52812,
+              "rss_kib": 25368
+            },
+            {
+              "ms": 21.507459,
+              "rss_kib": 25456
+            },
+            {
+              "ms": 21.594199,
+              "rss_kib": 25380
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 19.886729,
+          "median_rss_kib": 23068,
+          "samples": [
+            {
+              "ms": 20.261222,
+              "rss_kib": 22928
+            },
+            {
+              "ms": 20.150055,
+              "rss_kib": 23072
+            },
+            {
+              "ms": 19.886729,
+              "rss_kib": 22820
+            },
+            {
+              "ms": 20.000621,
+              "rss_kib": 23068
+            },
+            {
+              "ms": 18.973444,
+              "rss_kib": 23324
+            },
+            {
+              "ms": 19.829973,
+              "rss_kib": 22888
+            },
+            {
+              "ms": 18.316235,
+              "rss_kib": 23320
+            },
+            {
+              "ms": 19.870534,
+              "rss_kib": 22836
+            },
+            {
+              "ms": 20.084016,
+              "rss_kib": 23056
+            },
+            {
+              "ms": 20.055163,
+              "rss_kib": 23140
+            },
+            {
+              "ms": 18.889198,
+              "rss_kib": 23296
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 19.235739,
+          "median_rss_kib": 22820,
+          "samples": [
+            {
+              "ms": 18.708926,
+              "rss_kib": 23332
+            },
+            {
+              "ms": 19.862322,
+              "rss_kib": 22740
+            },
+            {
+              "ms": 19.046404,
+              "rss_kib": 22580
+            },
+            {
+              "ms": 18.974386,
+              "rss_kib": 22568
+            },
+            {
+              "ms": 19.905137,
+              "rss_kib": 22936
+            },
+            {
+              "ms": 18.499,
+              "rss_kib": 22716
+            },
+            {
+              "ms": 18.562285,
+              "rss_kib": 22820
+            },
+            {
+              "ms": 20.025277,
+              "rss_kib": 23268
+            },
+            {
+              "ms": 19.750344,
+              "rss_kib": 22980
+            },
+            {
+              "ms": 19.515951,
+              "rss_kib": 22924
+            },
+            {
+              "ms": 19.235739,
+              "rss_kib": 22724
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 32,
+      "logical_sha256": "2992469574884c8c00bf2804a628a8f51f919fc436803f4f5cb31474d397d427",
+      "variants": {
+        "before": {
+          "median_ms": 35.774378,
+          "median_rss_kib": 25744,
+          "samples": [
+            {
+              "ms": 35.774378,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.976521,
+              "rss_kib": 27836
+            },
+            {
+              "ms": 35.239272,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.20486,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.211751,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.802549,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.775439,
+              "rss_kib": 27756
+            },
+            {
+              "ms": 35.948209,
+              "rss_kib": 27784
+            },
+            {
+              "ms": 35.054994,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 35.108155,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 36.122401,
+              "rss_kib": 25740
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 38.276534,
+          "median_rss_kib": 23508,
+          "samples": [
+            {
+              "ms": 37.011159,
+              "rss_kib": 23640
+            },
+            {
+              "ms": 38.907985,
+              "rss_kib": 22920
+            },
+            {
+              "ms": 38.84529,
+              "rss_kib": 23604
+            },
+            {
+              "ms": 38.285618,
+              "rss_kib": 23008
+            },
+            {
+              "ms": 38.347701,
+              "rss_kib": 22936
+            },
+            {
+              "ms": 38.272207,
+              "rss_kib": 25420
+            },
+            {
+              "ms": 37.753056,
+              "rss_kib": 23708
+            },
+            {
+              "ms": 37.66868,
+              "rss_kib": 23508
+            },
+            {
+              "ms": 38.112237,
+              "rss_kib": 23072
+            },
+            {
+              "ms": 38.276534,
+              "rss_kib": 25384
+            },
+            {
+              "ms": 38.357105,
+              "rss_kib": 22976
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 26.238732,
+          "median_rss_kib": 23276,
+          "samples": [
+            {
+              "ms": 26.146833,
+              "rss_kib": 23536
+            },
+            {
+              "ms": 26.451522,
+              "rss_kib": 23148
+            },
+            {
+              "ms": 26.520436,
+              "rss_kib": 23108
+            },
+            {
+              "ms": 25.78607,
+              "rss_kib": 23604
+            },
+            {
+              "ms": 25.088419,
+              "rss_kib": 23556
+            },
+            {
+              "ms": 25.898219,
+              "rss_kib": 25380
+            },
+            {
+              "ms": 26.565824,
+              "rss_kib": 23000
+            },
+            {
+              "ms": 26.238732,
+              "rss_kib": 23476
+            },
+            {
+              "ms": 26.632384,
+              "rss_kib": 22956
+            },
+            {
+              "ms": 26.255807,
+              "rss_kib": 23276
+            },
+            {
+              "ms": 25.811959,
+              "rss_kib": 22956
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 26.531082,
+          "median_rss_kib": 23332,
+          "samples": [
+            {
+              "ms": 26.599975,
+              "rss_kib": 25384
+            },
+            {
+              "ms": 25.552258,
+              "rss_kib": 23664
+            },
+            {
+              "ms": 26.704222,
+              "rss_kib": 22960
+            },
+            {
+              "ms": 26.672795,
+              "rss_kib": 25384
+            },
+            {
+              "ms": 26.577101,
+              "rss_kib": 23332
+            },
+            {
+              "ms": 26.232312,
+              "rss_kib": 23040
+            },
+            {
+              "ms": 26.531082,
+              "rss_kib": 23184
+            },
+            {
+              "ms": 26.318021,
+              "rss_kib": 22928
+            },
+            {
+              "ms": 25.995285,
+              "rss_kib": 23336
+            },
+            {
+              "ms": 26.672234,
+              "rss_kib": 22920
+            },
+            {
+              "ms": 26.528458,
+              "rss_kib": 23520
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": false,
+      "scope_cells": 10842,
+      "predicates": 64,
+      "logical_sha256": "ebe754256ddf5a13553fec58617cd2e460c2eb3726047e9e1ff2c911946cce8a",
+      "variants": {
+        "before": {
+          "median_ms": 56.933452,
+          "median_rss_kib": 25372,
+          "samples": [
+            {
+              "ms": 56.933452,
+              "rss_kib": 27440
+            },
+            {
+              "ms": 57.331842,
+              "rss_kib": 27416
+            },
+            {
+              "ms": 56.269693,
+              "rss_kib": 25372
+            },
+            {
+              "ms": 56.810908,
+              "rss_kib": 25372
+            },
+            {
+              "ms": 57.19084,
+              "rss_kib": 25368
+            },
+            {
+              "ms": 56.511517,
+              "rss_kib": 25368
+            },
+            {
+              "ms": 57.666516,
+              "rss_kib": 25372
+            },
+            {
+              "ms": 56.68018,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 57.885846,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 57.012991,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 56.899851,
+              "rss_kib": 25368
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 62.23256,
+          "median_rss_kib": 23176,
+          "samples": [
+            {
+              "ms": 61.88107,
+              "rss_kib": 22920
+            },
+            {
+              "ms": 62.93709,
+              "rss_kib": 22824
+            },
+            {
+              "ms": 61.565696,
+              "rss_kib": 23552
+            },
+            {
+              "ms": 61.340206,
+              "rss_kib": 23300
+            },
+            {
+              "ms": 62.081572,
+              "rss_kib": 23548
+            },
+            {
+              "ms": 62.885352,
+              "rss_kib": 23176
+            },
+            {
+              "ms": 62.553513,
+              "rss_kib": 23124
+            },
+            {
+              "ms": 62.23256,
+              "rss_kib": 23108
+            },
+            {
+              "ms": 62.467563,
+              "rss_kib": 23076
+            },
+            {
+              "ms": 62.145148,
+              "rss_kib": 23568
+            },
+            {
+              "ms": 62.579131,
+              "rss_kib": 25404
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 36.570196,
+          "median_rss_kib": 23584,
+          "samples": [
+            {
+              "ms": 36.243093,
+              "rss_kib": 23584
+            },
+            {
+              "ms": 36.660241,
+              "rss_kib": 22964
+            },
+            {
+              "ms": 37.06501,
+              "rss_kib": 23004
+            },
+            {
+              "ms": 35.779155,
+              "rss_kib": 25400
+            },
+            {
+              "ms": 35.664752,
+              "rss_kib": 25400
+            },
+            {
+              "ms": 37.230609,
+              "rss_kib": 23132
+            },
+            {
+              "ms": 35.949221,
+              "rss_kib": 23340
+            },
+            {
+              "ms": 36.63978,
+              "rss_kib": 23664
+            },
+            {
+              "ms": 36.365958,
+              "rss_kib": 23776
+            },
+            {
+              "ms": 36.570196,
+              "rss_kib": 23752
+            },
+            {
+              "ms": 36.63936,
+              "rss_kib": 23456
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 36.55305,
+          "median_rss_kib": 23512,
+          "samples": [
+            {
+              "ms": 34.877347,
+              "rss_kib": 23392
+            },
+            {
+              "ms": 36.850308,
+              "rss_kib": 25404
+            },
+            {
+              "ms": 36.4599,
+              "rss_kib": 23612
+            },
+            {
+              "ms": 36.006998,
+              "rss_kib": 23492
+            },
+            {
+              "ms": 36.096613,
+              "rss_kib": 25404
+            },
+            {
+              "ms": 36.55305,
+              "rss_kib": 23512
+            },
+            {
+              "ms": 36.855995,
+              "rss_kib": 23632
+            },
+            {
+              "ms": 36.565248,
+              "rss_kib": 23512
+            },
+            {
+              "ms": 36.68617,
+              "rss_kib": 22964
+            },
+            {
+              "ms": 36.368662,
+              "rss_kib": 23688
+            },
+            {
+              "ms": 36.903487,
+              "rss_kib": 23184
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 2,
+      "logical_sha256": "1fe9088ec360383da0a5d753be779c0901ec4738b2ed2b2bb0b4c44f275c2ec4",
+      "variants": {
+        "before": {
+          "median_ms": 12.114267,
+          "median_rss_kib": 25332,
+          "samples": [
+            {
+              "ms": 12.421099,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 12.593789,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 11.942419,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 11.902319,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 12.114267,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 12.60024,
+              "rss_kib": 25328
+            },
+            {
+              "ms": 11.495626,
+              "rss_kib": 27332
+            },
+            {
+              "ms": 12.823956,
+              "rss_kib": 25328
+            },
+            {
+              "ms": 11.495015,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 12.435311,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 12.070331,
+              "rss_kib": 25332
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 10.712627,
+          "median_rss_kib": 20000,
+          "samples": [
+            {
+              "ms": 10.728411,
+              "rss_kib": 18952
+            },
+            {
+              "ms": 10.179796,
+              "rss_kib": 21560
+            },
+            {
+              "ms": 10.776113,
+              "rss_kib": 20484
+            },
+            {
+              "ms": 10.154768,
+              "rss_kib": 20528
+            },
+            {
+              "ms": 11.229446,
+              "rss_kib": 19976
+            },
+            {
+              "ms": 10.809293,
+              "rss_kib": 19428
+            },
+            {
+              "ms": 10.712627,
+              "rss_kib": 20000
+            },
+            {
+              "ms": 10.862032,
+              "rss_kib": 20456
+            },
+            {
+              "ms": 9.707404,
+              "rss_kib": 18624
+            },
+            {
+              "ms": 9.992463,
+              "rss_kib": 20368
+            },
+            {
+              "ms": 10.534429,
+              "rss_kib": 18552
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 10.857606,
+          "median_rss_kib": 19392,
+          "samples": [
+            {
+              "ms": 11.038779,
+              "rss_kib": 19016
+            },
+            {
+              "ms": 10.783294,
+              "rss_kib": 19664
+            },
+            {
+              "ms": 11.05333,
+              "rss_kib": 20460
+            },
+            {
+              "ms": 10.245014,
+              "rss_kib": 18532
+            },
+            {
+              "ms": 10.558866,
+              "rss_kib": 18684
+            },
+            {
+              "ms": 10.974181,
+              "rss_kib": 18612
+            },
+            {
+              "ms": 11.016445,
+              "rss_kib": 19868
+            },
+            {
+              "ms": 10.537093,
+              "rss_kib": 19392
+            },
+            {
+              "ms": 10.231232,
+              "rss_kib": 21664
+            },
+            {
+              "ms": 10.865548,
+              "rss_kib": 19936
+            },
+            {
+              "ms": 10.857606,
+              "rss_kib": 18760
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 10.676303,
+          "median_rss_kib": 19792,
+          "samples": [
+            {
+              "ms": 10.024201,
+              "rss_kib": 21660
+            },
+            {
+              "ms": 9.926945,
+              "rss_kib": 18976
+            },
+            {
+              "ms": 11.214893,
+              "rss_kib": 19880
+            },
+            {
+              "ms": 11.069265,
+              "rss_kib": 18576
+            },
+            {
+              "ms": 10.411695,
+              "rss_kib": 19792
+            },
+            {
+              "ms": 10.756284,
+              "rss_kib": 17904
+            },
+            {
+              "ms": 10.701922,
+              "rss_kib": 20308
+            },
+            {
+              "ms": 10.676303,
+              "rss_kib": 19812
+            },
+            {
+              "ms": 9.770559,
+              "rss_kib": 19208
+            },
+            {
+              "ms": 10.623193,
+              "rss_kib": 18796
+            },
+            {
+              "ms": 10.945078,
+              "rss_kib": 20388
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 8,
+      "logical_sha256": "c3a205c9b09153aa67247e94193eebe9679107fa474370717eb97882f0a8955a",
+      "variants": {
+        "before": {
+          "median_ms": 15.670161,
+          "median_rss_kib": 25336,
+          "samples": [
+            {
+              "ms": 15.687747,
+              "rss_kib": 25332
+            },
+            {
+              "ms": 14.776796,
+              "rss_kib": 27380
+            },
+            {
+              "ms": 16.090554,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 15.349999,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 15.889291,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 15.757032,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 15.351151,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 15.670161,
+              "rss_kib": 25340
+            },
+            {
+              "ms": 16.246949,
+              "rss_kib": 27376
+            },
+            {
+              "ms": 15.402898,
+              "rss_kib": 25336
+            },
+            {
+              "ms": 15.577161,
+              "rss_kib": 25336
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 11.201564,
+          "median_rss_kib": 19308,
+          "samples": [
+            {
+              "ms": 11.267323,
+              "rss_kib": 19328
+            },
+            {
+              "ms": 11.201564,
+              "rss_kib": 20372
+            },
+            {
+              "ms": 10.342951,
+              "rss_kib": 19252
+            },
+            {
+              "ms": 11.26556,
+              "rss_kib": 19604
+            },
+            {
+              "ms": 11.001562,
+              "rss_kib": 18552
+            },
+            {
+              "ms": 11.131548,
+              "rss_kib": 19308
+            },
+            {
+              "ms": 11.451009,
+              "rss_kib": 17836
+            },
+            {
+              "ms": 11.376878,
+              "rss_kib": 20472
+            },
+            {
+              "ms": 10.872749,
+              "rss_kib": 19976
+            },
+            {
+              "ms": 10.948513,
+              "rss_kib": 18764
+            },
+            {
+              "ms": 11.202776,
+              "rss_kib": 19128
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 11.171959,
+          "median_rss_kib": 19648,
+          "samples": [
+            {
+              "ms": 11.299491,
+              "rss_kib": 20112
+            },
+            {
+              "ms": 10.491986,
+              "rss_kib": 19820
+            },
+            {
+              "ms": 10.723283,
+              "rss_kib": 18704
+            },
+            {
+              "ms": 10.796745,
+              "rss_kib": 20184
+            },
+            {
+              "ms": 10.797215,
+              "rss_kib": 19352
+            },
+            {
+              "ms": 11.257027,
+              "rss_kib": 19312
+            },
+            {
+              "ms": 11.171959,
+              "rss_kib": 19024
+            },
+            {
+              "ms": 11.320463,
+              "rss_kib": 19932
+            },
+            {
+              "ms": 11.574765,
+              "rss_kib": 19648
+            },
+            {
+              "ms": 10.964817,
+              "rss_kib": 20556
+            },
+            {
+              "ms": 11.231429,
+              "rss_kib": 18600
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 11.016656,
+          "median_rss_kib": 19820,
+          "samples": [
+            {
+              "ms": 11.679713,
+              "rss_kib": 19820
+            },
+            {
+              "ms": 11.324089,
+              "rss_kib": 19860
+            },
+            {
+              "ms": 10.327518,
+              "rss_kib": 19060
+            },
+            {
+              "ms": 10.603464,
+              "rss_kib": 18760
+            },
+            {
+              "ms": 11.016656,
+              "rss_kib": 20452
+            },
+            {
+              "ms": 11.19902,
+              "rss_kib": 20464
+            },
+            {
+              "ms": 10.7007,
+              "rss_kib": 20372
+            },
+            {
+              "ms": 10.210201,
+              "rss_kib": 20328
+            },
+            {
+              "ms": 11.091819,
+              "rss_kib": 19288
+            },
+            {
+              "ms": 11.173441,
+              "rss_kib": 18996
+            },
+            {
+              "ms": 10.887571,
+              "rss_kib": 19800
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 32,
+      "logical_sha256": "280cc8953b4040c5129b8e5f1b2e85b799e36e7e6c305a783dd30b3552682cb7",
+      "variants": {
+        "before": {
+          "median_ms": 29.760484,
+          "median_rss_kib": 25744,
+          "samples": [
+            {
+              "ms": 29.259149,
+              "rss_kib": 25740
+            },
+            {
+              "ms": 29.830559,
+              "rss_kib": 25740
+            },
+            {
+              "ms": 29.75107,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 30.035528,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.273019,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.707353,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 30.205223,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.652722,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.884601,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.858301,
+              "rss_kib": 25744
+            },
+            {
+              "ms": 29.760484,
+              "rss_kib": 25744
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 13.004899,
+          "median_rss_kib": 19768,
+          "samples": [
+            {
+              "ms": 13.062435,
+              "rss_kib": 19820
+            },
+            {
+              "ms": 12.967622,
+              "rss_kib": 19156
+            },
+            {
+              "ms": 13.234945,
+              "rss_kib": 21636
+            },
+            {
+              "ms": 12.511526,
+              "rss_kib": 18968
+            },
+            {
+              "ms": 13.195425,
+              "rss_kib": 19756
+            },
+            {
+              "ms": 13.049715,
+              "rss_kib": 19768
+            },
+            {
+              "ms": 12.958498,
+              "rss_kib": 20320
+            },
+            {
+              "ms": 13.004278,
+              "rss_kib": 19992
+            },
+            {
+              "ms": 12.092925,
+              "rss_kib": 19312
+            },
+            {
+              "ms": 13.004899,
+              "rss_kib": 19812
+            },
+            {
+              "ms": 13.062124,
+              "rss_kib": 18672
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 11.984383,
+          "median_rss_kib": 19932,
+          "samples": [
+            {
+              "ms": 12.012634,
+              "rss_kib": 19004
+            },
+            {
+              "ms": 12.327379,
+              "rss_kib": 21580
+            },
+            {
+              "ms": 11.984383,
+              "rss_kib": 19932
+            },
+            {
+              "ms": 12.091193,
+              "rss_kib": 20256
+            },
+            {
+              "ms": 12.029981,
+              "rss_kib": 19688
+            },
+            {
+              "ms": 11.476578,
+              "rss_kib": 20016
+            },
+            {
+              "ms": 11.209356,
+              "rss_kib": 18960
+            },
+            {
+              "ms": 12.108349,
+              "rss_kib": 19668
+            },
+            {
+              "ms": 11.904422,
+              "rss_kib": 19756
+            },
+            {
+              "ms": 11.9631,
+              "rss_kib": 21624
+            },
+            {
+              "ms": 11.892975,
+              "rss_kib": 20508
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 11.94987,
+          "median_rss_kib": 19276,
+          "samples": [
+            {
+              "ms": 11.881387,
+              "rss_kib": 18592
+            },
+            {
+              "ms": 11.920947,
+              "rss_kib": 19652
+            },
+            {
+              "ms": 12.15593,
+              "rss_kib": 19064
+            },
+            {
+              "ms": 11.991433,
+              "rss_kib": 18900
+            },
+            {
+              "ms": 11.809869,
+              "rss_kib": 18988
+            },
+            {
+              "ms": 12.3014,
+              "rss_kib": 19704
+            },
+            {
+              "ms": 11.94987,
+              "rss_kib": 19276
+            },
+            {
+              "ms": 11.889199,
+              "rss_kib": 20388
+            },
+            {
+              "ms": 11.406892,
+              "rss_kib": 18716
+            },
+            {
+              "ms": 12.054998,
+              "rss_kib": 19992
+            },
+            {
+              "ms": 11.951573,
+              "rss_kib": 20236
+            }
+          ]
+        }
+      }
+    },
+    {
+      "archive": "/tmp/gravlax-astra-benchmark-v3/reader.aie",
+      "scoped": true,
+      "scope_cells": 1085,
+      "predicates": 64,
+      "logical_sha256": "01f1b227fbfce50339e1c6dddd7aad1ecd5d9f3a85b275a80ab9b4000a0618d1",
+      "variants": {
+        "before": {
+          "median_ms": 50.403811,
+          "median_rss_kib": 25376,
+          "samples": [
+            {
+              "ms": 51.103895,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 50.544884,
+              "rss_kib": 25372
+            },
+            {
+              "ms": 50.713889,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 50.207906,
+              "rss_kib": 27432
+            },
+            {
+              "ms": 50.150991,
+              "rss_kib": 25380
+            },
+            {
+              "ms": 50.403811,
+              "rss_kib": 25372
+            },
+            {
+              "ms": 49.899582,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 50.406666,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 49.74552,
+              "rss_kib": 25376
+            },
+            {
+              "ms": 50.346145,
+              "rss_kib": 25380
+            },
+            {
+              "ms": 50.926349,
+              "rss_kib": 25372
+            }
+          ]
+        },
+        "scalar": {
+          "median_ms": 15.383239,
+          "median_rss_kib": 19752,
+          "samples": [
+            {
+              "ms": 15.372092,
+              "rss_kib": 18896
+            },
+            {
+              "ms": 14.861724,
+              "rss_kib": 21672
+            },
+            {
+              "ms": 15.802941,
+              "rss_kib": 19852
+            },
+            {
+              "ms": 15.491532,
+              "rss_kib": 19340
+            },
+            {
+              "ms": 15.5765,
+              "rss_kib": 18860
+            },
+            {
+              "ms": 15.010949,
+              "rss_kib": 19752
+            },
+            {
+              "ms": 14.878809,
+              "rss_kib": 19984
+            },
+            {
+              "ms": 15.688478,
+              "rss_kib": 20492
+            },
+            {
+              "ms": 15.383239,
+              "rss_kib": 19136
+            },
+            {
+              "ms": 15.319854,
+              "rss_kib": 19316
+            },
+            {
+              "ms": 15.643091,
+              "rss_kib": 20456
+            }
+          ]
+        },
+        "compiled": {
+          "median_ms": 12.940772,
+          "median_rss_kib": 19228,
+          "samples": [
+            {
+              "ms": 13.016536,
+              "rss_kib": 20408
+            },
+            {
+              "ms": 12.53462,
+              "rss_kib": 18816
+            },
+            {
+              "ms": 12.940772,
+              "rss_kib": 19056
+            },
+            {
+              "ms": 12.889995,
+              "rss_kib": 19068
+            },
+            {
+              "ms": 12.959831,
+              "rss_kib": 18832
+            },
+            {
+              "ms": 12.673059,
+              "rss_kib": 21640
+            },
+            {
+              "ms": 12.804216,
+              "rss_kib": 20548
+            },
+            {
+              "ms": 12.522843,
+              "rss_kib": 20032
+            },
+            {
+              "ms": 13.385021,
+              "rss_kib": 19128
+            },
+            {
+              "ms": 13.139381,
+              "rss_kib": 19228
+            },
+            {
+              "ms": 13.302967,
+              "rss_kib": 19960
+            }
+          ]
+        },
+        "auto": {
+          "median_ms": 12.770035,
+          "median_rss_kib": 18840,
+          "samples": [
+            {
+              "ms": 12.834252,
+              "rss_kib": 19204
+            },
+            {
+              "ms": 12.398916,
+              "rss_kib": 18620
+            },
+            {
+              "ms": 12.770035,
+              "rss_kib": 20496
+            },
+            {
+              "ms": 12.967562,
+              "rss_kib": 21696
+            },
+            {
+              "ms": 12.842564,
+              "rss_kib": 18840
+            },
+            {
+              "ms": 12.58767,
+              "rss_kib": 18744
+            },
+            {
+              "ms": 12.502132,
+              "rss_kib": 20472
+            },
+            {
+              "ms": 13.360433,
+              "rss_kib": 18600
+            },
+            {
+              "ms": 12.595482,
+              "rss_kib": 20204
+            },
+            {
+              "ms": 12.889575,
+              "rss_kib": 18688
+            },
+            {
+              "ms": 12.054438,
+              "rss_kib": 18704
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

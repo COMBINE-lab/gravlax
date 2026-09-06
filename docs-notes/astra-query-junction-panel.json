@@ -1,0 +1,1191 @@
+{
+  "schema": "gravlax.query.junctions.v1",
+  "chrom": "1",
+  "start": 198600000,
+  "end": 198800000,
+  "junctions": [
+    {
+      "donor": 198615583,
+      "acceptor": 198692343,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198620033,
+      "acceptor": 198626158,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198626946,
+      "acceptor": 198639225,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 4
+    },
+    {
+      "donor": 198629839,
+      "acceptor": 198744156,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198630938,
+      "acceptor": 198783804,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198638698,
+      "acceptor": 198639225,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 8
+    },
+    {
+      "donor": 198638786,
+      "acceptor": 198639225,
+      "umis": 4,
+      "cells": 4,
+      "supporting_children": 12
+    },
+    {
+      "donor": 198639134,
+      "acceptor": 198639223,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639137,
+      "acceptor": 198639225,
+      "umis": 1595,
+      "cells": 1352,
+      "supporting_children": 1944
+    },
+    {
+      "donor": 198639137,
+      "acceptor": 198639228,
+      "umis": 27,
+      "cells": 27,
+      "supporting_children": 34
+    },
+    {
+      "donor": 198639240,
+      "acceptor": 198696815,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639263,
+      "acceptor": 198703294,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639278,
+      "acceptor": 198752671,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198639290,
+      "acceptor": 198692356,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198648781,
+      "umis": 2,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198652842,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198653946,
+      "umis": 57,
+      "cells": 57,
+      "supporting_children": 107
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198664331,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198671894,
+      "umis": 10,
+      "cells": 10,
+      "supporting_children": 18
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198680201,
+      "umis": 4,
+      "cells": 4,
+      "supporting_children": 9
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198692325,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198692346,
+      "umis": 9898,
+      "cells": 4887,
+      "supporting_children": 25997
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198696711,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198712952,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 4
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198718093,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198741868,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198639341,
+      "acceptor": 198754268,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198640872,
+      "acceptor": 198679885,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198641698,
+      "acceptor": 198692346,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198643979,
+      "acceptor": 198741972,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198648817,
+      "acceptor": 198692346,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 4
+    },
+    {
+      "donor": 198649874,
+      "acceptor": 198652262,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198652032,
+      "acceptor": 198692346,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198653742,
+      "acceptor": 198653781,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198654442,
+      "acceptor": 198657532,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198654484,
+      "acceptor": 198654989,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198656550,
+      "acceptor": 198656582,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198657018,
+      "acceptor": 198695481,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198657821,
+      "acceptor": 198658469,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 6
+    },
+    {
+      "donor": 198657821,
+      "acceptor": 198660622,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198664442,
+      "acceptor": 198692346,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 5
+    },
+    {
+      "donor": 198671996,
+      "acceptor": 198692346,
+      "umis": 14,
+      "cells": 13,
+      "supporting_children": 22
+    },
+    {
+      "donor": 198688476,
+      "acceptor": 198689426,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198692363,
+      "acceptor": 198734328,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198692372,
+      "acceptor": 198699563,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 8
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198692988,
+      "umis": 3,
+      "cells": 3,
+      "supporting_children": 6
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198694017,
+      "umis": 109,
+      "cells": 107,
+      "supporting_children": 270
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198696711,
+      "umis": 3982,
+      "cells": 2338,
+      "supporting_children": 12075
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198698912,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198699563,
+      "umis": 3895,
+      "cells": 2508,
+      "supporting_children": 10706
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198699575,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198701774,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198702386,
+      "umis": 9,
+      "cells": 9,
+      "supporting_children": 21
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198703297,
+      "umis": 1993,
+      "cells": 1341,
+      "supporting_children": 5929
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198704471,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198706733,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198712952,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 5
+    },
+    {
+      "donor": 198692373,
+      "acceptor": 198755905,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198692374,
+      "acceptor": 198734389,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198693074,
+      "acceptor": 198696711,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198693074,
+      "acceptor": 198699563,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198693074,
+      "acceptor": 198703297,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198694140,
+      "acceptor": 198696711,
+      "umis": 17,
+      "cells": 17,
+      "supporting_children": 22
+    },
+    {
+      "donor": 198694140,
+      "acceptor": 198699563,
+      "umis": 9,
+      "cells": 9,
+      "supporting_children": 13
+    },
+    {
+      "donor": 198696738,
+      "acceptor": 198706890,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198696746,
+      "acceptor": 198699671,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696796,
+      "acceptor": 198702417,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696796,
+      "acceptor": 198742249,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696810,
+      "acceptor": 198749496,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696851,
+      "acceptor": 198732535,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696863,
+      "acceptor": 198744172,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696879,
+      "acceptor": 198754342,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696909,
+      "acceptor": 198698912,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198696909,
+      "acceptor": 198699563,
+      "umis": 692,
+      "cells": 603,
+      "supporting_children": 1022
+    },
+    {
+      "donor": 198698931,
+      "acceptor": 198699563,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198699594,
+      "acceptor": 198702491,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198699609,
+      "acceptor": 198731654,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198699615,
+      "acceptor": 198703333,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198699631,
+      "acceptor": 198748134,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198699661,
+      "acceptor": 198703308,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198699704,
+      "acceptor": 198701774,
+      "umis": 6,
+      "cells": 6,
+      "supporting_children": 8
+    },
+    {
+      "donor": 198699704,
+      "acceptor": 198702303,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198699704,
+      "acceptor": 198702349,
+      "umis": 8,
+      "cells": 8,
+      "supporting_children": 12
+    },
+    {
+      "donor": 198699704,
+      "acceptor": 198702386,
+      "umis": 594,
+      "cells": 532,
+      "supporting_children": 956
+    },
+    {
+      "donor": 198699704,
+      "acceptor": 198703297,
+      "umis": 1433,
+      "cells": 1144,
+      "supporting_children": 2167
+    },
+    {
+      "donor": 198700447,
+      "acceptor": 198701287,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 4
+    },
+    {
+      "donor": 198701807,
+      "acceptor": 198701870,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198701811,
+      "acceptor": 198711088,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198702530,
+      "acceptor": 198703297,
+      "umis": 183,
+      "cells": 178,
+      "supporting_children": 362
+    },
+    {
+      "donor": 198703371,
+      "acceptor": 198704471,
+      "umis": 5,
+      "cells": 5,
+      "supporting_children": 8
+    },
+    {
+      "donor": 198703372,
+      "acceptor": 198704471,
+      "umis": 2062,
+      "cells": 1522,
+      "supporting_children": 4089
+    },
+    {
+      "donor": 198703372,
+      "acceptor": 198706871,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198704485,
+      "acceptor": 198732344,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198704498,
+      "acceptor": 198706733,
+      "umis": 1591,
+      "cells": 1249,
+      "supporting_children": 2750
+    },
+    {
+      "donor": 198706739,
+      "acceptor": 198706932,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198706810,
+      "acceptor": 198718097,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198706952,
+      "acceptor": 198708132,
+      "umis": 323,
+      "cells": 306,
+      "supporting_children": 597
+    },
+    {
+      "donor": 198708261,
+      "acceptor": 198709686,
+      "umis": 236,
+      "cells": 228,
+      "supporting_children": 426
+    },
+    {
+      "donor": 198708261,
+      "acceptor": 198712952,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198709824,
+      "acceptor": 198710722,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198709824,
+      "acceptor": 198710875,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 7
+    },
+    {
+      "donor": 198709824,
+      "acceptor": 198712952,
+      "umis": 240,
+      "cells": 230,
+      "supporting_children": 429
+    },
+    {
+      "donor": 198710997,
+      "acceptor": 198712952,
+      "umis": 4,
+      "cells": 4,
+      "supporting_children": 9
+    },
+    {
+      "donor": 198712978,
+      "acceptor": 198728354,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198713057,
+      "acceptor": 198716776,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198713072,
+      "acceptor": 198716681,
+      "umis": 256,
+      "cells": 241,
+      "supporting_children": 516
+    },
+    {
+      "donor": 198716744,
+      "acceptor": 198756039,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198716840,
+      "acceptor": 198718093,
+      "umis": 341,
+      "cells": 319,
+      "supporting_children": 665
+    },
+    {
+      "donor": 198718302,
+      "acceptor": 198722415,
+      "umis": 422,
+      "cells": 398,
+      "supporting_children": 868
+    },
+    {
+      "donor": 198722476,
+      "acceptor": 198728339,
+      "umis": 428,
+      "cells": 410,
+      "supporting_children": 890
+    },
+    {
+      "donor": 198728365,
+      "acceptor": 198754914,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198728388,
+      "acceptor": 198732533,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198728423,
+      "acceptor": 198729137,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198728448,
+      "acceptor": 198729136,
+      "umis": 400,
+      "cells": 381,
+      "supporting_children": 868
+    },
+    {
+      "donor": 198729171,
+      "acceptor": 198729633,
+      "umis": 7,
+      "cells": 7,
+      "supporting_children": 14
+    },
+    {
+      "donor": 198729171,
+      "acceptor": 198731369,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198729171,
+      "acceptor": 198731616,
+      "umis": 410,
+      "cells": 392,
+      "supporting_children": 866
+    },
+    {
+      "donor": 198729765,
+      "acceptor": 198731369,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 6
+    },
+    {
+      "donor": 198729765,
+      "acceptor": 198731374,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198729765,
+      "acceptor": 198731616,
+      "umis": 16,
+      "cells": 16,
+      "supporting_children": 23
+    },
+    {
+      "donor": 198731462,
+      "acceptor": 198731616,
+      "umis": 7,
+      "cells": 7,
+      "supporting_children": 13
+    },
+    {
+      "donor": 198731726,
+      "acceptor": 198732299,
+      "umis": 602,
+      "cells": 564,
+      "supporting_children": 1241
+    },
+    {
+      "donor": 198731726,
+      "acceptor": 198748108,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198732369,
+      "acceptor": 198732479,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198732390,
+      "acceptor": 198732479,
+      "umis": 639,
+      "cells": 596,
+      "supporting_children": 1299
+    },
+    {
+      "donor": 198732556,
+      "acceptor": 198734195,
+      "umis": 603,
+      "cells": 566,
+      "supporting_children": 1163
+    },
+    {
+      "donor": 198734208,
+      "acceptor": 198756127,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198734232,
+      "acceptor": 198734327,
+      "umis": 582,
+      "cells": 552,
+      "supporting_children": 1088
+    },
+    {
+      "donor": 198734366,
+      "acceptor": 198735174,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198734425,
+      "acceptor": 198735126,
+      "umis": 558,
+      "cells": 527,
+      "supporting_children": 979
+    },
+    {
+      "donor": 198735252,
+      "acceptor": 198741868,
+      "umis": 665,
+      "cells": 612,
+      "supporting_children": 1369
+    },
+    {
+      "donor": 198735252,
+      "acceptor": 198741869,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198735252,
+      "acceptor": 198744053,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198737413,
+      "acceptor": 198738928,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198739210,
+      "acceptor": 198741868,
+      "umis": 7,
+      "cells": 7,
+      "supporting_children": 18
+    },
+    {
+      "donor": 198740317,
+      "acceptor": 198740456,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198741883,
+      "acceptor": 198750532,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198742026,
+      "acceptor": 198742231,
+      "umis": 1257,
+      "cells": 1104,
+      "supporting_children": 2998
+    },
+    {
+      "donor": 198742367,
+      "acceptor": 198744053,
+      "umis": 1073,
+      "cells": 972,
+      "supporting_children": 1858
+    },
+    {
+      "donor": 198742584,
+      "acceptor": 198742612,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198744060,
+      "acceptor": 198755932,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198744203,
+      "acceptor": 198748108,
+      "umis": 357,
+      "cells": 339,
+      "supporting_children": 561
+    },
+    {
+      "donor": 198748125,
+      "acceptor": 198749444,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198748150,
+      "acceptor": 198757241,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198748169,
+      "acceptor": 198749415,
+      "umis": 2,
+      "cells": 2,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198748185,
+      "acceptor": 198749542,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198748199,
+      "acceptor": 198749364,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198748199,
+      "acceptor": 198749415,
+      "umis": 366,
+      "cells": 350,
+      "supporting_children": 669
+    },
+    {
+      "donor": 198748574,
+      "acceptor": 198748814,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198749549,
+      "acceptor": 198750491,
+      "umis": 769,
+      "cells": 692,
+      "supporting_children": 1614
+    },
+    {
+      "donor": 198749549,
+      "acceptor": 198750493,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198750626,
+      "acceptor": 198752248,
+      "umis": 630,
+      "cells": 586,
+      "supporting_children": 1219
+    },
+    {
+      "donor": 198752253,
+      "acceptor": 198756213,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198752282,
+      "acceptor": 198752336,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 5
+    },
+    {
+      "donor": 198752370,
+      "acceptor": 198752585,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198752371,
+      "acceptor": 198752593,
+      "umis": 447,
+      "cells": 428,
+      "supporting_children": 902
+    },
+    {
+      "donor": 198752371,
+      "acceptor": 198752595,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198752630,
+      "acceptor": 198756291,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198752772,
+      "acceptor": 198754268,
+      "umis": 417,
+      "cells": 396,
+      "supporting_children": 760
+    },
+    {
+      "donor": 198754289,
+      "acceptor": 198756292,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198754387,
+      "acceptor": 198756131,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 3
+    },
+    {
+      "donor": 198754404,
+      "acceptor": 198755905,
+      "umis": 495,
+      "cells": 472,
+      "supporting_children": 1022
+    },
+    {
+      "donor": 198756351,
+      "acceptor": 198756864,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198756499,
+      "acceptor": 198756558,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198756799,
+      "acceptor": 198757142,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198757046,
+      "acceptor": 198757124,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198757048,
+      "acceptor": 198757071,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 2
+    },
+    {
+      "donor": 198757051,
+      "acceptor": 198757085,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    },
+    {
+      "donor": 198757056,
+      "acceptor": 198757114,
+      "umis": 1,
+      "cells": 1,
+      "supporting_children": 1
+    }
+  ]
+}

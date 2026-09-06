@@ -1576,9 +1576,9 @@ fn decode_tail_chunk(
         let (reader, tables) = archive.reader_and_tables();
         let (compressed, raw_len) = reader.read_compressed_at(&format!("c{}", route.chunk))?;
         let raw = evidence_io::format::decompress(&compressed, raw_len)?;
-        decode_chunk(&raw, info, None, tables)?
+        crate::archivecmd::decode_chunk_identities(&raw, info, tables)?
     };
-    archive.terminal_tail_records(route, info, molecule_base, &molecules)
+    archive.terminal_tail_records_projected(route, info, molecule_base, &molecules)
 }
 
 fn plan_tail_archive(collection: &Collection, sample: usize) -> Result<TailArchivePlan> {

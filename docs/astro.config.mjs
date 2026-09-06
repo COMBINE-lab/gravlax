@@ -62,6 +62,7 @@ export default defineConfig({
             { label: 'aie replay-rows', link: '/cli/replay-rows/' },
             { label: 'Compare annotations', link: '/cli/compare-annotations/' },
             { label: 'aie query', link: '/cli/query/' },
+            { label: 'GQ query language', link: '/cli/gq/' },
             { label: 'aie collection', link: '/cli/collection/' },
             { label: 'Transcript equivalence classes', link: '/cli/transcript-ecs/' },
             { label: 'aie federate', link: '/cli/federate/' },

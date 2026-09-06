@@ -1,0 +1,97 @@
+{
+  "schema": "gravlax.path-openzl-backend.v1",
+  "openzl_release": "v0.2.0",
+  "openzl_commit": "3dceb64867840201fb8f57a29d179995f700c9b8",
+  "streams": 8,
+  "totals": [
+    {
+      "name": "varint-zstd19",
+      "frame_bytes": 184146,
+      "encode_seconds": 0.191481939,
+      "decode_seconds": 0.00024133399999999998
+    },
+    {
+      "name": "u64-zstd19",
+      "frame_bytes": 248399,
+      "encode_seconds": 1.056880371,
+      "decode_seconds": 0.000741543
+    },
+    {
+      "name": "numeric-generic9",
+      "frame_bytes": 250480,
+      "encode_seconds": 0.026902273999999997,
+      "decode_seconds": 0.0016452559999999999
+    },
+    {
+      "name": "numeric-generic19",
+      "frame_bytes": 250449,
+      "encode_seconds": 0.027778407,
+      "decode_seconds": 0.001636222
+    },
+    {
+      "name": "numeric-delta9",
+      "frame_bytes": 303127,
+      "encode_seconds": 0.029510374,
+      "decode_seconds": 0.001755533
+    },
+    {
+      "name": "numeric-fieldlz9",
+      "frame_bytes": 250480,
+      "encode_seconds": 0.02700673,
+      "decode_seconds": 0.001641262
+    },
+    {
+      "name": "numeric-range-generic9",
+      "frame_bytes": 218468,
+      "encode_seconds": 0.016058602,
+      "decode_seconds": 0.000771877
+    },
+    {
+      "name": "numeric-range-fse9",
+      "frame_bytes": 220141,
+      "encode_seconds": 0.002355153,
+      "decode_seconds": 0.001018391
+    },
+    {
+      "name": "numeric-range-zstd19",
+      "frame_bytes": 202680,
+      "encode_seconds": 0.226183276,
+      "decode_seconds": 0.0007423830000000001
+    },
+    {
+      "name": "numeric-flatpack9",
+      "frame_bytes": 3864078,
+      "encode_seconds": 0.005143043999999999,
+      "decode_seconds": 0.0022650730000000003
+    },
+    {
+      "name": "numeric-token-fse9",
+      "frame_bytes": 225141,
+      "encode_seconds": 0.004393542,
+      "decode_seconds": 0.0011476429999999998
+    },
+    {
+      "name": "numeric-bitpack9",
+      "frame_bytes": 585787,
+      "encode_seconds": 0.0012283489999999999,
+      "decode_seconds": 0.000485119
+    },
+    {
+      "name": "openzl-best-per-stream",
+      "frame_bytes": 194125,
+      "encode_seconds": 0.36655975100000004,
+      "decode_seconds": 0.0010056140000000002
+    },
+    {
+      "name": "hybrid-best-per-stream",
+      "frame_bytes": 178753,
+      "encode_seconds": 0.5580416899999999,
+      "decode_seconds": 0.000731275
+    }
+  ],
+  "limitations": "Actual persisted backend frames, every stream reopened and exactly verified. No outer archive/directory/index integration; frame totals are NOT whole archive sizes. Timings exclude conversion to/from u64 and geometry reconstruction. Simple standard graphs, no trained clustering or exhaustive graph search; best-per-stream pays all candidate encode costs. Empty streams included.",
+  "source_root": "20e0b97b31d6ec6376896e5c61f0f2d6a52953ea24f511ddcaddbaea99fd150e",
+  "source_benchmark": "/tmp/gravlax-path-default-complete",
+  "full_report": "/tmp/gravlax-path-openzl-default-complete/report.json",
+  "full_report_sha256": "416110bd1ac5df168d6930d9617d1daee13acd2eb6c2a7b9341110d35fbb2c60"
+}
