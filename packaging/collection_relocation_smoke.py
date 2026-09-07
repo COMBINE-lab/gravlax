@@ -5,11 +5,40 @@ import base64
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 import subprocess
 import tempfile
 import time
+
+
+def bundle_path_aliases(*roots):
+    # Snapshot canonical paths before the original bundle is moved away. On
+    # macOS a temporary /var path can resolve through the /private/var symlink.
+    aliases = {str(path) for root in roots for path in (root, root.resolve())}
+    for alias in tuple(aliases):
+        # Rust canonicalize uses Windows verbatim paths; Python and the resolver
+        # can return ordinary paths. Match only these known bundle locations.
+        windows = PureWindowsPath(alias)
+        if windows.is_absolute() and not alias.startswith('\\\\?\\'):
+            if alias.startswith('\\\\'):
+                aliases.add('\\\\?\\UNC\\' + alias[2:])
+            else:
+                aliases.add('\\\\?\\' + alias)
+    return tuple(sorted(aliases, key=len, reverse=True))
+
+
+def normalized_result(value, aliases):
+    if isinstance(value, dict):
+        return {k: normalized_result(v, aliases) for k, v in value.items()
+                if not k.endswith('_seconds') and k not in ('timings_ms', 'locations_manifest')}
+    if isinstance(value, list):
+        return [normalized_result(v, aliases) for v in value]
+    if isinstance(value, str):
+        for alias in aliases:
+            if value == alias or any(value.startswith(alias + sep) for sep in ('/', '\\')):
+                return '<bundle>' + value[len(alias):]
+    return value
 
 
 def main():
@@ -32,6 +61,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='gravlax-relocation-original-') as first, tempfile.TemporaryDirectory(prefix='gravlax-relocation-copy-', dir=args.relocation_dir) as second:
         root, moved = Path(first) / 'bundle', Path(second) / 'bundle'
         root.mkdir()
+        aliases = bundle_path_aliases(root, moved)
         fixtures = Path(__file__).with_name('fixtures')
         for sample, filename in [('a', 'gq-smoke.aie.b64'), ('b', 'gq-smoke-coarse.aie.b64'), ('c', 'gq-smoke-middle.aie.b64')]:
             (root / f'{sample}.aie').write_bytes(base64.b64decode(b''.join((fixtures / filename).read_bytes().split()), validate=True))
@@ -69,13 +99,7 @@ def main():
         run(['collection', 'inspect', moved / 'atlas.aicollection'], succeeds=False)
         after, after_ms = execute(moved, True)
         def normalized(value):
-            if isinstance(value, dict):
-                return {k: normalized(v) for k, v in value.items() if not k.endswith('_seconds') and k not in ('timings_ms', 'locations_manifest')}
-            if isinstance(value, list):
-                return [normalized(v) for v in value]
-            if isinstance(value, str):
-                return value.replace(str(root), '<bundle>').replace(str(moved), '<bundle>')
-            return value
+            return normalized_result(value, aliases)
         for name in commands:
             if normalized(before[name]) != normalized(after[name]):
                 raise RuntimeError((name, 'relocation changed results or I/O', normalized(before[name]), normalized(after[name])))
