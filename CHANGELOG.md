@@ -2,6 +2,22 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## Unreleased
+
+- Make rooted collection sources and parent layers relocatable through an optional
+  `--locations` manifest keyed by committed content identities. Existing archive and
+  collection formats, index bytes and roots remain unchanged; relocation adds no
+  archive scan or decoding beyond normal authenticated access.
+- Stop treating historical inode, device, size and timestamps as source acceptance
+  criteria or cross-layer duplicate identities. Keep content-based duplicate checks,
+  same-open-file authentication, consumed-payload checks and explicit full audits.
+- Add location manifests to Python collection event search and collection-backed
+  analysis plans, with resolved paths and manifest digests in uniform provenance.
+- Legacy unrooted archives now authenticate each source open by full-file hash;
+  their relocation remains supported but cannot provide the rooted fast path.
+- Test moved layered bundles, unchanged archive/index hashes and I/O, cross-file
+  replacement, malformed mappings, wrong roots, legacy identity and corruption.
+
 ## [0.2.0] - 2026-09-05
 
 ### Composable query language

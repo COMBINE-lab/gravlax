@@ -1,0 +1,332 @@
+{
+  "method": "One warmup and nine (or --repeats) randomized paired repetitions; warm cache; four Rayon threads; same filesystem. Full process wall time includes startup, argument parsing and output. Complete science/work results agree after excluding timings and locator provenance. No archive payload verification or decoding is added by relocation.",
+  "repeats": 9,
+  "binary_sha256": "9d1413d1c206b8d22b28f98d26731ff377cb5eda2a4700609d52fb5a2e7cb6ff",
+  "archive_sha256": {
+    "archive_a": "6c671d7245be37927faa64137cc274dcda55f6406f18322a97f75be079d2e14c",
+    "archive_b": "080e2d50bb2b43b212cb389c87c44095851a57a0169fd7968211b6300f4b6cd3",
+    "archive_c": "59c378030d8eb6fb491c08c9e32019bae4b7deb1eb83ace5b6aa6b23eb075b77",
+    "archive_d": "a27fe73a04dafe9e0b2808e65b811f35d473b6d554c18a681cd7f569cef21d1d",
+    "archive_e": "b053b9a2adbb3f572a786a62c440e9524eb8f33b0edae801c839284af6f5bed3",
+    "archive_f": "5b8317a14facf76e9bad376aeb864c90183f94cec48a1fef37a5d652a9fa4853",
+    "archive_g": "e7bb91c8ae7781c5adcf81f64895ebf7aba78099c0c519ed511fd54400cacd0c",
+    "archive_h": "4810e0f3d60097224f3ded0352a2d2cf6f889c8d696daf15b65db33a743a7cd7"
+  },
+  "cases": [
+    {
+      "case": "region_chr1",
+      "query": [
+        "region",
+        "chr1:70122500-70142500"
+      ],
+      "process_ms": {
+        "original": [
+          91.54733,
+          58.735524,
+          59.278622,
+          66.718455,
+          65.520999,
+          82.143715,
+          75.071366,
+          79.10465,
+          73.550472
+        ],
+        "relocated": [
+          51.661833,
+          57.789637,
+          61.987279,
+          72.585787,
+          75.90247,
+          73.79411,
+          89.834126,
+          97.102441,
+          90.122561
+        ]
+      },
+      "median_ms": {
+        "original": 73.550472,
+        "relocated": 73.79411
+      },
+      "paired_relocated_over_original": 1.0879416647163067,
+      "paired_ratio_ci95": [
+        0.8983536963235714,
+        1.2253158756071614
+      ],
+      "verified_result_sha256": "91c306253c59694588d106b70847ecb8e8124e0825f6e7c426f3db95321625ef",
+      "summary": {
+        "coordinates": "0-based half-open",
+        "anchor_semantics": true,
+        "chrom": "chr1",
+        "start": 70122500,
+        "end": 70142500,
+        "molecules": 44148,
+        "umis": 43775,
+        "cells": 12111,
+        "selection": {
+          "requested_top_per_sample": 0,
+          "top_zero_means_all": true,
+          "comparator": "UMIs descending, archive cell id ascending"
+        },
+        "planning": {
+          "collection_layers": 2,
+          "archives_total": 8,
+          "archives_opened": 8,
+          "archives_pruned": 0,
+          "unique_chunks_decoded": 8,
+          "planned_compressed_bytes": 59134,
+          "actual_archive_bytes_read": 405135,
+          "source_archive_identity_bytes_read": 15000,
+          "source_archive_execution_bytes_read": 405135,
+          "source_archive_bytes_read": 420135,
+          "collection_sidecar_bytes_read": 5273,
+          "shape_route_sidecar_payload_bytes_read": 0,
+          "total_logical_bytes_read": 425408,
+          "route_blocks_loaded": 0,
+          "routed_archives": 0,
+          "fallback_archives": 0
+        }
+      }
+    },
+    {
+      "case": "region_chr12",
+      "query": [
+        "region",
+        "chr12:18714000-18854000"
+      ],
+      "process_ms": {
+        "original": [
+          52.901363,
+          55.756039,
+          62.245719,
+          86.357642,
+          64.757788,
+          57.73253,
+          57.945682,
+          106.306465,
+          68.62409
+        ],
+        "relocated": [
+          56.773393,
+          91.65306,
+          62.016613,
+          61.67032,
+          110.310845,
+          56.879173,
+          58.417163,
+          57.353088,
+          67.562109
+        ]
+      },
+      "median_ms": {
+        "original": 62.245719,
+        "relocated": 61.67032
+      },
+      "paired_relocated_over_original": 0.9963193292055956,
+      "paired_ratio_ci95": [
+        0.7141269558981242,
+        1.64382301260676
+      ],
+      "verified_result_sha256": "5f92689fb0a9b3cbe260344b9e139d8f9659ff777ae84283ea969d24644f35a0",
+      "summary": {
+        "coordinates": "0-based half-open",
+        "anchor_semantics": true,
+        "chrom": "chr12",
+        "start": 18714000,
+        "end": 18854000,
+        "molecules": 11410,
+        "umis": 11404,
+        "cells": 8238,
+        "selection": {
+          "requested_top_per_sample": 0,
+          "top_zero_means_all": true,
+          "comparator": "UMIs descending, archive cell id ascending"
+        },
+        "planning": {
+          "collection_layers": 2,
+          "archives_total": 8,
+          "archives_opened": 8,
+          "archives_pruned": 0,
+          "unique_chunks_decoded": 8,
+          "planned_compressed_bytes": 11312,
+          "actual_archive_bytes_read": 357313,
+          "source_archive_identity_bytes_read": 15000,
+          "source_archive_execution_bytes_read": 357313,
+          "source_archive_bytes_read": 372313,
+          "collection_sidecar_bytes_read": 5273,
+          "shape_route_sidecar_payload_bytes_read": 0,
+          "total_logical_bytes_read": 377586,
+          "route_blocks_loaded": 0,
+          "routed_archives": 0,
+          "fallback_archives": 0
+        }
+      }
+    },
+    {
+      "case": "junction_observed",
+      "query": [
+        "junction",
+        "chr12:18715181-18853140"
+      ],
+      "process_ms": {
+        "original": [
+          111.866523,
+          55.031358,
+          59.429592,
+          74.438897,
+          48.947465,
+          50.400834,
+          46.554976,
+          63.015477,
+          56.329512
+        ],
+        "relocated": [
+          48.238962,
+          51.032338,
+          57.044964,
+          51.678666,
+          51.829194,
+          56.427019,
+          51.036626,
+          54.766789,
+          53.173418
+        ]
+      },
+      "median_ms": {
+        "original": 56.329512,
+        "relocated": 51.829194
+      },
+      "paired_relocated_over_original": 0.9439708620234452,
+      "paired_ratio_ci95": [
+        0.6942427693414104,
+        1.0962657568548633
+      ],
+      "verified_result_sha256": "a3135445db62524cd8b67bb3a1270477d594772be383a894c723ba61d66401ee",
+      "summary": {
+        "coordinates": "0-based junction boundaries",
+        "chrom": "chr12",
+        "donor": 18715181,
+        "acceptor": 18853140,
+        "support_upper_bound": 10364,
+        "min_support": 0,
+        "umis": 10334,
+        "cells": 7668,
+        "selection": {
+          "requested_top_per_sample": 0,
+          "top_zero_means_all": true,
+          "comparator": "UMIs descending, archive cell id ascending"
+        },
+        "planning": {
+          "collection_layers": 2,
+          "archives_total": 8,
+          "archives_opened": 8,
+          "archives_pruned": 0,
+          "support_bound_pruned": false,
+          "unique_chunks_decoded": 8,
+          "planned_compressed_bytes": 11312,
+          "actual_archive_bytes_read": 357313,
+          "source_archive_identity_bytes_read": 15000,
+          "source_archive_execution_bytes_read": 357313,
+          "source_archive_bytes_read": 372313,
+          "collection_sidecar_bytes_read": 11755,
+          "shape_route_sidecar_payload_bytes_read": 5900,
+          "total_logical_bytes_read": 384068,
+          "route_blocks_loaded": 8,
+          "routed_archives": 8,
+          "fallback_archives": 0
+        }
+      }
+    },
+    {
+      "case": "jset_observed",
+      "query": [
+        "jset",
+        "--include",
+        "chr12:18715181-18853140",
+        "--exclude",
+        "chr9:129925157-129927194"
+      ],
+      "process_ms": {
+        "original": [
+          53.986929,
+          67.582225,
+          96.211914,
+          68.926108,
+          57.816942,
+          66.97059,
+          69.91942,
+          62.894894,
+          68.416687
+        ],
+        "relocated": [
+          102.556853,
+          59.950099,
+          48.643114,
+          142.910768,
+          64.540654,
+          80.938909,
+          144.716309,
+          59.103258,
+          64.838534
+        ]
+      },
+      "median_ms": {
+        "original": 67.582225,
+        "relocated": 64.838534
+      },
+      "paired_relocated_over_original": 1.116293110071439,
+      "paired_ratio_ci95": [
+        0.8870690333146032,
+        2.069758430490413
+      ],
+      "verified_result_sha256": "a13e9e0dd316676db6aa37d720279eb8ad2d91fe62401d33802a54d6a902d242",
+      "summary": {
+        "coordinates": "0-based junction boundaries",
+        "class_categories": [
+          "include_only",
+          "exclude_only",
+          "both"
+        ],
+        "informative_umis": "include_only + exclude_only",
+        "usage_fraction": "include_only / informative_umis",
+        "both_in_usage_denominator": false,
+        "min_support": 0,
+        "totals": {
+          "include_only": 10334,
+          "exclude_only": 182,
+          "both": 0,
+          "informative_umis": 10516,
+          "usage_fraction": 0.9826930391783948
+        },
+        "selection": {
+          "requested_top_per_sample": 0,
+          "top_zero_means_all": true,
+          "comparator": "total category UMIs descending, archive cell id ascending"
+        },
+        "planning": {
+          "collection_layers": 2,
+          "archives_total": 8,
+          "archives_opened": 8,
+          "archives_pruned": 0,
+          "support_bound_pruned": false,
+          "unique_chunks_decoded": 16,
+          "independent_chunk_decodes": 16,
+          "planned_compressed_bytes": 39112,
+          "actual_archive_bytes_read": 385113,
+          "source_archive_identity_bytes_read": 15000,
+          "source_archive_execution_bytes_read": 385113,
+          "source_archive_bytes_read": 400113,
+          "collection_sidecar_bytes_read": 13298,
+          "shape_route_sidecar_payload_bytes_read": 5900,
+          "total_logical_bytes_read": 413411,
+          "route_blocks_loaded": 8,
+          "routed_archives": 8,
+          "fallback_archives": 0
+        }
+      }
+    }
+  ],
+  "collection_sha256": {
+    "base.aicollection": "b641e04613966c0c85bd229038846d16429c3e4951e1cefdbf78c347be2d1e60",
+    "atlas.aicollection": "f8a842afe3c82c69165d78d5c32a809bdf2a43b35a1a80ab753a885fc9941a43"
+  }
+}

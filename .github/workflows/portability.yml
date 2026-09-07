@@ -110,7 +110,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Execute GQ archive and federation acceptance
+      - name: Execute GQ and relocated collection acceptance
         shell: bash
         run: >-
           python packaging/gq_smoke.py

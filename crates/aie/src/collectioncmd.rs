@@ -8,7 +8,9 @@
 //! shapes, archives, and chunks, then the ordinary archive decoder recomputes exact molecule-class
 //! counts.
 
+mod locations;
 mod search;
+use locations::Locations;
 
 use crate::archivecmd::{
     decode_chunk, read_chunk_index, remove_staging_if_owned, ChunkInfo, LazyArchive,
@@ -77,7 +79,10 @@ impl From<CollectionOutputFormat> for OutputFormat {
 }
 
 #[derive(clap::Args, Clone, Debug, Default)]
-struct CollectionOutputArgs {
+struct CollectionIoArgs {
+    /// Resolve expected archive and parent-collection roots using a local locations manifest.
+    #[arg(long)]
+    locations: Option<PathBuf>,
     /// Use the versioned uniform result contract instead of the legacy presentation.
     #[arg(long, value_enum)]
     format: Option<CollectionOutputFormat>,
@@ -116,12 +121,12 @@ enum What {
         #[arg(long, conflicts_with = "format")]
         json: bool,
         #[command(flatten)]
-        uniform_output: CollectionOutputArgs,
+        uniform_output: CollectionIoArgs,
     },
     /// Print the versioned collection manifest and index cardinalities.
     Inspect {
         collection: PathBuf,
-        /// Re-hash every source archive in addition to the default exact filesystem guard.
+        /// Verify all source payloads in addition to the default content-identity check.
         /// Routed collections also reconstruct every shape route from its bound source shapes.
         #[arg(long)]
         verify_content: bool,
@@ -129,7 +134,7 @@ enum What {
         #[arg(long)]
         verify_routes: bool,
         #[command(flatten)]
-        uniform_output: CollectionOutputArgs,
+        uniform_output: CollectionIoArgs,
     },
     /// Exact point-junction counts across routed archives.
     Junction {
@@ -151,7 +156,7 @@ enum What {
         #[arg(long, conflicts_with = "format")]
         json: bool,
         #[command(flatten)]
-        uniform_output: CollectionOutputArgs,
+        uniform_output: CollectionIoArgs,
     },
     /// Exact anchor-region counts across routed archives.
     Region {
@@ -167,7 +172,7 @@ enum What {
         #[arg(long, conflicts_with = "format")]
         json: bool,
         #[command(flatten)]
-        uniform_output: CollectionOutputArgs,
+        uniform_output: CollectionIoArgs,
     },
     /// Exact inclusion/exclusion junction-set usage across routed archives.
     Jset {
@@ -188,7 +193,7 @@ enum What {
         #[arg(long, conflicts_with = "format")]
         json: bool,
         #[command(flatten)]
-        uniform_output: CollectionOutputArgs,
+        uniform_output: CollectionIoArgs,
     },
     /// Search genome-wide for recurrent junctions, splice events, and terminal-tail evidence.
     FindEvents(Box<search::Args>),
@@ -1312,6 +1317,7 @@ struct CollectionLayer {
 }
 
 struct CollectionChain {
+    location_provenance: Option<serde_json::Value>,
     layers: Vec<CollectionLayer>,
     collection: Collection,
     global_to_local: Vec<(usize, usize)>,
@@ -1366,7 +1372,7 @@ fn uniform_path<'a>(path: &'a Path, role: &str) -> Result<&'a str> {
 
 /// Run one uniform serializer against either locked stdout or the shared atomic no-clobber file
 /// publisher. The producer is invoked exactly once, and a failed producer never installs a file.
-fn write_uniform_collection_result<F>(output: &CollectionOutputArgs, produce: F) -> Result<()>
+fn write_uniform_collection_result<F>(output: &CollectionIoArgs, produce: F) -> Result<()>
 where
     F: FnOnce(&mut dyn Write) -> std::result::Result<(), OutputError>,
 {
@@ -1389,7 +1395,7 @@ where
 
 /// Avoid an expensive collection scan when a requested result destination is already occupied.
 /// The publisher remains the authoritative race-safe no-clobber check.
-fn preflight_uniform_collection_output(output: &CollectionOutputArgs) -> Result<()> {
+fn preflight_uniform_collection_output(output: &CollectionIoArgs) -> Result<()> {
     let Some(path) = output.output.as_deref() else {
         return Ok(());
     };
@@ -1487,6 +1493,12 @@ fn collection_uniform_context(
     chain: &CollectionChain,
     mut parameters: BTreeMap<String, serde_json::Value>,
 ) -> Result<ResultContext> {
+    if let Some(locations) = &chain.location_provenance {
+        parameters.insert("locations_manifest".into(), locations.clone());
+    }
+    parameters.insert("resolved_sources".into(), json!(chain.collection.archives.iter().map(|a| json!({
+        "sample": a.id, "identity": format!("{}:{}", a.identity.native_scheme, a.identity.native_digest), "path": a.path
+    })).collect::<Vec<_>>()));
     parameters.insert(
         "collection_path".into(),
         json!(uniform_path(requested_path, "collection")?),
@@ -1852,6 +1864,7 @@ pub fn native_collection_identity(path: &Path) -> Result<String> {
 
 fn load_collection_layers(
     path: &Path,
+    locations: &Locations,
     depth: usize,
     seen: &mut FxHashSet<PathBuf>,
     layers: &mut Vec<CollectionLayer>,
@@ -1864,17 +1877,15 @@ fn load_collection_layers(
     if !seen.insert(canonical.clone()) {
         bail!("collection base chain contains a cycle or repeated layer");
     }
-    let (file, manifest) = open_collection_manifest(&canonical)?;
+    let (file, mut manifest) = open_collection_manifest(&canonical)?;
     if let Some(base) = &manifest.base {
-        let base_path = if base.path.is_absolute() {
-            base.path.clone()
-        } else {
-            canonical
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .join(&base.path)
-        };
-        let observed = load_collection_layers(&base_path, depth + 1, seen, layers)?;
+        let base_path = locations.resolve(
+            locations::COLLECTION_SCHEME,
+            &base.root_digest,
+            &base.path,
+            canonical.parent().unwrap_or_else(|| Path::new(".")),
+        );
+        let observed = load_collection_layers(&base_path, locations, depth + 1, seen, layers)?;
         if observed != base.root_digest {
             bail!(
                 "base collection digest mismatch for {}; expected {}, observed {}",
@@ -1883,6 +1894,15 @@ fn load_collection_layers(
                 observed
             );
         }
+    }
+    // Only the in-memory locator changes. Authenticated collection bytes stay untouched.
+    for archive in &mut manifest.archives {
+        archive.path = locations.resolve(
+            &archive.identity.native_scheme,
+            &archive.identity.native_digest,
+            &archive.path,
+            canonical.parent().unwrap_or_else(|| Path::new(".")),
+        );
     }
     let root_digest = file.root_digest_hex();
     layers.push(CollectionLayer {
@@ -1894,9 +1914,18 @@ fn load_collection_layers(
     Ok(root_digest)
 }
 
+#[cfg(test)]
 fn open_collection_chain(path: &Path) -> Result<CollectionChain> {
+    open_collection_chain_with_locations(path, None)
+}
+
+fn open_collection_chain_with_locations(
+    path: &Path,
+    manifest: Option<&Path>,
+) -> Result<CollectionChain> {
+    let locations = Locations::load(manifest)?;
     let mut layers = Vec::new();
-    load_collection_layers(path, 0, &mut FxHashSet::default(), &mut layers)?;
+    load_collection_layers(path, &locations, 0, &mut FxHashSet::default(), &mut layers)?;
     let has_v2 = layers
         .iter()
         .any(|layer| layer.file.version == LEGACY_VERSION);
@@ -1927,8 +1956,6 @@ fn open_collection_chain(path: &Path) -> Result<CollectionChain> {
     }
 
     let mut by_id: BTreeMap<String, (usize, usize)> = BTreeMap::new();
-    let mut by_path: FxHashMap<PathBuf, String> = FxHashMap::default();
-    let mut by_inode: FxHashMap<(u64, u64), String> = FxHashMap::default();
     let mut by_digest: FxHashMap<String, String> = FxHashMap::default();
     for (layer_index, layer) in layers.iter().enumerate() {
         for (local_index, archive) in layer.manifest.archives.iter().enumerate() {
@@ -1942,24 +1969,7 @@ fn open_collection_chain(path: &Path) -> Result<CollectionChain> {
                     layer.path.display()
                 );
             }
-            if let Some(previous) = by_path.insert(archive.path.clone(), archive.id.clone()) {
-                bail!(
-                    "samples {previous} and {} reuse resolved archive {}",
-                    archive.id,
-                    archive.path.display()
-                );
-            }
             let identity = &archive.identity;
-            if identity.dev != 0 || identity.inode != 0 {
-                if let Some(previous) =
-                    by_inode.insert((identity.dev, identity.inode), archive.id.clone())
-                {
-                    bail!(
-                        "samples {previous} and {} reuse the same archive inode",
-                        archive.id
-                    );
-                }
-            }
             let duplicate_key = identity.encoded_sections_digest.clone().unwrap_or_else(|| {
                 format!("{}:{}", identity.native_scheme, identity.native_digest)
             });
@@ -1991,6 +2001,7 @@ fn open_collection_chain(path: &Path) -> Result<CollectionChain> {
             .context("collection posting count overflow")
     })?;
     Ok(CollectionChain {
+        location_provenance: locations.provenance,
         layers,
         collection: Collection {
             base: None,
@@ -2303,47 +2314,42 @@ fn identity_stat_matches(expected: &FileIdentity, observed: &FileIdentity) -> bo
         && expected.inode == observed.inode
 }
 
+// A transient mutation detector, never a historical source identity. Unlike serialized
+// legacy stat fields, SystemTime can represent pre-epoch timestamps; unavailable timestamps
+// are not grounds for rejecting otherwise authenticated evidence.
+fn same_file_snapshot(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
+    let same = before.is_file()
+        && after.is_file()
+        && before.len() == after.len()
+        && before.modified().ok() == after.modified().ok();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        same && before.dev() == after.dev()
+            && before.ino() == after.ino()
+            && before.ctime() == after.ctime()
+            && before.ctime_nsec() == after.ctime_nsec()
+    }
+    #[cfg(not(unix))]
+    {
+        same
+    }
+}
+
 fn validate_archive_identity(archive: &ArchiveEntry, verify_content: bool) -> Result<SourceIo> {
     let file = std::fs::File::open(&archive.path)
         .with_context(|| format!("opening archive identity {}", archive.path.display()))?;
     validate_archive_identity_file(archive, file, verify_content)
 }
 
-fn validate_archive_identity_file(
+// One content guard shared by preflight, actual query opens, and route inspection.
+// Directory authentication is performed by SectionReader; no historical inode is authoritative.
+fn validate_source_reader(
     archive: &ArchiveEntry,
-    file: std::fs::File,
+    reader: &evidence_io::format::SectionReader,
+    route_binding: Option<&ShapeRouteBinding>,
     verify_content: bool,
-) -> Result<SourceIo> {
-    let observed = identity_from_metadata(file.metadata()?, 0, String::new(), String::new(), None)?;
-    if !identity_stat_matches(&archive.identity, &observed) {
-        bail!(
-            "archive identity changed for sample {} at {}; rebuild the collection index",
-            archive.id,
-            archive.path.display()
-        );
-    }
-    // A normal legacy-v1 guard remains stat-only. Its v3+ manifest nevertheless records the
-    // scheme-independent identity established during construction. Re-reading that identity would
-    // require the full-file scan that rooted archives are designed to eliminate.
-    if archive.identity.archive_format_version == evidence_io::format::SEEKABLE_VERSION
-        && !verify_content
-    {
-        return Ok(SourceIo {
-            id: archive.id.clone(),
-            format_version: archive.identity.archive_format_version,
-            identity_scheme: archive.identity.native_scheme.clone(),
-            identity_content_bytes_read: 0,
-            total_bytes_read: 0,
-            shape_route_payload_bytes_read: 0,
-            shape_route_source_bytes_read: 0,
-            sections_read: Vec::new(),
-        });
-    }
-
-    // Parse and verify the same open file description whose stat tuple was checked above. This
-    // prevents a replaceable archive path from splitting the stat and content guards across two
-    // different inodes.
-    let reader = evidence_io::format::SectionReader::from_file(file)?;
+) -> Result<u64> {
     if reader.archive_version() != archive.identity.archive_format_version {
         bail!(
             "archive format version changed for sample {} at {}; rebuild the collection index",
@@ -2375,7 +2381,7 @@ fn validate_archive_identity_file(
                     archive.path.display()
                 );
         }
-        if let Some(binding) = &archive.shape_routes {
+        if let Some(binding) = route_binding {
             let shapes_digest = reader
                 .section_metadata()
                 .find(|section| section.name == "shapes")
@@ -2398,6 +2404,9 @@ fn validate_archive_identity_file(
             0
         }
     } else {
+        if route_binding.is_some() {
+            bail!("shape routes require rooted archives");
+        }
         let scan = reader.scan_legacy_identities()?;
         let full = digest_hex(scan.full_file_blake3);
         let encoded = digest_hex(scan.encoded_sections_blake3);
@@ -2417,20 +2426,34 @@ fn validate_archive_identity_file(
         }
         scan.bytes_read
     };
+    Ok(identity_content_bytes_read)
+}
+
+fn validate_archive_identity_file(
+    archive: &ArchiveEntry,
+    file: std::fs::File,
+    verify_content: bool,
+) -> Result<SourceIo> {
+    let before = file.metadata()?;
+    if !before.is_file() {
+        bail!("archive source is not a regular file");
+    }
+    // Verify identity and payloads through this same open file, not a reopened pathname.
+    let reader = evidence_io::format::SectionReader::from_file(file)?;
+    let identity_content_bytes_read = validate_source_reader(
+        archive,
+        &reader,
+        archive.shape_routes.as_ref(),
+        verify_content,
+    )?;
     let sections_read =
         if verify_content && reader.archive_version() == evidence_io::format::VERSION {
             reader.names().map(str::to_owned).collect()
         } else {
             Vec::new()
         };
-    let after = identity_from_metadata(
-        reader.file_metadata()?,
-        0,
-        String::new(),
-        String::new(),
-        None,
-    )?;
-    if !identity_stat_matches(&archive.identity, &after) {
+    let after = reader.file_metadata()?;
+    if !same_file_snapshot(&before, &after) {
         bail!(
             "archive identity changed while validating sample {} at {}; rebuild the collection index",
             archive.id,
@@ -2972,15 +2995,6 @@ fn validate_extension(base: &Collection, extension: &Collection) -> Result<()> {
         bail!("new collection segment has an incompatible reference identity");
     }
     let base_ids: FxHashSet<&str> = base.archives.iter().map(|row| row.id.as_str()).collect();
-    let base_paths: FxHashSet<&Path> = base.archives.iter().map(|row| row.path.as_path()).collect();
-    let base_inodes: FxHashSet<(u64, u64)> = base
-        .archives
-        .iter()
-        .filter_map(|row| {
-            let identity = &row.identity;
-            (identity.dev != 0 || identity.inode != 0).then_some((identity.dev, identity.inode))
-        })
-        .collect();
     let base_digests: FxHashSet<&str> = base
         .archives
         .iter()
@@ -2998,22 +3012,7 @@ fn validate_extension(base: &Collection, extension: &Collection) -> Result<()> {
                 archive.id
             );
         }
-        if base_paths.contains(archive.path.as_path()) {
-            bail!(
-                "sample {} reuses resolved archive {} from the base collection",
-                archive.id,
-                archive.path.display()
-            );
-        }
         let identity = &archive.identity;
-        if (identity.dev != 0 || identity.inode != 0)
-            && base_inodes.contains(&(identity.dev, identity.inode))
-        {
-            bail!(
-                "sample {} reuses an archive inode from the base collection",
-                archive.id
-            );
-        }
         let encoded = identity
             .encoded_sections_digest
             .as_deref()
@@ -3246,7 +3245,7 @@ struct BuildRun {
     allow_unstamped: bool,
     build_shape_routes: bool,
     json_output: bool,
-    uniform_output: CollectionOutputArgs,
+    uniform_output: CollectionIoArgs,
 }
 
 fn run_build(args: BuildRun) -> Result<()> {
@@ -3264,7 +3263,13 @@ fn run_build(args: BuildRun) -> Result<()> {
     if base.is_some() && samples.is_empty() {
         bail!("an incremental build requires at least one new --sample");
     }
-    let base_chain = base.as_deref().map(open_collection_chain).transpose()?;
+    if base.is_none() && uniform_output.locations.is_some() {
+        bail!("--locations on collection build requires --base; new samples already supply their paths");
+    }
+    let base_chain = base
+        .as_deref()
+        .map(|path| open_collection_chain_with_locations(path, uniform_output.locations.as_deref()))
+        .transpose()?;
     let mut source_io = if let Some(chain) = &base_chain {
         require_encoded_extension_base(chain)?;
         validate_collection_sources(&chain.collection, false)?
@@ -3581,70 +3586,8 @@ fn open_source(
             entry.path.display()
         )
     })?;
-    let observed = identity_from_metadata(
-        archive.reader().file_metadata()?,
-        0,
-        String::new(),
-        String::new(),
-        None,
-    )?;
-    if !identity_stat_matches(&entry.identity, &observed) {
-        bail!(
-            "archive identity changed for sample {} at {}; rebuild the collection index",
-            entry.id,
-            entry.path.display()
-        );
-    }
     let reader = archive.reader();
-    if reader.archive_version() != entry.identity.archive_format_version {
-        bail!(
-            "archive format version changed for sample {} at {}; rebuild the collection index",
-            entry.id,
-            entry.path.display()
-        );
-    }
-    if reader.archive_version() == evidence_io::format::VERSION {
-        let root = reader
-            .content_commitment()
-            .context("rooted archive lacks its directory commitment")?;
-        let encoded = reader
-            .encoded_content_identity()?
-            .context("rooted archive lacks its encoded-sections identity")?;
-        let encoded = digest_hex(encoded);
-        if entry.identity.native_scheme != ROOTED_DIRECTORY_SCHEME
-            || root.to_hex() != entry.identity.native_digest
-            || entry.identity.encoded_sections_digest.as_deref() != Some(encoded.as_str())
-        {
-            bail!(
-                "archive root identity changed for sample {} at {}; rebuild the collection index",
-                entry.id,
-                entry.path.display()
-            );
-        }
-        if let Some(binding) = shape_route {
-            let shapes_digest = reader
-                .section_metadata()
-                .find(|section| section.name == "shapes")
-                .context("routed archive lacks its shapes section")?
-                .compressed_blake3
-                .context("routed archive shapes entry lacks its committed payload digest")?;
-            shaperoute::validate_binding(
-                binding,
-                binding.archive_ordinal,
-                root.digest,
-                shapes_digest,
-            )
-            .with_context(|| format!("validating shape-route source for sample {}", entry.id))?;
-        }
-    } else if entry.identity.native_scheme != LEGACY_FULL_FILE_SCHEME {
-        bail!(
-            "legacy archive identity scheme changed for sample {}; rebuild the collection index",
-            entry.id
-        );
-    }
-    if shape_route.is_some() && reader.archive_version() != evidence_io::format::VERSION {
-        bail!("shape routes cannot be used with legacy archive sample {}", entry.id);
-    }
+    validate_source_reader(entry, reader, shape_route, false)?;
     if archive.chrom_names != collection.chroms || archive.chrom_digest != collection.chroms_digest
     {
         bail!(
@@ -4130,7 +4073,7 @@ struct JunctionQueryRun {
     explain: bool,
     verify_content: bool,
     json_output: bool,
-    uniform_output: CollectionOutputArgs,
+    uniform_output: CollectionIoArgs,
 }
 
 fn run_junction_query(args: JunctionQueryRun) -> Result<()> {
@@ -4145,7 +4088,7 @@ fn run_junction_query(args: JunctionQueryRun) -> Result<()> {
         uniform_output,
     } = args;
     let started = std::time::Instant::now();
-    let chain = open_collection_chain(&path)?;
+    let chain = open_collection_chain_with_locations(&path, uniform_output.locations.as_deref())?;
     let collection = &chain.collection;
     let load_seconds = started.elapsed().as_secs_f64();
     let uniform_context = if uniform_output.format.is_some() {
@@ -4427,10 +4370,10 @@ fn run_region_query(
     explain: bool,
     verify_content: bool,
     json_output: bool,
-    uniform_output: CollectionOutputArgs,
+    uniform_output: CollectionIoArgs,
 ) -> Result<()> {
     let started = std::time::Instant::now();
-    let chain = open_collection_chain(&path)?;
+    let chain = open_collection_chain_with_locations(&path, uniform_output.locations.as_deref())?;
     let collection = &chain.collection;
     let load_seconds = started.elapsed().as_secs_f64();
     let uniform_context = if uniform_output.format.is_some() {
@@ -5089,7 +5032,7 @@ struct JsetQueryRun {
     explain: bool,
     verify_content: bool,
     json_output: bool,
-    uniform_output: CollectionOutputArgs,
+    uniform_output: CollectionIoArgs,
 }
 
 fn run_jset_query(args: JsetQueryRun) -> Result<()> {
@@ -5105,7 +5048,7 @@ fn run_jset_query(args: JsetQueryRun) -> Result<()> {
         uniform_output,
     } = args;
     let started = std::time::Instant::now();
-    let chain = open_collection_chain(&path)?;
+    let chain = open_collection_chain_with_locations(&path, uniform_output.locations.as_deref())?;
     let collection = &chain.collection;
     let load_seconds = started.elapsed().as_secs_f64();
     let uniform_context = if uniform_output.format.is_some() {
@@ -5746,51 +5689,12 @@ fn verify_inspected_archive_routes(
 ) -> Result<u64> {
     let file = std::fs::File::open(&archive.path)
         .with_context(|| format!("opening routed archive {}", archive.path.display()))?;
-    let before = identity_from_metadata(file.metadata()?, 0, String::new(), String::new(), None)?;
-    if !identity_stat_matches(&archive.identity, &before) {
-        bail!(
-            "archive identity changed for sample {} at {}; rebuild the collection index",
-            archive.id,
-            archive.path.display()
-        );
+    let before = file.metadata()?;
+    if !before.is_file() {
+        bail!("archive source is not a regular file");
     }
     let mut reader = evidence_io::format::SectionReader::from_file(file)?;
-    if reader.archive_version() != evidence_io::format::VERSION {
-        bail!(
-            "shape-route verification requires a rooted v2 archive for sample {}",
-            archive.id
-        );
-    }
-    let root = reader
-        .content_commitment()
-        .context("rooted route source lacks its directory commitment")?;
-    let encoded = reader
-        .encoded_content_identity()?
-        .context("rooted route source lacks its encoded-sections identity")?;
-    if archive.identity.native_scheme != ROOTED_DIRECTORY_SCHEME
-        || root.to_hex() != archive.identity.native_digest
-        || archive.identity.encoded_sections_digest.as_deref()
-            != Some(digest_hex(encoded).as_str())
-    {
-        bail!(
-            "archive root identity changed for sample {} at {}; rebuild the collection index",
-            archive.id,
-            archive.path.display()
-        );
-    }
-    let shapes_digest = reader
-        .section_metadata()
-        .find(|section| section.name == "shapes")
-        .context("routed archive lacks its shapes section")?
-        .compressed_blake3
-        .context("routed archive shapes entry lacks its committed payload digest")?;
-    shaperoute::validate_binding(
-        binding,
-        binding.archive_ordinal,
-        root.digest,
-        shapes_digest,
-    )
-    .with_context(|| format!("validating shape-route source for sample {}", archive.id))?;
+    validate_source_reader(archive, &reader, Some(binding), false)?;
     let shapes_raw = reader.read("shapes")?;
     shaperoute::verify_reconstruction(&shapes_raw, binding, blocks).with_context(|| {
         format!(
@@ -5798,14 +5702,8 @@ fn verify_inspected_archive_routes(
             archive.id
         )
     })?;
-    let after = identity_from_metadata(
-        reader.file_metadata()?,
-        0,
-        String::new(),
-        String::new(),
-        None,
-    )?;
-    if !identity_stat_matches(&archive.identity, &after) {
+    let after = reader.file_metadata()?;
+    if !same_file_snapshot(&before, &after) {
         bail!(
             "archive identity changed while verifying shape routes for sample {} at {}; rebuild the collection index",
             archive.id,
@@ -5884,6 +5782,7 @@ struct InspectIndexSummary {
 struct InspectGuardSummary {
     filesystem_identity: &'static str,
     content_digest_recorded: bool,
+    content_identity_verified: bool,
     content_digest_verified: bool,
     shape_route_payloads_verified: bool,
     shape_route_reconstruction_verified: bool,
@@ -6216,10 +6115,10 @@ fn run_inspect(
     path: PathBuf,
     verify_content: bool,
     verify_routes: bool,
-    uniform_output: CollectionOutputArgs,
+    uniform_output: CollectionIoArgs,
 ) -> Result<()> {
     let started = std::time::Instant::now();
-    let chain = open_collection_chain(&path)?;
+    let chain = open_collection_chain_with_locations(&path, uniform_output.locations.as_deref())?;
     let collection = &chain.collection;
     let uniform_context = if uniform_output.format.is_some() {
         let mut parameters = BTreeMap::new();
@@ -6329,8 +6228,9 @@ fn run_inspect(
                 shape_route_compressed_bytes,
             },
             guard: InspectGuardSummary {
-                filesystem_identity: "size + nanosecond mtime + nanosecond ctime + device + inode",
+                filesystem_identity: "not bound; same-operation mutation checks only",
                 content_digest_recorded: true,
+                content_identity_verified: true,
                 content_digest_verified: verify_content,
                 shape_route_payloads_verified: true,
                 shape_route_reconstruction_verified: reconstruct_routes,
@@ -6431,8 +6331,9 @@ fn run_inspect(
             "shape_route_compressed_bytes": shape_route_compressed_bytes,
         },
         "guard": {
-            "filesystem_identity": "size + nanosecond mtime + nanosecond ctime + device + inode",
+            "filesystem_identity": "not bound; same-operation mutation checks only",
             "content_digest_recorded": true,
+            "content_identity_verified": true,
             "content_digest_verified": verify_content,
             "shape_route_payloads_verified": true,
             "shape_route_reconstruction_verified": reconstruct_routes,
@@ -6491,6 +6392,10 @@ fn validate_collection_args(what: &What) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn validate_locations_manifest(path: &Path) -> Result<()> {
+    Locations::load(Some(path)).map(|_| ())
 }
 
 pub fn run(args: Args) -> Result<()> {
@@ -6586,6 +6491,7 @@ pub fn run(args: Args) -> Result<()> {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    include!("collectioncmd/relocation_tests.rs");
 
     fn test_path(tag: &str, extension: &str) -> PathBuf {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -7205,7 +7111,7 @@ mod tests {
         assert_eq!(io.identity_content_bytes_read, 0);
         assert!(io.total_bytes_read > 0);
 
-        // A fresh validation follows the path and therefore rejects the replacement inode.
+        // A fresh validation follows the path and therefore rejects its different content.
         assert!(validate_archive_identity(&archive, false).is_err());
         std::fs::remove_file(path).unwrap();
         std::fs::remove_file(moved).unwrap();
@@ -7766,9 +7672,10 @@ mod tests {
     fn collection_uniform_preflight_rejects_occupied_destination() {
         let output = test_path("uniform-occupied", "json");
         std::fs::write(&output, b"keep\n").unwrap();
-        let args = CollectionOutputArgs {
+        let args = CollectionIoArgs {
             format: Some(CollectionOutputFormat::Json),
             output: Some(output.clone()),
+            locations: None,
         };
         let error = preflight_uniform_collection_output(&args).unwrap_err();
         assert!(error.to_string().contains("refusing to replace"));

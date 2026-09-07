@@ -254,6 +254,7 @@ def _cooccurrence_query_args(
 def _collection_find_events_args(
     collection: PathToken,
     *,
+    locations: Optional[PathToken],
     kinds: Sequence[str],
     design: Optional[PathToken],
     groups: Optional[PathToken],
@@ -352,6 +353,8 @@ def _collection_find_events_args(
         "find-events",
         _token(collection, "collection"),
     ]
+    if locations is not None:
+        args.append(_option("locations", locations))
     for kind in selected_kinds:
         args.append(_option("kind", kind))
     if design is not None:
@@ -1052,6 +1055,7 @@ class Client:
         self,
         collection: PathToken,
         *,
+        locations: Optional[PathToken] = None,
         kinds: Sequence[str] = (),
         design: Optional[PathToken] = None,
         groups: Optional[PathToken] = None,
@@ -1088,6 +1092,7 @@ class Client:
         return self.result_bundle(
             _collection_find_events_args(
                 collection,
+                locations=locations,
                 kinds=kinds,
                 design=design,
                 groups=groups,
@@ -1120,6 +1125,7 @@ class Client:
         collection: PathToken,
         output: PathToken,
         *,
+        locations: Optional[PathToken] = None,
         kinds: Sequence[str] = (),
         design: Optional[PathToken] = None,
         groups: Optional[PathToken] = None,
@@ -1151,6 +1157,7 @@ class Client:
 
         args = _collection_find_events_args(
             collection,
+            locations=locations,
             kinds=kinds,
             design=design,
             groups=groups,

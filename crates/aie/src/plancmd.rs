@@ -472,6 +472,9 @@ pub enum PlanStep {
     CollectionRegion {
         id: String,
         collection: String,
+        /// Registered metadata resource containing content-root location hints.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        locations: Option<String>,
         #[serde(default)]
         locus: Option<String>,
         #[serde(default)]
@@ -494,6 +497,9 @@ pub enum PlanStep {
     CollectionJunction {
         id: String,
         collection: String,
+        /// Registered metadata resource containing content-root location hints.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        locations: Option<String>,
         locus: String,
         #[serde(default)]
         min_support: u64,
@@ -513,6 +519,9 @@ pub enum PlanStep {
     CollectionJset {
         id: String,
         collection: String,
+        /// Registered metadata resource containing content-root location hints.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        locations: Option<String>,
         include: Vec<String>,
         exclude: Vec<String>,
         #[serde(default)]
@@ -2828,6 +2837,7 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
         }
         PlanStep::CollectionRegion {
             collection,
+            locations,
             locus,
             feature,
             annotation,
@@ -2870,6 +2880,12 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
                 "--top".to_owned(),
                 top.to_string(),
             ]);
+            if let Some(name) = locations {
+                let path = resolver.resource(name, &[ResourceKind::Metadata])?;
+                crate::collectioncmd::validate_locations_manifest(&path)?;
+                explain_resource(&mut explanation, "locations", name, &path);
+                args.extend(["--locations".to_owned(), path_arg(&path)]);
+            }
             push_collection_flags(
                 &mut args,
                 *explain_routing,
@@ -2901,6 +2917,7 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
         }
         PlanStep::CollectionJunction {
             collection,
+            locations,
             locus,
             min_support,
             top,
@@ -2933,6 +2950,12 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
                 "--top".to_owned(),
                 top.to_string(),
             ]);
+            if let Some(name) = locations {
+                let path = resolver.resource(name, &[ResourceKind::Metadata])?;
+                crate::collectioncmd::validate_locations_manifest(&path)?;
+                explain_resource(&mut explanation, "locations", name, &path);
+                args.extend(["--locations".to_owned(), path_arg(&path)]);
+            }
             push_collection_flags(
                 &mut args,
                 *explain_routing,
@@ -2964,6 +2987,7 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
         }
         PlanStep::CollectionJset {
             collection,
+            locations,
             include,
             exclude,
             min_support,
@@ -3000,6 +3024,12 @@ fn compile_step(step: &PlanStep, resolver: &mut Resolver<'_>) -> Result<Resolved
                 "--top".to_owned(),
                 top.to_string(),
             ]);
+            if let Some(name) = locations {
+                let path = resolver.resource(name, &[ResourceKind::Metadata])?;
+                crate::collectioncmd::validate_locations_manifest(&path)?;
+                explain_resource(&mut explanation, "locations", name, &path);
+                args.extend(["--locations".to_owned(), path_arg(&path)]);
+            }
             push_collection_flags(
                 &mut args,
                 *explain_routing,

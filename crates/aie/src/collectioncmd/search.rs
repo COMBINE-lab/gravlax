@@ -147,7 +147,7 @@ pub(super) struct Args {
     #[arg(long)]
     verify_content: bool,
     #[command(flatten)]
-    pub(super) uniform_output: CollectionOutputArgs,
+    pub(super) uniform_output: CollectionIoArgs,
 }
 
 #[derive(Clone, Debug)]
@@ -3350,7 +3350,10 @@ fn human_output(data: &OutputData<'_>) {
 
 pub(super) fn run(args: Args) -> Result<()> {
     let started = std::time::Instant::now();
-    let chain = open_collection_chain(&args.collection)?;
+    let chain = open_collection_chain_with_locations(
+        &args.collection,
+        args.uniform_output.locations.as_deref(),
+    )?;
     let collection = &chain.collection;
     if collection.archives.is_empty() {
         bail!("collection contains no source archives");
@@ -4081,7 +4084,7 @@ mod tests {
             max_exact_match_attempts: 10_000_000,
             max_annotation_comparisons: 10_000_000,
             verify_content: false,
-            uniform_output: CollectionOutputArgs::default(),
+            uniform_output: CollectionIoArgs::default(),
         };
         assert!(keep_entity(
             &candidates[0],
@@ -4464,7 +4467,7 @@ mod tests {
             max_exact_match_attempts: 10_000_000,
             max_annotation_comparisons: 10_000_000,
             verify_content: false,
-            uniform_output: CollectionOutputArgs::default(),
+            uniform_output: CollectionIoArgs::default(),
         };
         assert!(!keep_entity(
             &candidate,

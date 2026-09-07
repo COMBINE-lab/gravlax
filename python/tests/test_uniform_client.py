@@ -158,6 +158,7 @@ class UniformClientTests(unittest.TestCase):
 
         Client().collection_find_events(
             "atlas.aicollection",
+            locations="relocated bundle/locations.json",
             kinds=("junction", "cassette", "terminal-tail"),
             design="donors.tsv",
             groups="groups.tsv",
@@ -179,6 +180,7 @@ class UniformClientTests(unittest.TestCase):
 
         argv = run.call_args.args[0]
         self.assertEqual(argv[:3], ("aie", "collection", "find-events"))
+        self.assertIn("--locations=relocated bundle/locations.json", argv)
         self.assertIn("--kind=junction", argv)
         self.assertIn("--kind=cassette", argv)
         self.assertIn("--kind=terminal-tail", argv)
@@ -224,6 +226,7 @@ class UniformClientTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires solo_strand='forward'"):
             client.collection_find_events(
                 "atlas.aicollection",
+                locations="locations.json",
                 kinds=("terminal-tail",),
                 solo_strand="reverse",
             )
@@ -252,6 +255,7 @@ class UniformClientTests(unittest.TestCase):
             result = Client().collection_find_events_to_file(
                 "atlas.aicollection",
                 output,
+                locations="locations.json",
                 kinds=("terminal-tail",),
                 terminal_cluster_bp=7,
             )
@@ -260,6 +264,7 @@ class UniformClientTests(unittest.TestCase):
         argv = run.call_args.args[0]
         self.assertIn("--kind=terminal-tail", argv)
         self.assertIn("--terminal-cluster-bp=7", argv)
+        self.assertIn("--locations=locations.json", argv)
         self.assertIn("--format=json", argv)
         self.assertNotEqual(run.call_args.kwargs["stdout"], subprocess.PIPE)
 

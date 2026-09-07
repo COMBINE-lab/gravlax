@@ -9,6 +9,11 @@ identifiers remain single literal arguments. Archive interpretation stays in
 the Rust executable; Python consumes the same versioned JSON plans and result
 schemas as the command line and Explorer.
 
+Collection event-search methods `collection_find_events` and
+`collection_find_events_to_file` accept `locations="locations.json"` to resolve
+relocated archives and parent index layers without rebuilding. This is the same
+content-root location manifest accepted by collection CLI subcommands.
+
 ## Install from a checkout
 
 Install `aie` first, then choose only the notebook integrations you need:

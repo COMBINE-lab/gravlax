@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 
@@ -48,6 +49,8 @@ def main():
         again = subprocess.run(command, env=env, capture_output=True)
         if again.returncode == 0 or output.read_bytes() != original:
             raise RuntimeError('GQ publication replaced an existing result')
+    subprocess.run([sys.executable, str(Path(__file__).with_name('collection_relocation_smoke.py')),
+                    '--binary', binary], check=True)
     print('GQ executable acceptance passed: archive/federation, serial/parallel/reference, no-clobber publication')
 
 
