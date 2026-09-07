@@ -482,6 +482,55 @@ steps:
 }
 
 #[test]
+fn collection_locations_are_bound_for_all_plan_query_kinds() {
+    let scratch = Scratch::new();
+    let root = scratch.0.join("workspace");
+    init(&root);
+    let collection = root.join("data/atlas.aicollection");
+    let locations = root.join("metadata/locations.json");
+    std::fs::create_dir_all(collection.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(locations.parent().unwrap()).unwrap();
+    write_empty_collection(&collection);
+    std::fs::write(&locations, r#"{"schema_version":1,"locations":[]}"#).unwrap();
+    add(&root, "atlas", &collection, "collection");
+    add(&root, "moved", &locations, "metadata");
+    let plan = root.join("plans/locations.json");
+    let steps = serde_json::json!([
+        {"id":"region","kind":"collection-region","collection":"atlas","locations":"moved","locus":"chr1:0-1000"},
+        {"id":"junction","kind":"collection-junction","collection":"atlas","locations":"moved","locus":"chr1:100-200"},
+        {"id":"jset","kind":"collection-jset","collection":"atlas","locations":"moved","include":["chr1:100-200"],"exclude":["chr1:100-300"]}
+    ]);
+    std::fs::write(
+        &plan,
+        serde_json::json!({"schema_version":1,"name":"locations","steps":steps}).to_string(),
+    )
+    .unwrap();
+    let check = || {
+        aie()
+            .args(["plan", "check"])
+            .arg(&plan)
+            .arg("--project")
+            .arg(&root)
+            .arg("--json")
+            .output()
+            .unwrap()
+    };
+    let result: serde_json::Value = serde_json::from_slice(&success(check()).stdout).unwrap();
+    assert!(result["resources"].get("moved").is_some());
+    for step in result["steps"].as_array().unwrap() {
+        let args = step["args"].as_array().unwrap();
+        let index = args.iter().position(|a| a == "--locations").unwrap();
+        assert_eq!(Path::new(args[index + 1].as_str().unwrap()), locations);
+    }
+    std::fs::write(&locations, r#"{"schema_version":99,"locations":[]}"#).unwrap();
+    let rejected = check();
+    assert!(!rejected.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("unsupported locations schema_version")
+    );
+}
+
+#[test]
 fn annotation_identity_and_feature_resolution_are_explicit_and_reproducible() {
     let scratch = Scratch::new();
     let root = scratch.0.join("workspace");
@@ -1373,6 +1422,9 @@ fn complex_query_collection_and_cohort_steps_compile_to_the_cli() {
     for path in [&groups_a, &groups_b] {
         std::fs::write(path, b"cell-a\tcase\n").unwrap();
     }
+    let locations = metadata.join("locations.json");
+    std::fs::write(&locations, r#"{"schema_version":1,"locations":[]}"#).unwrap();
+    add(&root, "locations", &locations, "metadata");
     let design = metadata.join("design.tsv");
     std::fs::write(
         &design,
@@ -1415,6 +1467,7 @@ steps:
   - id: collection-region
     kind: collection-region
     collection: atlas
+    locations: locations
     locus: chr1:1-1000
     explain_routing: true
     uniform_output:
@@ -1422,6 +1475,7 @@ steps:
   - id: collection-junction
     kind: collection-junction
     collection: atlas
+    locations: locations
     locus: chr1:100-200
     verify_content: true
     uniform_output:
@@ -1515,6 +1569,20 @@ steps:
         ),
     ] {
         assert_eq!(resolved["steps"][index]["output_schema_ids"], expected);
+    }
+    assert!(resolved["resources"].get("locations").is_some());
+    for step in resolved["steps"].as_array().unwrap() {
+        if step["kind"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("collection-")
+        {
+            assert!(step["args"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|arg| arg == "--locations"));
+        }
     }
     assert!(resolved["resources"].get("design").is_some());
     assert_eq!(

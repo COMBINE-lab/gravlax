@@ -24,8 +24,10 @@ aie collection inspect atlas.aicollection \
 
 Sample IDs are sorted before encoding. Sources must have identical chromosome
 dictionaries and, unless `--allow-unstamped` is used, the same stamped genome
-identity. Duplicate IDs, resolved paths, inodes, and encoded archive content
-are rejected. `--shape-routes` derives source-root-bound exact intron-span
+identity. Duplicate IDs and encoded archive content are rejected; new-source
+build checks also detect duplicate resolved paths and inodes. Historical filesystem
+identities are not used to reject sources or deduplicate collection layers.
+`--shape-routes` derives source-root-bound exact intron-span
 routes without reading molecule chunks.
 
 An incremental build adds an immutable layer:
@@ -36,19 +38,69 @@ aie collection build --base atlas.aicollection \
   --shape-routes --out atlas-plus-c.aicollection
 ```
 
-The child records its parent's canonical path and authenticated root. Queries
-verify every layer, reject changed parents and cycles, and remap layer-local
+The child records its parent's authenticated root and a canonical path hint. Queries
+verify every layer, reject different parent content and cycles, and remap layer-local
 archive ordinals into one sample order.
 
 `inspect` authenticates all collection payloads and checks every source's
-recorded filesystem and content identity. `--verify-routes` reconstructs stored local-shape
+committed content identity, regardless of inode or historical timestamps. `--verify-routes` reconstructs stored local-shape
 routes from their root-bound source dictionaries. `--verify-content` also
 verifies complete source content.
+
+### Relocating archives and collection layers
+
+Archives and parent collection layers can move without rebuilding or rewriting an
+index. Supply `--locations locations.json` to inspection, query, event-search, or
+incremental-build commands. Locations are hints keyed by the scheme-qualified
+identity already committed in the collection, never replacement expected identities:
+
+```json
+{
+  "schema_version": 1,
+  "locations": [
+    {"identity": "aie-directory-root-v2:<64-hex-archive-root>", "path": "archives/donor-a.aie"},
+    {"identity": "aicollection-directory-root-v1:<64-hex-parent-root>", "path": "indexes/base.aicollection"}
+  ]
+}
+```
+
+Replace the placeholder roots with the `native_identity` and layer `root_digest`
+values reported by `collection inspect`. Paths are relative to the location
+manifest, or absolute. Copy a whole directory bundle and its relative manifest
+without editing any locations. Unmapped identities use their existing embedded path
+hints. An explicit mapping to missing or wrong content fails; it never silently
+falls back. Duplicate identity entries, unknown schemes/fields and malformed roots
+are rejected. Manifests are limited to 4 MiB and 65,536 entries.
+
+```sh
+aie collection region indexes/atlas.aicollection chr2:1200000-1300000 \
+  --locations locations.json --format json
+
+aie collection inspect indexes/atlas.aicollection \
+  --locations locations.json --verify-routes
+```
+
+Rooted v2 archives incur only their normal authenticated header/directory reads and
+checks on accessed payloads: relocation adds **no archive scan, decoding or index
+reconstruction**. The location file itself is small additional metadata I/O. Copies
+at the original path also work without a mapping. Same-operation mutation checks
+remain, but saved size, timestamps, device and inode are not acceptance criteria.
+`--verify-content` explicitly audits all payloads, including otherwise unread data.
+
+Legacy v1 archives remain supported with `full-file-blake3-v1:<hex>` locations, but
+each opened legacy source must be fully hashed: it has no rooted directory. The
+zero-additional-scan guarantee applies to rooted archives, not to legacy sources.
+Different encodings or chunking are not treated as interchangeable evidence.
+
+Existing collection v2/v3/v4 encodings remain readable and unchanged. No relocation
+command or persistent cache is needed. Uniform results retain committed source
+identities and separately disclose resolved paths and the locations-manifest digest.
 
 ### Build and inspection options
 
 | Command | Argument or option | Default | Description |
 |---|---|---|---|
+| all | `--locations <JSON>` | embedded hints | Resolve existing source/parent identities; on `build`, applies to the base chain |
 | `build` | `--sample <ID=ARCHIVE>` | repeatable | Add a named source archive; a build needs a sample or `--base` |
 | `build` | `--source-digest <ID=BLAKE3>` | — | Require the named source's native v1 file digest or v2 directory root to match |
 | `build` | `--base <COLLECTION>` | — | Extend an existing sidecar without rescanning its source indexes |

@@ -72,6 +72,13 @@ behavior and canonical argument vector. Resolved-plan v6 exposes the selected
 mode, format, publication boundary, destination, and all output schema IDs
 explicitly.
 
+Collection `region`, `junction` and `jset` plan steps also accept an optional
+`locations: <resource-id>`. Register the location manifest as project `metadata`;
+the plan binds its content and passes its resolved path to `--locations`. Entries
+are paths relative to that manifest, keyed by expected archive or parent-collection
+roots. Relocation does not rewrite the collection. The location manifest is part
+of execution provenance, so changing it intentionally changes the resolved plan.
+
 Check the plan before it reads evidence:
 
 ```sh

@@ -4023,8 +4023,8 @@ fn collection_routes_exact_queries_and_guards_archive_identity() {
         .arg("--json");
     assert!(!noncanonical_query.output().unwrap().status.success());
 
-    // A same-length change with its mtime restored still changes Unix ctime, so the default
-    // open-file identity guard fails before stale routes can be used.
+    // A same-length inline-header change is rejected by directory/header authentication,
+    // independently of filesystem identity or restored timestamps.
     #[cfg(unix)]
     {
         use std::os::unix::fs::FileExt as _;
@@ -4046,5 +4046,5 @@ fn collection_routes_exact_queries_and_guards_archive_identity() {
     stale.arg("collection").arg("inspect").arg(&collection);
     let stale = stale.output().unwrap();
     assert!(!stale.status.success());
-    assert!(String::from_utf8_lossy(&stale.stderr).contains("archive identity changed"));
+    assert!(String::from_utf8_lossy(&stale.stderr).contains("inconsistent inline name length"));
 }

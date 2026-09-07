@@ -1,0 +1,2474 @@
+{
+  "cases": [
+    "inspect",
+    "verify_routes",
+    "verify_content",
+    "region",
+    "junction",
+    "jset",
+    "find_events"
+  ],
+  "different_filesystems": true,
+  "archive_and_collection_sha256": {
+    "a.aie": "ad6b04e1b9542c67e22de6c4c5cdbd31a34fe71f3c9a356552f1573b51f4ddcc",
+    "b.aie": "74cb4c131cf10f3dae1d3769dbb08180e3d4e882d776a57bd8af21c16e57d007",
+    "c.aie": "52738b81ddcfa1141d62ae7ff5c20705537fd409c6020840689b8e69528f2d4d",
+    "base.aicollection": "838185325b188ac0c417a40ac3601bc6e03fa104d15596213b9526b37f4ba015",
+    "atlas.aicollection": "6dbaea9ff326563d61b007728b4e9637f71b33f47eaa86b2600230a4398f82af"
+  },
+  "before_ms": {
+    "inspect": 20.157946972176433,
+    "verify_routes": 18.86035595089197,
+    "verify_content": 23.225751938298345,
+    "region": 19.538199994713068,
+    "junction": 28.959224931895733,
+    "jset": 24.830376030877233,
+    "find_events": 21.70957112684846
+  },
+  "after_ms": {
+    "inspect": 23.05471384897828,
+    "verify_routes": 16.166466986760497,
+    "verify_content": 21.99594397097826,
+    "region": 23.798397975042462,
+    "junction": 30.15958797186613,
+    "jset": 25.83311195485294,
+    "find_events": 28.464718023315072
+  },
+  "note": "Single-pass acceptance timings, not a statistical speed benchmark. Complete results and I/O counters agree after removing timings and locator provenance.",
+  "verified_results": {
+    "inspect": {
+      "archives": [
+        {
+          "archive_format_version": 2,
+          "bytes": 1889,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "45ce025b910973ae80ccad1426a583319a4468c0993829ef06ae326b7b6c1127",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "a",
+          "native_identity": {
+            "blake3": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/a.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": false,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1626,
+          "chunks": 1,
+          "encoded_sections_identity": {
+            "blake3": "28eb7424739f3064ae57e2c28ec1fa3c33a09a2ac2e0ba57587b13ce83c9a28c",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "b",
+          "native_identity": {
+            "blake3": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/b.aie",
+          "shape_routes": {
+            "archive_ordinal": 1,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.1.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": false,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1891,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "c817161375f26b9dbb426425da7ff8faf8d1c43f1f1ebb873d1e0e0158b5fcef",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "c",
+          "native_identity": {
+            "blake3": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/c.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": false,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          }
+        }
+      ],
+      "chromosomes": [
+        "1"
+      ],
+      "file_bytes": 1688,
+      "format_version": 4,
+      "guard": {
+        "content_digest_recorded": true,
+        "content_digest_verified": false,
+        "content_identity_verified": true,
+        "filesystem_identity": "not bound; same-operation mutation checks only",
+        "shape_route_payloads_verified": true,
+        "shape_route_reconstruction_verified": false
+      },
+      "index": {
+        "archive_routes": 9,
+        "chunk_postings": 9,
+        "global_junctions": null,
+        "interval_chunks": 7,
+        "junction_bin_bp": 16000000,
+        "junction_segments": 2,
+        "segment_junction_rows": 6,
+        "shape_route_archives": 3,
+        "shape_route_compressed_bytes": 123,
+        "shape_route_exact_spans": 3,
+        "shape_route_pairs": 3,
+        "shape_route_sections": 3
+      },
+      "io": {
+        "collection_sidecar_bytes_read": 3066,
+        "route_verification_source_bytes_read": 0,
+        "source_identity_content_bytes_read": 0,
+        "source_identity_total_bytes_read": 3993
+      },
+      "layers": [
+        {
+          "archives": 2,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/base.aicollection",
+          "root_digest": "51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb",
+          "shape_routes": {
+            "archives": 2,
+            "compressed_bytes": 82,
+            "exact_spans": 2,
+            "pairs": 2,
+            "reconstruction_verified": false,
+            "sections": 2
+          }
+        },
+        {
+          "archives": 1,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/atlas.aicollection",
+          "root_digest": "915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3",
+          "shape_routes": {
+            "archives": 1,
+            "compressed_bytes": 41,
+            "exact_spans": 1,
+            "pairs": 1,
+            "reconstruction_verified": false,
+            "sections": 1
+          }
+        }
+      ],
+      "path": "<bundle>/atlas.aicollection",
+      "reference": {
+        "stamped": false
+      },
+      "schema": "gravlax.collection.v4"
+    },
+    "verify_routes": {
+      "archives": [
+        {
+          "archive_format_version": 2,
+          "bytes": 1889,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "45ce025b910973ae80ccad1426a583319a4468c0993829ef06ae326b7b6c1127",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "a",
+          "native_identity": {
+            "blake3": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/a.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1626,
+          "chunks": 1,
+          "encoded_sections_identity": {
+            "blake3": "28eb7424739f3064ae57e2c28ec1fa3c33a09a2ac2e0ba57587b13ce83c9a28c",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "b",
+          "native_identity": {
+            "blake3": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/b.aie",
+          "shape_routes": {
+            "archive_ordinal": 1,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.1.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1891,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "c817161375f26b9dbb426425da7ff8faf8d1c43f1f1ebb873d1e0e0158b5fcef",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "c",
+          "native_identity": {
+            "blake3": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/c.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          }
+        }
+      ],
+      "chromosomes": [
+        "1"
+      ],
+      "file_bytes": 1688,
+      "format_version": 4,
+      "guard": {
+        "content_digest_recorded": true,
+        "content_digest_verified": false,
+        "content_identity_verified": true,
+        "filesystem_identity": "not bound; same-operation mutation checks only",
+        "shape_route_payloads_verified": true,
+        "shape_route_reconstruction_verified": true
+      },
+      "index": {
+        "archive_routes": 9,
+        "chunk_postings": 9,
+        "global_junctions": null,
+        "interval_chunks": 7,
+        "junction_bin_bp": 16000000,
+        "junction_segments": 2,
+        "segment_junction_rows": 6,
+        "shape_route_archives": 3,
+        "shape_route_compressed_bytes": 123,
+        "shape_route_exact_spans": 3,
+        "shape_route_pairs": 3,
+        "shape_route_sections": 3
+      },
+      "io": {
+        "collection_sidecar_bytes_read": 3066,
+        "route_verification_source_bytes_read": 4044,
+        "source_identity_content_bytes_read": 0,
+        "source_identity_total_bytes_read": 3993
+      },
+      "layers": [
+        {
+          "archives": 2,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/base.aicollection",
+          "root_digest": "51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb",
+          "shape_routes": {
+            "archives": 2,
+            "compressed_bytes": 82,
+            "exact_spans": 2,
+            "pairs": 2,
+            "reconstruction_verified": true,
+            "sections": 2
+          }
+        },
+        {
+          "archives": 1,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/atlas.aicollection",
+          "root_digest": "915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3",
+          "shape_routes": {
+            "archives": 1,
+            "compressed_bytes": 41,
+            "exact_spans": 1,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1
+          }
+        }
+      ],
+      "path": "<bundle>/atlas.aicollection",
+      "reference": {
+        "stamped": false
+      },
+      "schema": "gravlax.collection.v4"
+    },
+    "verify_content": {
+      "archives": [
+        {
+          "archive_format_version": 2,
+          "bytes": 1889,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "45ce025b910973ae80ccad1426a583319a4468c0993829ef06ae326b7b6c1127",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "a",
+          "native_identity": {
+            "blake3": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/a.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1626,
+          "chunks": 1,
+          "encoded_sections_identity": {
+            "blake3": "28eb7424739f3064ae57e2c28ec1fa3c33a09a2ac2e0ba57587b13ce83c9a28c",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "b",
+          "native_identity": {
+            "blake3": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/b.aie",
+          "shape_routes": {
+            "archive_ordinal": 1,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.1.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1"
+          }
+        },
+        {
+          "archive_format_version": 2,
+          "bytes": 1891,
+          "chunks": 3,
+          "encoded_sections_identity": {
+            "blake3": "c817161375f26b9dbb426425da7ff8faf8d1c43f1f1ebb873d1e0e0158b5fcef",
+            "scheme": "aie-encoded-sections-v1"
+          },
+          "id": "c",
+          "native_identity": {
+            "blake3": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+            "scheme": "aie-directory-root-v2"
+          },
+          "path": "<bundle>/c.aie",
+          "shape_routes": {
+            "archive_ordinal": 0,
+            "codec_version": 1,
+            "compressed_bytes": 41,
+            "descriptors": [
+              {
+                "compressed_bytes": 41,
+                "exact_spans": 1,
+                "first_span": 20,
+                "last_span": 20,
+                "pairs": 1,
+                "section_name": "s.0.20"
+              }
+            ],
+            "exact_spans": 1,
+            "n_shapes": 2,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1,
+            "shapes_digest": "0f7d51600acafdec537f4a53a7828dcb40ceee18a5eca8ab894563a45d266e48",
+            "source_root": "873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          }
+        }
+      ],
+      "chromosomes": [
+        "1"
+      ],
+      "file_bytes": 1688,
+      "format_version": 4,
+      "guard": {
+        "content_digest_recorded": true,
+        "content_digest_verified": true,
+        "content_identity_verified": true,
+        "filesystem_identity": "not bound; same-operation mutation checks only",
+        "shape_route_payloads_verified": true,
+        "shape_route_reconstruction_verified": true
+      },
+      "index": {
+        "archive_routes": 9,
+        "chunk_postings": 9,
+        "global_junctions": null,
+        "interval_chunks": 7,
+        "junction_bin_bp": 16000000,
+        "junction_segments": 2,
+        "segment_junction_rows": 6,
+        "shape_route_archives": 3,
+        "shape_route_compressed_bytes": 123,
+        "shape_route_exact_spans": 3,
+        "shape_route_pairs": 3,
+        "shape_route_sections": 3
+      },
+      "io": {
+        "collection_sidecar_bytes_read": 3066,
+        "route_verification_source_bytes_read": 4044,
+        "source_identity_content_bytes_read": 1413,
+        "source_identity_total_bytes_read": 5406
+      },
+      "layers": [
+        {
+          "archives": 2,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/base.aicollection",
+          "root_digest": "51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb",
+          "shape_routes": {
+            "archives": 2,
+            "compressed_bytes": 82,
+            "exact_spans": 2,
+            "pairs": 2,
+            "reconstruction_verified": true,
+            "sections": 2
+          }
+        },
+        {
+          "archives": 1,
+          "format_version": 4,
+          "junction_rows": 3,
+          "junction_segments": 1,
+          "path": "<bundle>/atlas.aicollection",
+          "root_digest": "915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3",
+          "shape_routes": {
+            "archives": 1,
+            "compressed_bytes": 41,
+            "exact_spans": 1,
+            "pairs": 1,
+            "reconstruction_verified": true,
+            "sections": 1
+          }
+        }
+      ],
+      "path": "<bundle>/atlas.aicollection",
+      "reference": {
+        "stamped": false
+      },
+      "schema": "gravlax.collection.v4"
+    },
+    "region": {
+      "$schema": "gravlax.result-envelope.v1",
+      "result_schema": "gravlax.collection.region.result.v1",
+      "producer": {
+        "name": "aie",
+        "version": "0.2.0"
+      },
+      "provenance": {
+        "archives": [
+          "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+          "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+          "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+        ],
+        "parameters": {
+          "archive_access": "collection interval routing and selected archive chunks",
+          "chromosome_dictionary_digest": "d63bd9a826af91c1fea371965a64e11ee20f13e46b5f52c59901136605b3a487",
+          "collection_layers": [
+            {
+              "format_version": 4,
+              "path": "<bundle>/base.aicollection",
+              "root": "aicollection-directory-root-v1:51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb"
+            },
+            {
+              "format_version": 4,
+              "path": "<bundle>/atlas.aicollection",
+              "root": "aicollection-directory-root-v1:915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3"
+            }
+          ],
+          "collection_path": "<bundle>/atlas.aicollection",
+          "explain": false,
+          "locus": "1:0-1000",
+          "reference": {
+            "stamped": false
+          },
+          "resolved_sources": [
+            {
+              "identity": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+              "path": "<bundle>/a.aie",
+              "sample": "a"
+            },
+            {
+              "identity": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+              "path": "<bundle>/b.aie",
+              "sample": "b"
+            },
+            {
+              "identity": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+              "path": "<bundle>/c.aie",
+              "sample": "c"
+            }
+          ],
+          "sample_identities": {
+            "a": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "b": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "c": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          },
+          "top": 0,
+          "verify_content": false
+        }
+      },
+      "warnings": [],
+      "data": {
+        "summary": {
+          "coordinates": "0-based half-open",
+          "anchor_semantics": true,
+          "chrom": "1",
+          "start": 0,
+          "end": 1000,
+          "molecules": 12,
+          "umis": 9,
+          "cells": 6,
+          "selection": {
+            "requested_top_per_sample": 0,
+            "top_zero_means_all": true,
+            "comparator": "UMIs descending, archive cell id ascending"
+          },
+          "planning": {
+            "collection_layers": 2,
+            "archives_total": 3,
+            "archives_opened": 3,
+            "archives_pruned": 0,
+            "unique_chunks_decoded": 7,
+            "planned_compressed_bytes": 412,
+            "actual_archive_bytes_read": 5042,
+            "source_archive_identity_bytes_read": 3993,
+            "source_archive_execution_bytes_read": 5042,
+            "source_archive_bytes_read": 9035,
+            "collection_sidecar_bytes_read": 1861,
+            "shape_route_sidecar_payload_bytes_read": 0,
+            "total_logical_bytes_read": 10896,
+            "route_blocks_loaded": 0,
+            "routed_archives": 0,
+            "fallback_archives": 0
+          }
+        },
+        "tables": [
+          {
+            "name": "samples",
+            "schema": {
+              "id": "gravlax.collection.region.samples.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "present",
+                  "data_type": "boolean",
+                  "nullable": false
+                },
+                {
+                  "name": "molecules",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "chunks_decoded",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "planned_compressed_bytes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "actual_archive_bytes_read",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "decision",
+                  "data_type": "string",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 3,
+              "emitted_rows": 3,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                true,
+                4,
+                3,
+                2,
+                3,
+                168,
+                1763,
+                null
+              ],
+              [
+                "b",
+                true,
+                4,
+                3,
+                2,
+                1,
+                75,
+                1515,
+                null
+              ],
+              [
+                "c",
+                true,
+                4,
+                3,
+                2,
+                3,
+                169,
+                1764,
+                null
+              ]
+            ]
+          },
+          {
+            "name": "cells",
+            "schema": {
+              "id": "gravlax.collection.region.cells.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "rank",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "barcode",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample",
+                  "barcode"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 6,
+              "emitted_rows": 6,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                1,
+                "AAAAAAAAAAAAAAAA",
+                2
+              ],
+              [
+                "a",
+                2,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ],
+              [
+                "b",
+                1,
+                "AAAAAAAAAAAAAAAA",
+                2
+              ],
+              [
+                "b",
+                2,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ],
+              [
+                "c",
+                1,
+                "AAAAAAAAAAAAAAAA",
+                2
+              ],
+              [
+                "c",
+                2,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "junction": {
+      "$schema": "gravlax.result-envelope.v1",
+      "result_schema": "gravlax.collection.junction.result.v1",
+      "producer": {
+        "name": "aie",
+        "version": "0.2.0"
+      },
+      "provenance": {
+        "archives": [
+          "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+          "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+          "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+        ],
+        "parameters": {
+          "archive_access": "collection catalogue/postings and optional source-root-bound local-shape routes",
+          "chromosome_dictionary_digest": "d63bd9a826af91c1fea371965a64e11ee20f13e46b5f52c59901136605b3a487",
+          "collection_layers": [
+            {
+              "format_version": 4,
+              "path": "<bundle>/base.aicollection",
+              "root": "aicollection-directory-root-v1:51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb"
+            },
+            {
+              "format_version": 4,
+              "path": "<bundle>/atlas.aicollection",
+              "root": "aicollection-directory-root-v1:915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3"
+            }
+          ],
+          "collection_path": "<bundle>/atlas.aicollection",
+          "explain": false,
+          "locus": "1:160-180",
+          "min_support": 0,
+          "reference": {
+            "stamped": false
+          },
+          "resolved_sources": [
+            {
+              "identity": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+              "path": "<bundle>/a.aie",
+              "sample": "a"
+            },
+            {
+              "identity": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+              "path": "<bundle>/b.aie",
+              "sample": "b"
+            },
+            {
+              "identity": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+              "path": "<bundle>/c.aie",
+              "sample": "c"
+            }
+          ],
+          "sample_identities": {
+            "a": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "b": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "c": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          },
+          "top": 0,
+          "verify_content": false
+        }
+      },
+      "warnings": [],
+      "data": {
+        "summary": {
+          "coordinates": "0-based junction boundaries",
+          "chrom": "1",
+          "donor": 160,
+          "acceptor": 180,
+          "support_upper_bound": 3,
+          "min_support": 0,
+          "umis": 3,
+          "cells": 3,
+          "selection": {
+            "requested_top_per_sample": 0,
+            "top_zero_means_all": true,
+            "comparator": "UMIs descending, archive cell id ascending"
+          },
+          "planning": {
+            "collection_layers": 2,
+            "archives_total": 3,
+            "archives_opened": 3,
+            "archives_pruned": 0,
+            "support_bound_pruned": false,
+            "unique_chunks_decoded": 3,
+            "planned_compressed_bytes": 205,
+            "actual_archive_bytes_read": 4835,
+            "source_archive_identity_bytes_read": 3993,
+            "source_archive_execution_bytes_read": 4835,
+            "source_archive_bytes_read": 8828,
+            "collection_sidecar_bytes_read": 2075,
+            "shape_route_sidecar_payload_bytes_read": 123,
+            "total_logical_bytes_read": 10903,
+            "route_blocks_loaded": 3,
+            "routed_archives": 3,
+            "fallback_archives": 0
+          }
+        },
+        "tables": [
+          {
+            "name": "samples",
+            "schema": {
+              "id": "gravlax.collection.junction.samples.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "present",
+                  "data_type": "boolean",
+                  "nullable": false
+                },
+                {
+                  "name": "supporting_children",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "chunks_decoded",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "planned_compressed_bytes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "actual_archive_bytes_read",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "shape_route_used",
+                  "data_type": "boolean",
+                  "nullable": false
+                },
+                {
+                  "name": "shape_route_section",
+                  "data_type": "string",
+                  "nullable": true
+                },
+                {
+                  "name": "shape_route_sidecar_bytes_read",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "decision",
+                  "data_type": "string",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 3,
+              "emitted_rows": 3,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                true,
+                1,
+                1,
+                1,
+                1,
+                65,
+                1660,
+                true,
+                "s.0.20",
+                41,
+                null
+              ],
+              [
+                "b",
+                true,
+                1,
+                1,
+                1,
+                1,
+                75,
+                1515,
+                true,
+                "s.1.20",
+                41,
+                null
+              ],
+              [
+                "c",
+                true,
+                1,
+                1,
+                1,
+                1,
+                65,
+                1660,
+                true,
+                "s.0.20",
+                41,
+                null
+              ]
+            ]
+          },
+          {
+            "name": "cells",
+            "schema": {
+              "id": "gravlax.collection.junction.cells.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "rank",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "barcode",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample",
+                  "barcode"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 3,
+              "emitted_rows": 3,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ],
+              [
+                "b",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ],
+              [
+                "c",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "jset": {
+      "$schema": "gravlax.result-envelope.v1",
+      "result_schema": "gravlax.collection.jset.result.v1",
+      "producer": {
+        "name": "aie",
+        "version": "0.2.0"
+      },
+      "provenance": {
+        "archives": [
+          "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+          "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+          "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+        ],
+        "parameters": {
+          "archive_access": "collection catalogue/postings with shared chunk decoding and optional source-root-bound local-shape routes",
+          "chromosome_dictionary_digest": "d63bd9a826af91c1fea371965a64e11ee20f13e46b5f52c59901136605b3a487",
+          "collection_layers": [
+            {
+              "format_version": 4,
+              "path": "<bundle>/base.aicollection",
+              "root": "aicollection-directory-root-v1:51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb"
+            },
+            {
+              "format_version": 4,
+              "path": "<bundle>/atlas.aicollection",
+              "root": "aicollection-directory-root-v1:915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3"
+            }
+          ],
+          "collection_path": "<bundle>/atlas.aicollection",
+          "exclude": [
+            "1:999-1000"
+          ],
+          "explain": false,
+          "include": [
+            "1:160-180"
+          ],
+          "min_support": 0,
+          "reference": {
+            "stamped": false
+          },
+          "resolved_sources": [
+            {
+              "identity": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+              "path": "<bundle>/a.aie",
+              "sample": "a"
+            },
+            {
+              "identity": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+              "path": "<bundle>/b.aie",
+              "sample": "b"
+            },
+            {
+              "identity": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+              "path": "<bundle>/c.aie",
+              "sample": "c"
+            }
+          ],
+          "sample_identities": {
+            "a": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "b": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "c": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          },
+          "top": 0,
+          "verify_content": false
+        }
+      },
+      "warnings": [],
+      "data": {
+        "summary": {
+          "coordinates": "0-based junction boundaries",
+          "class_categories": [
+            "include_only",
+            "exclude_only",
+            "both"
+          ],
+          "informative_umis": "include_only + exclude_only",
+          "usage_fraction": "include_only / informative_umis",
+          "both_in_usage_denominator": false,
+          "min_support": 0,
+          "totals": {
+            "include_only": 3,
+            "exclude_only": 0,
+            "both": 0,
+            "informative_umis": 3,
+            "usage_fraction": 1.0
+          },
+          "selection": {
+            "requested_top_per_sample": 0,
+            "top_zero_means_all": true,
+            "comparator": "total category UMIs descending, archive cell id ascending"
+          },
+          "planning": {
+            "collection_layers": 2,
+            "archives_total": 3,
+            "archives_opened": 3,
+            "archives_pruned": 0,
+            "support_bound_pruned": false,
+            "unique_chunks_decoded": 3,
+            "independent_chunk_decodes": 3,
+            "planned_compressed_bytes": 205,
+            "actual_archive_bytes_read": 4835,
+            "source_archive_identity_bytes_read": 3993,
+            "source_archive_execution_bytes_read": 4835,
+            "source_archive_bytes_read": 8828,
+            "collection_sidecar_bytes_read": 2075,
+            "shape_route_sidecar_payload_bytes_read": 123,
+            "total_logical_bytes_read": 10903,
+            "route_blocks_loaded": 3,
+            "routed_archives": 3,
+            "fallback_archives": 0
+          }
+        },
+        "tables": [
+          {
+            "name": "requests",
+            "schema": {
+              "id": "gravlax.collection.jset.requests.v1",
+              "fields": [
+                {
+                  "name": "request_index",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "side",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "locus",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "present_samples",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "support_upper_bound",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "passes_min_support",
+                  "data_type": "boolean",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "sequence",
+                "key": [
+                  "request_index"
+                ],
+                "ordered_by": [
+                  {
+                    "field": "request_index",
+                    "direction": "ascending"
+                  }
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 2,
+              "emitted_rows": 2,
+              "truncated": false
+            },
+            "rows": [
+              [
+                0,
+                "include",
+                "1:160-180",
+                3,
+                3,
+                true
+              ],
+              [
+                1,
+                "exclude",
+                "1:999-1000",
+                0,
+                0,
+                true
+              ]
+            ]
+          },
+          {
+            "name": "samples",
+            "schema": {
+              "id": "gravlax.collection.jset.samples.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "present_components",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "include_only",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exclude_only",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "both",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "informative_umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "usage_fraction",
+                  "data_type": "float64",
+                  "nullable": true
+                },
+                {
+                  "name": "cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "unique_chunks_decoded",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "independent_chunk_decodes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "planned_compressed_bytes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "actual_archive_bytes_read",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "shape_route_used",
+                  "data_type": "boolean",
+                  "nullable": false
+                },
+                {
+                  "name": "shape_route_sections",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "shape_route_sidecar_bytes_read",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "decision",
+                  "data_type": "string",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 3,
+              "emitted_rows": 3,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                1,
+                1,
+                0,
+                0,
+                1,
+                1.0,
+                1,
+                1,
+                1,
+                65,
+                1660,
+                true,
+                1,
+                41,
+                null
+              ],
+              [
+                "b",
+                1,
+                1,
+                0,
+                0,
+                1,
+                1.0,
+                1,
+                1,
+                1,
+                75,
+                1515,
+                true,
+                1,
+                41,
+                null
+              ],
+              [
+                "c",
+                1,
+                1,
+                0,
+                0,
+                1,
+                1.0,
+                1,
+                1,
+                1,
+                65,
+                1660,
+                true,
+                1,
+                41,
+                null
+              ]
+            ]
+          },
+          {
+            "name": "cells",
+            "schema": {
+              "id": "gravlax.collection.jset.cells.v1",
+              "fields": [
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "rank",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "barcode",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "include_only",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exclude_only",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "both",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "informative_umis",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "usage_fraction",
+                  "data_type": "float64",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "sample",
+                  "barcode"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 3,
+              "emitted_rows": 3,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "a",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1,
+                0,
+                0,
+                1,
+                1.0
+              ],
+              [
+                "b",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1,
+                0,
+                0,
+                1,
+                1.0
+              ],
+              [
+                "c",
+                1,
+                "AAAAAAAAAAAAAAAC",
+                1,
+                0,
+                0,
+                1,
+                1.0
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "find_events": {
+      "$schema": "gravlax.result-envelope.v1",
+      "result_schema": "gravlax.collection.find-events.result.v1",
+      "producer": {
+        "name": "aie",
+        "version": "0.2.0"
+      },
+      "provenance": {
+        "archives": [
+          "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+          "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+          "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+        ],
+        "parameters": {
+          "annotation_comparisons": 0,
+          "archive_access": "collection catalogue/capability prefilter followed by exact routed union chunk decoding",
+          "chromosome_dictionary_digest": "d63bd9a826af91c1fea371965a64e11ee20f13e46b5f52c59901136605b3a487",
+          "collection_layers": [
+            {
+              "format_version": 4,
+              "path": "<bundle>/base.aicollection",
+              "root": "aicollection-directory-root-v1:51d0384ac3257f0d06a69ea5779fd98a8c9bf41554212e4c31e6e7dcf32793cb"
+            },
+            {
+              "format_version": 4,
+              "path": "<bundle>/atlas.aicollection",
+              "root": "aicollection-directory-root-v1:915ac33d49a5e16f463a929f7424361607942fb0d857e83206d61fd67f0560d3"
+            }
+          ],
+          "collection_path": "<bundle>/atlas.aicollection",
+          "evidence_placement_policy": "unique_chain_representatives_only",
+          "exact_match_attempts": 12,
+          "kinds": [
+            "junction"
+          ],
+          "max_annotation_comparisons": 10000000,
+          "max_candidates": 100000,
+          "max_candidates_considered": 1000000,
+          "max_exact_match_attempts": 25000000,
+          "max_routed_entries": 10000000,
+          "max_terminal_events": 10000000,
+          "min_donors": 1,
+          "min_group_umi_classes": 1,
+          "min_samples": 1,
+          "min_side_umi_classes": 1,
+          "min_support": 0,
+          "min_umi_classes": 1,
+          "multimapper_alternatives_available_to_search": false,
+          "multimapper_placements_included": false,
+          "novel_only": false,
+          "reference": {
+            "stamped": false
+          },
+          "required_groups": [],
+          "resolved_sources": [
+            {
+              "identity": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+              "path": "<bundle>/a.aie",
+              "sample": "a"
+            },
+            {
+              "identity": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+              "path": "<bundle>/b.aie",
+              "sample": "b"
+            },
+            {
+              "identity": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27",
+              "path": "<bundle>/c.aie",
+              "sample": "c"
+            }
+          ],
+          "routed_chunk_postings": 9,
+          "routed_target_associations": 18,
+          "sample_identities": {
+            "a": "aie-directory-root-v2:cdb2cc2b3a79b3880087817f6811272d7153d522a38851397295d7c45f65525b",
+            "b": "aie-directory-root-v2:94f19fd57753d5a95f6a18370d9355560066375ebf0ee6d7bd82192136af6de1",
+            "c": "aie-directory-root-v2:873e9e7eb61ed4ea08bd431899c3dc0edbacd168962303edbcf726fb94068a27"
+          },
+          "solo_strand": "forward",
+          "terminal_cluster_bp": 25,
+          "verify_content": false
+        }
+      },
+      "warnings": [],
+      "data": {
+        "summary": {
+          "coordinates": "0-based junction boundaries and strand-aware terminal cleavage anchors; entity intervals are half-open",
+          "candidate_source": "authenticated collection junction route superset (unique chains plus direct multimapper anchors) followed by unique-chain-only exact filtering, plus rooted terminal-tail capability/index routes",
+          "exact_counting": "distinct archive classes (corrected cell barcode, retained raw UMI value) supported by unique-read chains; stored 1MM edges are not collapsed",
+          "missing_count_rows": "logical zero over retained entity x capable sample x requested cell-group dimensions; consult capabilities",
+          "event_usage": "alternative-site informative_umi_classes = side_a_only_umi_classes + side_b_only_umi_classes; cassette informative_umi_classes = include_only_umi_classes + exclude_only_umi_classes; both_umi_classes is reported but excluded",
+          "alternative_site_side_semantics": "side_a is the lexicographically lower (donor,acceptor) junction and side_b the higher; these are neutral coordinate labels, not exon inclusion or PSI",
+          "cassette_component_semantics": "include-only is the distinct-class union witnessing either inclusion flank and not the skip; marginal component counts must each pass, possibly in disjoint classes; no same-class full inclusion path is claimed",
+          "donor_semantics": "each collection sample is one donor",
+          "cell_scope": "all archive cells in group bulk",
+          "evidence_placement_policy": "unique_chain_representatives_only",
+          "multimapper_placements_included": false,
+          "multimapper_alternatives_available_to_search": false,
+          "requested_kinds": [
+            "junction"
+          ],
+          "catalogue_junctions": 3,
+          "splice_candidate_definitions_attempted": 6,
+          "splice_candidate_definitions_distinct": 6,
+          "candidate_entities": 6,
+          "retained_entities": 2,
+          "archives_total": 3,
+          "archives_opened": 3,
+          "donors_total": 3,
+          "groups_total": 1,
+          "min_support": 0,
+          "min_samples": 1,
+          "min_donors": 1,
+          "min_umi_classes": 1,
+          "min_side_umi_classes": 1,
+          "min_group_umi_classes": 1,
+          "max_candidates": 100000,
+          "max_candidates_considered": 1000000,
+          "max_routed_entries": 10000000,
+          "routed_target_associations": 18,
+          "routed_chunk_postings": 9,
+          "max_exact_match_attempts": 25000000,
+          "exact_match_attempts": 12,
+          "max_annotation_comparisons": 10000000,
+          "annotation_comparisons": 0,
+          "terminal_cluster_bp": 25,
+          "max_terminal_events": 10000000,
+          "required_groups": [],
+          "annotation_gap_flags_nonexclusive": true,
+          "annotation_gap_primary_precedence": [
+            "strand",
+            "boundary",
+            "overlap",
+            "missing_junction"
+          ],
+          "annotation_identity": null,
+          "annotation_collection_compatibility": null,
+          "annotation_exact_contig_names_matched": null,
+          "annotation_collection_contigs": null,
+          "annotation_unmatched_evidence_policy": null,
+          "annotation_excluded_splice_candidates": 0,
+          "annotation_excluded_terminal_routes": 0,
+          "annotation_excluded_terminal_events": 0,
+          "annotation_unmatched_evidence_contigs": [],
+          "collection_genome_algo": null,
+          "collection_genome_digest": null,
+          "unique_chunks_decoded": 7,
+          "independent_chunk_decodes": 9,
+          "planned_compressed_bytes": 412,
+          "actual_archive_bytes_read": 9086,
+          "source_archive_identity_bytes_read": 3993,
+          "collection_sidecar_bytes_read": 1952,
+          "terminal_tail_available_archives": 0,
+          "terminal_tail_unavailable_archives": 0,
+          "terminal_tail_available_donors": 0,
+          "terminal_tail_declared_selected_molecules": 0,
+          "terminal_tail_declared_events": 0,
+          "terminal_tail_routed_chunks": 0
+        },
+        "tables": [
+          {
+            "name": "capabilities",
+            "schema": {
+              "id": "gravlax.collection.find-events.capabilities.v1",
+              "fields": [
+                {
+                  "name": "kind",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "scope",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "donor",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "status",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "archives_available",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "archives_unavailable",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "included_in_denominator",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "denominator",
+                  "data_type": "string",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "kind",
+                  "scope",
+                  "sample"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 2,
+              "emitted_rows": 2,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "junction",
+                "aggregate",
+                "*",
+                "*",
+                "available",
+                3,
+                0,
+                null,
+                "all collection archives"
+              ],
+              [
+                "terminal_tail",
+                "aggregate",
+                "*",
+                "*",
+                "not_requested",
+                0,
+                0,
+                null,
+                "not evaluated because terminal-tail was not requested"
+              ]
+            ]
+          },
+          {
+            "name": "entities",
+            "schema": {
+              "id": "gravlax.collection.find-events.entities.v1",
+              "fields": [
+                {
+                  "name": "entity_id",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "kind",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "chrom",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "strand",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "start",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "end",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "summit",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "catalogue_min_component_route_upper_bound",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "catalogue_sample_route_upper_bound",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "catalogue_donor_route_upper_bound",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "exact_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_samples",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_donors",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "forward_alignment_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "reverse_alignment_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "annotation_incompatible",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "compatible_transcripts",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_primary_class",
+                  "data_type": "string",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_missing_junction",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_boundary",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_strand",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_overlap",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "overlapping_gene_ids",
+                  "data_type": "json",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "entity_id"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 2,
+              "emitted_rows": 2,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "junction:1:+:160-180",
+                "junction",
+                "1",
+                "+",
+                160,
+                180,
+                null,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ],
+              [
+                "junction:1:+:510-530",
+                "junction",
+                "1",
+                "+",
+                510,
+                530,
+                null,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                3,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            ]
+          },
+          {
+            "name": "components",
+            "schema": {
+              "id": "gravlax.collection.find-events.components.v1",
+              "fields": [
+                {
+                  "name": "entity_id",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "role",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "ordinal",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "chrom",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "coordinate_kind",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "position",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "donor",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "acceptor",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "exact_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "entity_id",
+                  "role",
+                  "ordinal"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 2,
+              "emitted_rows": 2,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "junction:1:+:160-180",
+                "support",
+                0,
+                "1",
+                "junction",
+                null,
+                160,
+                180,
+                3
+              ],
+              [
+                "junction:1:+:510-530",
+                "support",
+                0,
+                "1",
+                "junction",
+                null,
+                510,
+                530,
+                3
+              ]
+            ]
+          },
+          {
+            "name": "counts",
+            "schema": {
+              "id": "gravlax.collection.find-events.counts.v1",
+              "fields": [
+                {
+                  "name": "entity_id",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "donor",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "group",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "support_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "side_a_only_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "side_b_only_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "include_only_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "exclude_only_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "both_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "informative_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "entity_id",
+                  "sample",
+                  "group"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 6,
+              "emitted_rows": 6,
+              "truncated": false
+            },
+            "rows": [
+              [
+                "junction:1:+:160-180",
+                "a",
+                "a",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ],
+              [
+                "junction:1:+:510-530",
+                "a",
+                "a",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ],
+              [
+                "junction:1:+:160-180",
+                "b",
+                "b",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ],
+              [
+                "junction:1:+:510-530",
+                "b",
+                "b",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ],
+              [
+                "junction:1:+:160-180",
+                "c",
+                "c",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ],
+              [
+                "junction:1:+:510-530",
+                "c",
+                "c",
+                "bulk",
+                1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                1
+              ]
+            ]
+          },
+          {
+            "name": "terminal_anchors",
+            "schema": {
+              "id": "gravlax.collection.find-events.terminal-anchors.v1",
+              "fields": [
+                {
+                  "name": "entity_id",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "chrom",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "strand",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "anchor",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_samples",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "exact_donors",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "max_clip_len",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "max_tail_bases",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "max_terminal_run",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "annotation_incompatible",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "compatible_transcripts",
+                  "data_type": "uint64",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_primary_class",
+                  "data_type": "string",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_missing_junction",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_boundary",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_strand",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "gap_overlap",
+                  "data_type": "boolean",
+                  "nullable": true
+                },
+                {
+                  "name": "overlapping_gene_ids",
+                  "data_type": "json",
+                  "nullable": true
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "entity_id",
+                  "anchor"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 0,
+              "emitted_rows": 0,
+              "truncated": false
+            },
+            "rows": []
+          },
+          {
+            "name": "terminal_counts",
+            "schema": {
+              "id": "gravlax.collection.find-events.terminal-counts.v1",
+              "fields": [
+                {
+                  "name": "entity_id",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "anchor",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "sample",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "donor",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "group",
+                  "data_type": "string",
+                  "nullable": false
+                },
+                {
+                  "name": "umi_classes",
+                  "data_type": "uint64",
+                  "nullable": false
+                },
+                {
+                  "name": "cells",
+                  "data_type": "uint64",
+                  "nullable": false
+                }
+              ],
+              "semantics": {
+                "row_semantics": "set",
+                "key": [
+                  "entity_id",
+                  "anchor",
+                  "sample",
+                  "group"
+                ]
+              }
+            },
+            "selection": {
+              "available_rows": 0,
+              "emitted_rows": 0,
+              "truncated": false
+            },
+            "rows": []
+          }
+        ]
+      }
+    }
+  }
+}
