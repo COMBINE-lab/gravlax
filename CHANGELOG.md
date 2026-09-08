@@ -4,6 +4,8 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+## [0.2.1] - 2026-09-07
+
 - Make rooted collection sources and parent layers relocatable through an optional
   `--locations` manifest keyed by committed content identities. Existing archive and
   collection formats, index bytes and roots remain unchanged; relocation adds no
@@ -17,6 +19,8 @@ This file records user-visible changes in each Gravlax release.
   their relocation remains supported but cannot provide the rooted fast path.
 - Test moved layered bundles, unchanged archive/index hashes and I/O, cross-file
   replacement, malformed mappings, wrong roots, legacy identity and corruption.
+- Normalize canonical path aliases in relocation acceptance tests on macOS and
+  Windows while preserving content, query-result and I/O comparisons.
 
 ## [0.2.0] - 2026-09-05
 
