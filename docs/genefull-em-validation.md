@@ -1,11 +1,12 @@
 # GeneFull EM validation
 
-The recovery evaluator accepts `aie dev em --gene-full` for forward-strand
-libraries. It builds unique and multi-gene support using the GeneFull replay
+The recovery evaluator accepts `aie dev em --gene-full`. The original manuscript
+experiment below used forward-strand libraries. It builds unique and multi-gene support using the GeneFull replay
 index, including ambiguity from overlapping spans at a single placement.
 Masking, ten EM iterations, and the emitted pooled layer retain their existing
-rules. The independent `--star` implementation remains Gene-only and conflicts
-with `--gene-full`.
+rules. Subsequent implementation adds `--solo-strand` to recovery and STAR-style
+EM, and supports `--gene-full --star`; see `genefull-em-strands-optimization.md`
+for the additional correctness checks and optimization measurements.
 
 Tests cover intronic evidence, nested genes, mixed classes split across decoder
 batches, masking without unique-evidence leakage, missing-contig alternatives,

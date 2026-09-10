@@ -44,7 +44,7 @@ impl SoloStrand {
 /// STARsolo `GeneFull`: overlap aligned blocks with exon-derived full gene spans.
 /// Built once per replay; the archive and compiled annotation formats are unchanged.
 pub struct GeneFullIndex {
-    chroms: hashbrown::HashMap<u32, Vec<GeneSpan>>,
+    chroms: hashbrown::HashMap<u32, [Vec<GeneSpan>; 2]>,
 }
 
 struct GeneSpan {
@@ -52,7 +52,6 @@ struct GeneSpan {
     end: u32,
     max_end: u32,
     gene: u32,
-    reverse: bool,
 }
 
 impl GeneFullIndex {
@@ -69,22 +68,23 @@ impl GeneFullIndex {
             entry.0 = entry.0.min(start);
             entry.1 = entry.1.max(end);
         }
-        let mut chroms: hashbrown::HashMap<u32, Vec<GeneSpan>> = hashbrown::HashMap::new();
+        let mut chroms: hashbrown::HashMap<u32, [Vec<GeneSpan>; 2]> = hashbrown::HashMap::new();
         for ((chrom, gene, reverse), (start, end)) in bounds {
-            chroms.entry(chrom).or_default().push(GeneSpan {
+            chroms.entry(chrom).or_default()[usize::from(reverse)].push(GeneSpan {
                 start,
                 end,
                 max_end: 0,
                 gene,
-                reverse,
             });
         }
-        for spans in chroms.values_mut() {
-            spans.sort_unstable_by_key(|s| (s.start, s.end, s.gene, s.reverse));
-            let mut max_end = 0;
-            for span in spans {
-                max_end = max_end.max(span.end);
-                span.max_end = max_end;
+        for strands in chroms.values_mut() {
+            for spans in strands {
+                spans.sort_unstable_by_key(|s| (s.start, s.end, s.gene));
+                let mut max_end = 0;
+                for span in spans {
+                    max_end = max_end.max(span.end);
+                    span.max_end = max_end;
+                }
             }
         }
         Self { chroms }
@@ -93,22 +93,52 @@ impl GeneFullIndex {
     /// Only aligned blocks overlap: genes inside skipped introns are not hit by
     /// the outer alignment span alone. Junction concordance is not required.
     pub fn genes_into(&self, p: &Placement, chrom: u32, strand: SoloStrand, out: &mut Vec<u32>) {
+        self.genes_for_blocks_into(
+            chrom,
+            matches!(p.strand, evidence_io::Strand::Reverse),
+            strand,
+            p.blocks.iter().map(|b| (b.start, b.end)),
+            out,
+        );
+    }
+
+    /// Query blocks directly from retained shape offsets without materializing a Placement or
+    /// its unused splice junctions. Strand-specific indexes avoid scanning opposite-strand genes.
+    /// Coordinates are zero-based, half-open; output is a sorted, deduplicated gene set.
+    pub fn genes_for_blocks_into(
+        &self,
+        chrom: u32,
+        alignment_reverse: bool,
+        strand: SoloStrand,
+        blocks: impl IntoIterator<Item = (u32, u32)>,
+        out: &mut Vec<u32>,
+    ) {
         out.clear();
-        let Some(spans) = self.chroms.get(&chrom) else {
+        let Some(strands) = self.chroms.get(&chrom) else {
             return;
         };
-        let reverse = matches!(p.strand, evidence_io::Strand::Reverse);
-        for block in &p.blocks {
-            if block.start >= block.end {
+        let indexes: &[Vec<GeneSpan>] = match strand {
+            SoloStrand::Forward => {
+                &strands[usize::from(alignment_reverse)..=usize::from(alignment_reverse)]
+            }
+            SoloStrand::Reverse => {
+                &strands[usize::from(!alignment_reverse)..=usize::from(!alignment_reverse)]
+            }
+            SoloStrand::Unstranded => strands,
+        };
+        for (start, end) in blocks {
+            if start >= end {
                 continue;
             }
-            let hi = spans.partition_point(|s| s.start < block.end);
-            for span in spans[..hi].iter().rev() {
-                if span.max_end <= block.start {
-                    break;
-                }
-                if span.end > block.start && strand.accepts(reverse, span.reverse) {
-                    out.push(span.gene);
+            for spans in indexes {
+                let hi = spans.partition_point(|s| s.start < end);
+                for span in spans[..hi].iter().rev() {
+                    if span.max_end <= start {
+                        break;
+                    }
+                    if span.end > start {
+                        out.push(span.gene);
+                    }
                 }
             }
         }
