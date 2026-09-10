@@ -2237,8 +2237,9 @@ impl StreamingReplayArchive {
     fn packed_em_accumulator(
         &self,
         anno: &anno::Annotation,
+        gene_full: bool,
     ) -> Result<crate::rows::PackedEmAccumulator> {
-        let mut em = crate::rows::PackedEmAccumulator::new(&self.x, anno, self.n_mols)?;
+        let mut em = crate::rows::PackedEmAccumulator::new(&self.x, anno, self.n_mols, gene_full)?;
         let threads = rayon::current_num_threads().max(1);
         // The disk-backed path exists to bound large-archive memory. Eight access units keep its
         // decoded MolRec window small; classification still subdivides them into 65k tasks and
@@ -2362,6 +2363,10 @@ pub struct EmArgs {
     pub archive: PathBuf,
     #[arg(long)]
     pub gtf: PathBuf,
+    /// Use intron-inclusive GeneFull candidates on the forward strand. Default: Gene.
+    /// The independent STAR-compatible EM implementation remains Gene-only.
+    #[arg(long, conflicts_with = "star")]
+    pub gene_full: bool,
     /// Fraction of mixed classes to mask for the labeled evaluation.
     #[arg(long, default_value_t = 0.2)]
     pub mask: f64,
@@ -2710,6 +2715,7 @@ pub fn run_em(args: EmArgs) -> Result<()> {
     let mut paired_metrics: Vec<crate::rows::PackedPairedMetrics> = Vec::new();
     let mut group_names: Vec<String> = Vec::new();
     let mut group_eval_cells = 0usize;
+    let mut evaluation_counts = serde_json::Value::Null;
     let (recovered, cells) = if args.eager {
         let x = read_archive(&args.archive)?;
         let recovered = crate::rows::em_experiment(
@@ -2719,11 +2725,12 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             args.seed,
             args.alpha,
             args.plot.is_some().then_some(&mut cals),
+            args.gene_full,
         );
         (recovered, x.cells)
     } else {
         let mut archive = StreamingReplayArchive::open(&args.archive)?;
-        let em = archive.packed_em_accumulator(&anno)?;
+        let em = archive.packed_em_accumulator(&anno, args.gene_full)?;
         let cells = std::mem::take(&mut archive.x.cells);
         let cell_of_class = std::mem::take(&mut archive.cell_of_class);
         drop(archive);
@@ -2763,6 +2770,7 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         } else {
             group_eval_cells = cells.len();
         }
+        evaluation_counts = packed.evaluation_counts(groups.as_ref());
         let recovered = packed.run(
             &anno,
             args.alpha,
@@ -2843,7 +2851,7 @@ pub fn run_em(args: EmArgs) -> Result<()> {
                 })
             })
             .collect();
-        let document = serde_json::json!({
+        let mut document = serde_json::json!({
             "schema_version": 2,
             "archive": args.archive,
             "gtf": args.gtf,
@@ -2885,6 +2893,10 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             "modes": modes,
             "paired_comparisons": paired_comparisons,
         });
+        document["counting_model"] =
+            serde_json::json!(if args.gene_full { "GeneFull" } else { "Gene" });
+        document["strand_policy"] = serde_json::json!("forward");
+        document["evaluation_counts"] = evaluation_counts;
         std::fs::write(path, serde_json::to_vec_pretty(&document)?)
             .with_context(|| format!("write EM metrics {}", path.display()))?;
     }
@@ -2963,6 +2975,17 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         }
         mtx.flush()?;
         feat.flush()?;
+        std::fs::write(
+            out_dir.join("metadata.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "counting_model": if args.gene_full { "GeneFull" } else { "Gene" },
+                "strand_policy": "forward",
+                "counting_unit": "fractional responsibility per UMI class before one-mismatch collapse",
+                "layer": "additive multi-only classes",
+                "archive": args.archive,
+                "annotation": args.gtf,
+            }))?,
+        )?;
         eprintln!(
             "wrote {} recovered entries to {}",
             triplets.len(),

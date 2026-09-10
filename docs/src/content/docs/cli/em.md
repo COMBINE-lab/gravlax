@@ -33,6 +33,7 @@ aie dev em sample.aie --gtf gencode.v49.gtf \
 | Option | Default | Description |
 |---|---|---|
 | `--gtf <GTF>` | required | Annotation defining the gene candidates |
+| `--gene-full` | off | Use intron-inclusive GeneFull candidates for forward-strand libraries; incompatible with `--star` |
 | `--mask <FRAC>` | `0.2` | Fraction of mixed classes to mask for the labeled evaluation; `0` switches to emission |
 | `--seed <SEED>` | `7` | Masking RNG seed |
 | `--alpha <ALPHA>` | `20` | Blend-mode global-prior weight |
@@ -58,6 +59,17 @@ aie dev em sample.aie --gtf gencode.v49.gtf \
 | `--star` | off | Use the STARsolo-compatible `--soloMultiMappers EM` design (per-cell, intersection candidate sets, STAR's init/zeroing/convergence) and emit `UniqueAndMult-EM.mtx` into `--emit` |
 | `--eager` | off | Use the historical full-materialization implementation as a semantic/performance reference |
 | `--plot <SVG/PNG>` | — | With a masked run, write a per-mode reliability diagram |
+
+`--gene-full` applies the same exon-derived gene spans as GeneFull replay when
+constructing unique and ambiguous evidence. Masking and the EM update rules are
+unchanged. For GeneFull, alternatives on unannotated chromosomes contribute no
+candidates; the historical Gene experiment retains its whole-row exclusion.
+Metrics record the counting model and scoped masked, truth-lost, and evaluable
+class counts. Accuracy is per evaluable UMI class before one-mismatch collapse;
+it is conditional on the unique-evidence label surviving masking. `--groups`
+restricts scoring to its barcodes; the pooled prior still uses all archive
+barcodes after masking. Classes eligible for evaluation can change between
+Gene and GeneFull, so their accuracies describe different labeled populations.
 
 ## Sharing models
 
@@ -146,9 +158,9 @@ Temporary shards are removed on success or error.
 ## The emitted layer
 
 `em.mtx` is an **additive, opt-in layer** of real-valued recovered counts: the
-base replay matrices are never modified. Responsibilities are calibrated, so
-they can be consumed as probabilities; thresholding at responsibility > 0.8
-keeps the layer's high-confidence core. Use `--star` to request the
+base replay matrices are never modified. Responsibilities are model-derived probabilities; assess calibration on comparable
+evidence before applying confidence thresholds. Calibration differs between
+Gene and GeneFull and between datasets. Use `--star` to request the
 STARsolo-compatible update scheme; cross-tool byte identity has not yet been
 established.
 

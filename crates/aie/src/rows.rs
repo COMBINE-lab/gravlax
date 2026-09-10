@@ -761,6 +761,8 @@ struct PackedEmShard {
     target_genes: Vec<u32>,
     target_local: Vec<u32>,
     target_truth: Vec<u32>,
+    masked_cells: Vec<u32>,
+    truth_lost_cells: Vec<u32>,
 }
 
 impl PackedEmShard {
@@ -880,6 +882,7 @@ pub(crate) struct PackedPairedMetrics {
 pub(crate) struct PackedEmAccumulator {
     n_classes: u32,
     gene_count: usize,
+    gene_full: Option<anno::assign::GeneFullIndex>,
     bam2anno: Vec<Option<u32>>,
     shards: Vec<Vec<EmSupport>>,
     spill: Option<EmSupportSpill>,
@@ -1001,6 +1004,7 @@ impl PackedEmAccumulator {
         x: &Extracted,
         anno: &anno::Annotation,
         expected_molecules: usize,
+        gene_full: bool,
     ) -> Result<Self> {
         if anno.gene_ids.len() > EM_GENE_MASK as usize + 1 {
             bail!("annotation has too many genes for packed EM labels");
@@ -1013,6 +1017,7 @@ impl PackedEmAccumulator {
         Ok(Self {
             n_classes: x.n_classes,
             gene_count: anno.gene_ids.len(),
+            gene_full: gene_full.then(|| anno::assign::GeneFullIndex::new(anno)),
             bam2anno,
             shards: (0..EM_SHARDS).map(|_| Vec::new()).collect(),
             spill: (expected_molecules.saturating_mul(std::mem::size_of::<EmSupport>())
@@ -1037,7 +1042,22 @@ impl PackedEmAccumulator {
         for m in mols {
             let shard = m.cell as usize % EM_SHARDS;
             let mut handle = |r: Row| {
-                if row_genes(&r, x, anno, &self.bam2anno, MmMissing::DropRow, s).is_none()
+                let missing = if self.gene_full.is_some() {
+                    MmMissing::SkipAlt
+                } else {
+                    MmMissing::DropRow
+                };
+                if row_genes_model(
+                    &r,
+                    x,
+                    anno,
+                    &self.bam2anno,
+                    missing,
+                    anno::assign::SoloStrand::Forward,
+                    self.gene_full.as_ref(),
+                    s,
+                )
+                .is_none()
                     || s.genes.is_empty()
                 {
                     return;
@@ -1265,6 +1285,8 @@ fn build_em_shard(
     let mut target_cells = Vec::new();
     let mut target_genes = Vec::new();
     let mut target_truth = Vec::new();
+    let mut masked_cells = Vec::new();
+    let mut truth_lost_cells = Vec::new();
     let mut unique_events: Vec<u64> = Vec::new();
     let mut key_events: Vec<u64> = Vec::new();
     let mut counters = EmCounters::default();
@@ -1308,6 +1330,7 @@ fn build_em_shard(
             let truth = unique_genes[0];
             if em_masked(seed, cell, class, mask_frac) {
                 counters.masked += 1;
+                masked_cells.push(cell);
                 let cands: SmallVec<[u32; 4]> = class_genes
                     .iter()
                     .filter(|(_, flags)| flags & EM_MULTI_FLAG != 0)
@@ -1326,6 +1349,7 @@ fn build_em_shard(
                     )?;
                 } else {
                     counters.truth_lost += 1;
+                    truth_lost_cells.push(cell);
                 }
             } else {
                 let key = cell_gene_key(cell, truth);
@@ -1386,6 +1410,8 @@ fn build_em_shard(
             target_genes,
             target_local,
             target_truth,
+            masked_cells,
+            truth_lost_cells,
         },
         counters,
     ))
@@ -1688,6 +1714,32 @@ fn paired_metrics(
 }
 
 impl PackedEm {
+    pub(crate) fn evaluation_counts(&self, groups: Option<&EmGroups>) -> serde_json::Value {
+        let selected = |cell: &&u32| groups.is_none_or(|g| g.eval_cell[**cell as usize]);
+        let masked: usize = self
+            .shards
+            .iter()
+            .map(|s| s.masked_cells.iter().filter(selected).count())
+            .sum();
+        let truth_lost: usize = self
+            .shards
+            .iter()
+            .map(|s| s.truth_lost_cells.iter().filter(selected).count())
+            .sum();
+        serde_json::json!({
+            "unit": "UMI classes before one-mismatch collapse",
+            "scored_population_masked_classes": masked,
+            "scored_population_truth_lost_classes": truth_lost,
+            "scored_population_evaluable_classes": masked - truth_lost,
+            "all_input_single_gene_classes": self.counters.single,
+            "all_input_mixed_classes": self.counters.mixed,
+            "all_input_multi_only_classes": self.counters.multi_only,
+            "all_input_masked_classes": self.counters.masked,
+            "all_input_truth_lost_classes": self.counters.truth_lost,
+            "prior_fit_scope": "all input archive barcodes after masking",
+        })
+    }
+
     /// Run the four fixed sharing modes, plus optional group, additive-hierarchical,
     /// candidate-normalized convex, posterior-mean Dirichlet-proxy, and monotone depth-hybrid
     /// modes, over packed CSR labels. Each iteration walks shards in a fixed order and classes in
@@ -2612,9 +2664,14 @@ pub fn em_experiment(
     seed: u64,
     alpha: f64,
     cal_out: Option<&mut Vec<EmCalibrationRow>>,
+    gene_full: bool,
 ) -> Option<FxHashMap<(u32, u32), f64>> {
-    let bam2anno: Vec<Option<u32>> =
-        x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
+    let gene_full = gene_full.then(|| anno::assign::GeneFullIndex::new(anno));
+    let bam2anno: Vec<Option<u32>> = x
+        .chrom_names
+        .iter()
+        .map(|n| anno.chrom_ids.get(n).copied())
+        .collect();
     let rows = flatten(&x.mols);
     // Per row: candidate genes + weight, tagged unique(1 gene) / multi(>1). DropRow preserves the
     // historical semantics: an mm alternative on an unannotated chromosome discards the row.
@@ -2622,7 +2679,21 @@ pub fn em_experiment(
     let per_row: Vec<Option<EmRowEvidence>> = rows
         .par_iter()
         .map_init(RowScratch::default, |s, r| {
-            row_genes(r, x, anno, &bam2anno, MmMissing::DropRow, s)?;
+            let missing = if gene_full.is_some() {
+                MmMissing::SkipAlt
+            } else {
+                MmMissing::DropRow
+            };
+            row_genes_model(
+                r,
+                x,
+                anno,
+                &bam2anno,
+                missing,
+                anno::assign::SoloStrand::Forward,
+                gene_full.as_ref(),
+                s,
+            )?;
             if s.genes.is_empty() {
                 None
             } else {
@@ -4491,6 +4562,107 @@ pub(crate) fn replay_rows_model(
 #[cfg(test)]
 mod genefull_replay_tests {
     use super::*;
+
+    #[test]
+    fn genefull_em_masks_nested_candidates_and_audits_scored_classes() {
+        let path =
+            std::env::temp_dir().join(format!("gravlax-genefull-em-{}.gtf", std::process::id()));
+        let mut gtf = String::new();
+        for (gene, start, end) in [
+            ("A", 101, 200),
+            ("A", 401, 500),
+            ("B", 251, 300),
+            ("C", 601, 700),
+            ("D", 801, 900),
+        ] {
+            gtf.push_str(&format!("chr1\tX\texon\t{start}\t{end}\t.\t+\t.\tgene_id \"{gene}\"; transcript_id \"{gene}1\";\n"));
+        }
+        std::fs::write(&path, gtf).unwrap();
+        let anno = anno::Annotation::from_gtf(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let molecule = |class, cell, pos| MolRec {
+            cell,
+            umi_class: class,
+            chrom: 0,
+            strand_rev: false,
+            chains: smallvec::smallvec![MolChain {
+                weight: 1,
+                reps: smallvec::smallvec![(pos, 0)]
+            }],
+            mms: SmallVec::new(),
+        };
+        let mut mols = vec![
+            molecule(0, 0, 110),
+            molecule(0, 0, 260),
+            molecule(1, 0, 210),
+            molecule(2, 0, 260),
+            molecule(3, 0, 110),
+            molecule(3, 0, 610),
+            molecule(4, 1, 110),
+            molecule(4, 1, 260),
+            molecule(5, 0, 210),
+        ];
+        mols[5].chains.clear();
+        mols[5].mms.push((610, 0, 0, 1));
+        mols[8].chains.clear();
+        mols[8].mms.push((210, 0, 1, 1));
+        let alt = |chrom, offset| PatAlt {
+            chrom,
+            offset,
+            strand_flip: false,
+            shape: SAME_SHAPE,
+        };
+        let x = Extracted {
+            mols,
+            edges: vec![],
+            cells: vec![0, 1],
+            shapes: vec![Shape {
+                blocks: vec![(0, 20)],
+            }],
+            patterns: vec![vec![alt(0, 0), alt(0, 200)], vec![alt(1, 0), alt(0, 0)]],
+            n_classes: 6,
+            chrom_names: vec!["chr1".into(), "missing".into()],
+        };
+        for full in [false, true] {
+            let mut em = PackedEmAccumulator::new(&x, &anno, x.mols.len(), full).unwrap();
+            // Split repeated classes across decoder batches; the global class is still masked once.
+            for m in &x.mols {
+                em.add_archive_chunks(&[vec![m.clone()]], &x, &anno)
+                    .unwrap();
+            }
+            let packed = em.finish(&[0, 0, 0, 0, 1, 0], 1.0, 7).unwrap();
+            let all = packed.evaluation_counts(None);
+            if full {
+                assert_eq!(all["all_input_single_gene_classes"], 2);
+                assert_eq!(all["all_input_multi_only_classes"], 1);
+                assert_eq!(all["scored_population_masked_classes"], 3);
+                assert_eq!(all["scored_population_truth_lost_classes"], 1);
+                assert_eq!(all["scored_population_evaluable_classes"], 2);
+                let groups = EmGroups {
+                    cell_group: vec![0, 0],
+                    eval_cell: vec![true, false],
+                    names: vec!["fixed".into()],
+                };
+                let fixed = packed.evaluation_counts(Some(&groups));
+                assert_eq!(fixed["scored_population_masked_classes"], 2);
+                assert_eq!(fixed["scored_population_truth_lost_classes"], 1);
+                assert_eq!(fixed["scored_population_evaluable_classes"], 1);
+                let target = &packed.shards[0];
+                let at = target
+                    .target_truth
+                    .iter()
+                    .position(|&truth| truth == 0)
+                    .unwrap();
+                assert_eq!(&target.target_genes[target.target_range(at)], &[0, 1]);
+                // Unique A evidence for the masked class cannot leak into the fitted prior.
+                assert_eq!(packed.global_base[0], 2.0);
+            } else {
+                assert_eq!(all["scored_population_masked_classes"], 1);
+                assert_eq!(all["scored_population_truth_lost_classes"], 1);
+                assert_eq!(all["scored_population_evaluable_classes"], 0);
+            }
+        }
+    }
 
     #[test]
     fn genefull_alternatives_global_collapse_and_statistic_units() {

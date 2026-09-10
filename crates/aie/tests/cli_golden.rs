@@ -455,6 +455,84 @@ fn bam_archive_and_post_correction_bam_replays_match() {
         "packed and eager EM summaries differ"
     );
 
+    let full_gtf = scratch.0.join("genefull-intronic.gtf");
+    std::fs::write(
+        &full_gtf,
+        concat!(
+            "chr1\ttest\texon\t1\t20\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+            "chr1\ttest\texon\t1999900\t2000000\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+        ),
+    )
+    .unwrap();
+    let full_metrics = scratch.0.join("genefull-em-metrics.json");
+    let mut full_em = Command::new(bin);
+    full_em
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--gene-full")
+        .arg("--mask")
+        .arg("0")
+        .arg("--metrics-json")
+        .arg(&full_metrics);
+    let full_em = run(full_em);
+    assert_eq!(full_em.stdout, packed_em.stdout);
+    let full_metrics: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(full_metrics).unwrap()).unwrap();
+    assert_eq!(full_metrics["counting_model"], "GeneFull");
+    assert!(
+        full_metrics["evaluation_counts"]["all_input_single_gene_classes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    let intronic_gene_metrics = scratch.0.join("intronic-gene-em.json");
+    let mut intronic_gene = Command::new(bin);
+    intronic_gene
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--mask")
+        .arg("0")
+        .arg("--metrics-json")
+        .arg(&intronic_gene_metrics);
+    run(intronic_gene);
+    let intronic_gene_metrics: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(intronic_gene_metrics).unwrap()).unwrap();
+    assert_eq!(
+        intronic_gene_metrics["evaluation_counts"]["all_input_single_gene_classes"],
+        0
+    );
+
+    assert_eq!(
+        full_metrics["evaluation_counts"]["unit"],
+        "UMI classes before one-mismatch collapse"
+    );
+    let mut full_eager = Command::new(bin);
+    full_eager
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--gene-full")
+        .arg("--mask")
+        .arg("0")
+        .arg("--eager");
+    assert_eq!(run(full_eager).stdout, full_em.stdout);
+    let incompatible = Command::new(bin)
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--gene-full")
+        .arg("--star")
+        .output()
+        .unwrap();
+    assert!(!incompatible.status.success());
+    assert!(String::from_utf8_lossy(&incompatible.stderr).contains("cannot be used with"));
+
     let groups = scratch.0.join("groups.tsv");
     let metrics = scratch.0.join("hierarchical-metrics.json");
     let candidates = scratch.0.join("candidate-genes.txt");
