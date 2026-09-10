@@ -263,3 +263,18 @@ The core test suite needs no optional scientific Python packages:
 cd python
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
+
+### GeneFull replay
+
+```python
+report = client.replay(
+    "nuclei.aie", "annotation.aic", "called-nuclei.tsv", "genefull",
+    gene_full=True,
+)
+```
+
+The barcode list orders columns and must cover all counted barcodes; it does
+not call nuclei. Gene is the
+default model. `gene_full=True` includes intronic gene-span overlaps and
+conflicts with `velocity=True`. Assignment statistics cover all input and distinguish records, representatives, and UMI
+classes from collapsed UMI counts.

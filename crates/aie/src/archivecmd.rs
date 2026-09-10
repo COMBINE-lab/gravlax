@@ -7,8 +7,8 @@ pub(crate) mod transcriptec;
 
 use crate::rows::{
     extract_rows, extract_rows_for_archive, extract_rows_with_identity, identity_of_consumed_file,
-    replay_rows_stranded, ConsumedFileIdentity, Extracted, ExtractedTerminalTails, MolChain,
-    MolRec, PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
+    AssignmentStats, ConsumedFileIdentity, Extracted, ExtractedTerminalTails, MolChain, MolRec,
+    PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
 };
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
@@ -201,6 +201,10 @@ pub struct ReplayRowsArgs {
     /// Emit STARsolo Velocyto semantics (spliced/unspliced/ambiguous matrices) instead of Gene.
     #[arg(long)]
     pub velocity: bool,
+    /// Count aligned-block overlaps with full gene spans (exons and introns), matching
+    /// STARsolo GeneFull. Gene remains the default.
+    #[arg(long, conflicts_with_all = ["velocity", "audit_multigene"])]
+    pub gene_full: bool,
     /// STARsolo cDNA-alignment/transcript strand relationship. 10x 3' uses forward; R2-only 10x
     /// 5' uses reverse.
     #[arg(long, value_enum, default_value_t = SoloStrandArg::Forward)]
@@ -2152,7 +2156,7 @@ struct StreamingReplayArchive {
     n_mols: usize,
 }
 
-type StreamingReplayResult = (FxHashMap<(u32, u32), u32>, u64, u64);
+type StreamingReplayResult = (FxHashMap<(u32, u32), u32>, AssignmentStats, u64);
 
 impl StreamingReplayArchive {
     fn open(path: &Path) -> Result<Self> {
@@ -2196,8 +2200,9 @@ impl StreamingReplayArchive {
         &self,
         anno: &anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
     ) -> Result<StreamingReplayResult> {
-        let mut replay = ReplayRowsAccumulator::with_strand(&self.x, anno, solo_strand);
+        let mut replay = ReplayRowsAccumulator::with_model(&self.x, anno, solo_strand, gene_full);
         replay.reserve_assignments(self.n_mols);
         // Two access units per worker smooth decode density and amortize reducer barriers while
         // retaining bounded memory use in complete-command peak-RSS measurements.
@@ -2224,7 +2229,7 @@ impl StreamingReplayArchive {
                 self.n_mols
             );
         }
-        Ok(replay.finish())
+        Ok(replay.finish_with_stats())
     }
     /// Decode the archive in the same bounded batches as streaming Gene replay, but reduce each
     /// batch immediately to packed (class,gene,evidence-kind) support words.  The final EM owns
@@ -3779,7 +3784,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         let t_open = t0.elapsed().as_secs_f32();
         let (anno, annotation_identity) = load_replay_annotation(&args.gtf, reporting)?;
         let t_anno = t0.elapsed().as_secs_f32();
-        let (counts, n_assigned, total) = archive.replay(&anno, solo_strand)?;
+        let (counts, assignment_stats, total) =
+            archive.replay(&anno, solo_strand, args.gene_full)?;
         let t_replay = t0.elapsed().as_secs_f32();
         let artifact = emit_matrix(
             &counts,
@@ -3817,7 +3823,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
                 velocity: false,
                 multigene_audit: false,
                 molecules: archive.n_mols as u64,
-                assigned_molecules: Some(n_assigned),
+                assigned_molecules: Some(assignment_stats.assigned_molecule_records),
+                assignment_statistics: Some(assignment_stats),
                 counted_umis: Some(total),
                 matrix_entries: Some(counts.len() as u64),
                 audit: None,
@@ -3826,8 +3833,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             emit_replay_report(&args, &summary, &context, metadata_path.as_deref())?;
         }
         eprintln!(
-            "molecules {} -> assigned {} -> {} UMIs in {} entries | streaming | open+dict {t_open:.1}s, +anno {:.1}s, +decode/replay {:.1}s, total {:.1}s",
-            archive.n_mols, n_assigned, total, counts.len(), t_anno - t_open,
+            "molecule records {} -> records with assignment {}; representative rows {} assigned / {} total; UMI classes {} assigned / {} total -> {} collapsed UMIs in {} entries (all input; not restricted to called nuclei) | streaming | open+dict {t_open:.1}s, +anno {:.1}s, +decode/replay {:.1}s, total {:.1}s",
+            archive.n_mols, assignment_stats.assigned_molecule_records, assignment_stats.assigned_representative_rows, assignment_stats.representative_rows, assignment_stats.assigned_umi_classes, assignment_stats.umi_classes, total, counts.len(), t_anno - t_open,
             t_replay - t_anno, t0.elapsed().as_secs_f32()
         );
         exit_without_teardown();
@@ -3925,6 +3932,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             multigene_audit: true,
             molecules: x.mols.len() as u64,
             assigned_molecules: None,
+            assignment_statistics: None,
             counted_umis: None,
             matrix_entries: None,
             audit: Some(audit),
@@ -3988,6 +3996,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
                 multigene_audit: false,
                 molecules: x.mols.len() as u64,
                 assigned_molecules: None,
+                assignment_statistics: None,
                 counted_umis: Some(n_counted),
                 matrix_entries: Some(vc.len() as u64),
                 audit: None,
@@ -4001,7 +4010,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         );
         return Ok(());
     }
-    let (counts, n_assigned, total) = replay_rows_stranded(&x, &anno, solo_strand);
+    let (counts, assignment_stats, total) =
+        crate::rows::replay_rows_model(&x, &anno, solo_strand, args.gene_full);
     let t_replay = t0.elapsed().as_secs_f32();
     let artifact = emit_matrix(
         &counts,
@@ -4055,7 +4065,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             velocity: false,
             multigene_audit: false,
             molecules: x.mols.len() as u64,
-            assigned_molecules: Some(n_assigned),
+            assigned_molecules: Some(assignment_stats.assigned_molecule_records),
+            assignment_statistics: Some(assignment_stats),
             counted_umis: Some(total),
             matrix_entries: Some(counts.len() as u64),
             audit: None,
@@ -4064,8 +4075,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         emit_replay_report(&args, &summary, &context, metadata_path.as_deref())?;
     }
     eprintln!(
-        "molecules {} -> assigned {} -> {} UMIs in {} entries | eager | load {t_load:.1}s, +anno {:.1}s, +replay {:.1}s, total {:.1}s",
-        x.mols.len(), n_assigned, total, counts.len(),
+        "molecule records {} -> records with assignment {}; representative rows {} assigned / {} total; UMI classes {} assigned / {} total -> {} collapsed UMIs in {} entries (all input; not restricted to called nuclei) | eager | load {t_load:.1}s, +anno {:.1}s, +replay {:.1}s, total {:.1}s",
+        x.mols.len(), assignment_stats.assigned_molecule_records, assignment_stats.assigned_representative_rows, assignment_stats.representative_rows, assignment_stats.assigned_umi_classes, assignment_stats.umi_classes, total, counts.len(),
         t_anno - t_load, t_replay - t_anno, t0.elapsed().as_secs_f32()
     );
     exit_without_teardown();
@@ -4185,7 +4196,9 @@ struct ReplayReportSummary {
     velocity: bool,
     multigene_audit: bool,
     molecules: u64,
+    /// Records with at least one uniquely assigned representative (not rows).
     assigned_molecules: Option<u64>,
+    assignment_statistics: Option<AssignmentStats>,
     counted_umis: Option<u64>,
     matrix_entries: Option<u64>,
     audit: Option<crate::rows::MultigeneAuditSummary>,
@@ -4770,6 +4783,21 @@ fn replay_report_context(
         serde_json::json!(args.from_molecule_bam),
     );
     parameters.insert("velocity".into(), serde_json::json!(args.velocity));
+    parameters.insert("gene_full".into(), serde_json::json!(args.gene_full));
+    parameters.insert(
+        "assignment_statistics_scope".into(),
+        serde_json::json!("all input records; not restricted to called nuclei"),
+    );
+    parameters.insert(
+        "counting_model".into(),
+        serde_json::json!(if args.velocity {
+            "Velocyto"
+        } else if args.gene_full {
+            "GeneFull"
+        } else {
+            "Gene"
+        }),
+    );
     parameters.insert(
         "audit_multigene".into(),
         serde_json::json!(args.audit_multigene),

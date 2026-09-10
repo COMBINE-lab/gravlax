@@ -4,6 +4,21 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+## [0.3.0] - 2026-09-10
+
+- Add `replay-rows --gene-full` for intron-inclusive, strand-aware gene-span
+  assignment from aligned blocks, with the existing global UMI collapse.
+  Support streaming/eager archives, BAM input, and compiled annotations.
+- Add Python `Client.replay(..., gene_full=True)` and record the counting model
+  in replay reports and MEX provenance. Reject incompatible velocity/audit flags.
+- Correct `assigned_molecules`, which previously counted representative rows.
+  Report molecule records, representatives, and UMI classes with separate
+  assignment numerators and denominators; all totals cover the full input.
+- Validate against an exhaustive overlap oracle, synthetic STARsolo runs,
+  equivalent representations, and matched brain-nucleus matrices. Preserve
+  default Gene matrices and archive/annotation encodings.
+
+
 ## [0.2.1] - 2026-09-07
 
 - Make rooted collection sources and parent layers relocatable through an optional

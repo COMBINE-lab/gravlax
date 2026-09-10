@@ -3100,6 +3100,20 @@ fn row_genes_stranded(
     solo_strand: anno::assign::SoloStrand,
     s: &mut RowScratch,
 ) -> Option<()> {
+    row_genes_model(r, x, anno, bam2anno, mm_missing, solo_strand, None, s)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn row_genes_model(
+    r: &Row,
+    x: &Extracted,
+    anno: &anno::Annotation,
+    bam2anno: &[Option<u32>],
+    mm_missing: MmMissing,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<&anno::assign::GeneFullIndex>,
+    s: &mut RowScratch,
+) -> Option<()> {
     // One-entry memo: same placement key → same genes (s.genes still holds them). The mm-missing
     // mode is constant across one pass, so it cannot alias between cached entries.
     let key = (r.chrom, r.pos, r.shape, r.pattern, r.strand_rev);
@@ -3112,9 +3126,13 @@ fn row_genes_stranded(
     if r.pattern == u32::MAX {
         let ac = (*bam2anno.get(r.chrom as usize)?)?;
         placement_from_parts_into(&mut s.place, r.chrom, r.pos, r.strand_rev, &x.shapes[r.shape as usize], 1);
-        anno::assign::concordant_genes_stranded_into(
-            &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
-        );
+        if let Some(index) = gene_full {
+            index.genes_into(&s.place, ac, solo_strand, &mut s.genes);
+        } else {
+            anno::assign::concordant_genes_stranded_into(
+                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
+            );
+        }
     } else {
         for alt in &x.patterns[r.pattern as usize] {
             let ac = match bam2anno.get(alt.chrom as usize).copied().flatten() {
@@ -3128,9 +3146,13 @@ fn row_genes_stranded(
             let arev = r.strand_rev != alt.strand_flip;
             let shape_id = if alt.shape == SAME_SHAPE { r.shape } else { alt.shape };
             placement_from_parts_into(&mut s.place, alt.chrom, apos, arev, &x.shapes[shape_id as usize], 2);
-            anno::assign::concordant_genes_stranded_into(
-                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
-            );
+            if let Some(index) = gene_full {
+                index.genes_into(&s.place, ac, solo_strand, &mut s.alt_genes);
+            } else {
+                anno::assign::concordant_genes_stranded_into(
+                    &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
+                );
+            }
             for &g in &s.alt_genes {
                 if !s.genes.contains(&g) {
                     s.genes.push(g);
@@ -4118,6 +4140,28 @@ fn extract_rows_inner(
 type ReplayTuple = (u32, u32, u32, u32); // (cell, class, gene, weight)
 const REPLAY_SHARDS: usize = 64;
 
+/// Assignment counts over all consumed input, not restricted to called nuclei.
+/// A molecule record can contain several representative rows, and a UMI class
+/// can occur in several records. None of these units is a collapsed UMI.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, PartialEq, Eq)]
+pub(crate) struct AssignmentStats {
+    pub molecule_records: u64,
+    pub assigned_molecule_records: u64,
+    pub representative_rows: u64,
+    pub assigned_representative_rows: u64,
+    pub umi_classes: u64,
+    pub assigned_umi_classes: u64,
+}
+
+impl AssignmentStats {
+    fn add(&mut self, other: Self) {
+        self.molecule_records += other.molecule_records;
+        self.assigned_molecule_records += other.assigned_molecule_records;
+        self.representative_rows += other.representative_rows;
+        self.assigned_representative_rows += other.assigned_representative_rows;
+    }
+}
+
 /// Bounded input-side reducer. Only assignment tuples survive each decoded archive batch; final
 /// aggregation remains global, so chunk boundaries cannot affect UMI classes or counts.
 pub(crate) struct ReplayRowsAccumulator<'a> {
@@ -4125,8 +4169,9 @@ pub(crate) struct ReplayRowsAccumulator<'a> {
     anno: &'a anno::Annotation,
     bam2anno: Vec<Option<u32>>,
     solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<anno::assign::GeneFullIndex>,
     shards: Vec<Vec<ReplayTuple>>,
-    n_assigned: u64,
+    stats: AssignmentStats,
 }
 
 impl<'a> ReplayRowsAccumulator<'a> {
@@ -4135,10 +4180,29 @@ impl<'a> ReplayRowsAccumulator<'a> {
         anno: &'a anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
     ) -> Self {
-        let bam2anno: Vec<Option<u32>> =
-            x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
-        Self { x, anno, bam2anno, solo_strand,
-            shards: (0..REPLAY_SHARDS).map(|_| Vec::new()).collect(), n_assigned: 0 }
+        Self::with_model(x, anno, solo_strand, false)
+    }
+
+    pub(crate) fn with_model(
+        x: &'a Extracted,
+        anno: &'a anno::Annotation,
+        solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
+    ) -> Self {
+        let bam2anno: Vec<Option<u32>> = x
+            .chrom_names
+            .iter()
+            .map(|n| anno.chrom_ids.get(n).copied())
+            .collect();
+        Self {
+            x,
+            anno,
+            bam2anno,
+            solo_strand,
+            gene_full: gene_full.then(|| anno::assign::GeneFullIndex::new(anno)),
+            shards: (0..REPLAY_SHARDS).map(|_| Vec::new()).collect(),
+            stats: AssignmentStats::default(),
+        }
     }
 
     pub(crate) fn reserve_assignments(&mut self, expected: usize) {
@@ -4148,42 +4212,77 @@ impl<'a> ReplayRowsAccumulator<'a> {
         }
     }
 
-    fn classify(&self, mols: &[MolRec], s: &mut RowScratch)
-        -> (u64, Vec<Vec<ReplayTuple>>)
-    {
-        let mut shards: Vec<Vec<ReplayTuple>> =
-            (0..REPLAY_SHARDS).map(|_| Vec::new()).collect();
-        let mut n = 0u64;
+    fn classify(
+        &self,
+        mols: &[MolRec],
+        s: &mut RowScratch,
+    ) -> (AssignmentStats, Vec<Vec<ReplayTuple>>) {
+        let mut shards: Vec<Vec<ReplayTuple>> = (0..REPLAY_SHARDS).map(|_| Vec::new()).collect();
+        let mut stats = AssignmentStats::default();
         for m in mols {
+            stats.molecule_records += 1;
+            let mut assigned = false;
             let mut handle = |r: Row| {
-                if row_genes_stranded(
-                    &r, self.x, self.anno, &self.bam2anno, MmMissing::SkipAlt,
-                    self.solo_strand, s,
-                ).is_some() {
+                stats.representative_rows += 1;
+                if row_genes_model(
+                    &r,
+                    self.x,
+                    self.anno,
+                    &self.bam2anno,
+                    MmMissing::SkipAlt,
+                    self.solo_strand,
+                    self.gene_full.as_ref(),
+                    s,
+                )
+                .is_some()
+                {
                     if let [g] = s.genes.as_slice() {
-                        n += 1;
-                        shards[r.cell as usize % REPLAY_SHARDS]
-                            .push((r.cell, r.umi_class, *g, r.weight));
+                        stats.assigned_representative_rows += 1;
+                        assigned = true;
+                        shards[r.cell as usize % REPLAY_SHARDS].push((
+                            r.cell,
+                            r.umi_class,
+                            *g,
+                            r.weight,
+                        ));
                     }
                 }
             };
             for ch in &m.chains {
                 for (pos, shape) in &ch.reps {
-                    handle(Row { cell: m.cell, umi_class: m.umi_class, chrom: m.chrom, pos: *pos,
-                        strand_rev: m.strand_rev, shape: *shape, weight: ch.weight,
-                        pattern: u32::MAX });
+                    handle(Row {
+                        cell: m.cell,
+                        umi_class: m.umi_class,
+                        chrom: m.chrom,
+                        pos: *pos,
+                        strand_rev: m.strand_rev,
+                        shape: *shape,
+                        weight: ch.weight,
+                        pattern: u32::MAX,
+                    });
                 }
             }
             for (pos, shape, pattern, weight) in &m.mms {
-                handle(Row { cell: m.cell, umi_class: m.umi_class, chrom: m.chrom, pos: *pos,
-                    strand_rev: m.strand_rev, shape: *shape, weight: *weight, pattern: *pattern });
+                handle(Row {
+                    cell: m.cell,
+                    umi_class: m.umi_class,
+                    chrom: m.chrom,
+                    pos: *pos,
+                    strand_rev: m.strand_rev,
+                    shape: *shape,
+                    weight: *weight,
+                    pattern: *pattern,
+                });
             }
+            stats.assigned_molecule_records += u64::from(assigned);
         }
-        (n, shards)
+        (stats, shards)
     }
 
-    fn append_parts(&mut self, mut parts: Vec<(u64, Vec<Vec<ReplayTuple>>)>) {
-        self.n_assigned += parts.iter().map(|(n, _)| *n).sum::<u64>();
+    fn append_parts(&mut self, mut parts: Vec<(AssignmentStats, Vec<Vec<ReplayTuple>>)>) {
+        for (stats, _) in &parts {
+            self.stats.add(*stats);
+        }
         for k in 0..REPLAY_SHARDS {
             self.shards[k].reserve(parts.iter().map(|(_, p)| p[k].len()).sum());
         }
@@ -4197,20 +4296,29 @@ impl<'a> ReplayRowsAccumulator<'a> {
     /// Fine reducer tasks let work stealing smooth gene-density differences within the fixed
     /// decode window without concatenating molecule records.
     pub(crate) fn add_archive_chunks(&mut self, chunks: &[Vec<MolRec>]) {
-        let tasks: Vec<&[MolRec]> = chunks.iter()
-            .flat_map(|chunk| chunk.chunks(1 << 16)).collect();
-        let parts: Vec<_> = tasks.into_par_iter()
-            .map_init(RowScratch::default, |s, part| self.classify(part, s)).collect();
+        let tasks: Vec<&[MolRec]> = chunks
+            .iter()
+            .flat_map(|chunk| chunk.chunks(1 << 16))
+            .collect();
+        let parts: Vec<_> = tasks
+            .into_par_iter()
+            .map_init(RowScratch::default, |s, part| self.classify(part, s))
+            .collect();
         self.append_parts(parts);
     }
 
     /// Preserve the original parallel shard assembly for a performance-faithful `--eager` arm.
     fn add_molecules_eager(&mut self, mols: &[MolRec]) {
-        let parts: Vec<_> = mols.par_chunks(1 << 19)
-            .map_init(RowScratch::default, |s, part| self.classify(part, s)).collect();
-        self.n_assigned += parts.iter().map(|(n, _)| *n).sum::<u64>();
+        let parts: Vec<_> = mols
+            .par_chunks(1 << 19)
+            .map_init(RowScratch::default, |s, part| self.classify(part, s))
+            .collect();
+        for (stats, _) in &parts {
+            self.stats.add(*stats);
+        }
         let mut shards: Vec<Vec<ReplayTuple>> = (0..REPLAY_SHARDS)
-            .map(|k| Vec::with_capacity(parts.iter().map(|(_, p)| p[k].len()).sum())).collect();
+            .map(|k| Vec::with_capacity(parts.iter().map(|(_, p)| p[k].len()).sum()))
+            .collect();
         shards.par_iter_mut().enumerate().for_each(|(k, dst)| {
             for (_, worker_shards) in &parts {
                 dst.extend_from_slice(&worker_shards[k]);
@@ -4220,10 +4328,15 @@ impl<'a> ReplayRowsAccumulator<'a> {
     }
 
     pub(crate) fn finish(self) -> (FxHashMap<(u32, u32), u32>, u64, u64) {
+        let (counts, stats, total) = self.finish_with_stats();
+        (counts, stats.assigned_representative_rows, total)
+    }
+
+    pub(crate) fn finish_with_stats(self) -> (FxHashMap<(u32, u32), u32>, AssignmentStats, u64) {
         let Self {
             x,
             shards,
-            n_assigned,
+            mut stats,
             ..
         } = self;
 
@@ -4251,9 +4364,9 @@ impl<'a> ReplayRowsAccumulator<'a> {
         }
         drop(cur);
 
-        let counted: Vec<((u32, u32), u32)> = shards
+        let counted_shards: Vec<_> = shards
             .into_par_iter()
-            .flat_map_iter(|mut shard| {
+            .map(|mut shard| {
                 // Sorting groups (cell, class) runs with genes as sub-runs; weight sums, the
                 // MultiGeneUMI_CR best-gene choice and the per-(cell, gene) collapse all read off
                 // contiguous slices. Semantics identical to the old nested-map pipeline.
@@ -4327,12 +4440,18 @@ impl<'a> ReplayRowsAccumulator<'a> {
                     out.push(((cell, gene), roots));
                     g0 = g1;
                 }
-                out
+                (out, kept.len() as u64)
             })
             .collect();
 
-    let total: u64 = counted.iter().map(|(_, n)| *n as u64).sum();
-    (counted.into_iter().collect(), n_assigned, total)
+        stats.umi_classes = u64::from(x.n_classes);
+        stats.assigned_umi_classes = counted_shards.iter().map(|(_, n)| *n).sum();
+        let counted: FxHashMap<_, _> = counted_shards
+            .into_iter()
+            .flat_map(|(rows, _)| rows)
+            .collect();
+        let total = counted.values().map(|n| u64::from(*n)).sum();
+        (counted, stats, total)
     }
 }
 
@@ -4355,4 +4474,107 @@ pub fn replay_rows_stranded(
     let mut replay = ReplayRowsAccumulator::with_strand(x, anno, solo_strand);
     replay.add_molecules_eager(&x.mols);
     replay.finish()
+}
+
+/// Gene or intron-inclusive GeneFull assignment with the same global UMI collapse.
+pub(crate) fn replay_rows_model(
+    x: &Extracted,
+    anno: &anno::Annotation,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: bool,
+) -> (FxHashMap<(u32, u32), u32>, AssignmentStats, u64) {
+    let mut replay = ReplayRowsAccumulator::with_model(x, anno, solo_strand, gene_full);
+    replay.add_molecules_eager(&x.mols);
+    replay.finish_with_stats()
+}
+
+#[cfg(test)]
+mod genefull_replay_tests {
+    use super::*;
+
+    #[test]
+    fn genefull_alternatives_global_collapse_and_statistic_units() {
+        let path =
+            std::env::temp_dir().join(format!("gravlax-genefull-{}.gtf", std::process::id()));
+        std::fs::write(
+            &path,
+            concat!(
+                "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"A\"; transcript_id \"A1\";\n",
+                "chr1\tX\texon\t401\t500\t.\t+\t.\tgene_id \"A\"; transcript_id \"A1\";\n",
+                "chr1\tX\texon\t251\t300\t.\t+\t.\tgene_id \"B\"; transcript_id \"B1\";\n"
+            ),
+        )
+        .unwrap();
+        let anno = anno::Annotation::from_gtf(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let molecule = |class, pos| MolRec {
+            cell: 0,
+            umi_class: class,
+            chrom: 0,
+            strand_rev: false,
+            chains: smallvec::smallvec![MolChain {
+                weight: 2,
+                reps: smallvec::smallvec![(pos, 0)]
+            }],
+            mms: SmallVec::new(),
+        };
+        let mut mols = vec![
+            molecule(0, 210),
+            molecule(1, 210),
+            molecule(0, 410),
+            molecule(2, 260),
+            molecule(3, 210),
+            molecule(4, 210),
+            molecule(5, 210),
+        ];
+        mols[0].chains[0].reps.push((220, 0));
+        for (i, pattern) in [(4, 0), (5, 1)] {
+            mols[i].chains.clear();
+            mols[i].mms.push((210, 0, pattern, 1));
+        }
+        mols[6].chrom = 1; // missing annotation chromosome
+        let alt = |offset| PatAlt {
+            chrom: 0,
+            offset,
+            strand_flip: false,
+            shape: SAME_SHAPE,
+        };
+        let x = Extracted {
+            mols,
+            edges: vec![(0, 1)],
+            cells: vec![0],
+            shapes: vec![Shape {
+                blocks: vec![(0, 20)],
+            }],
+            patterns: vec![vec![alt(0), alt(200)], vec![alt(0), alt(50)]],
+            n_classes: 6,
+            chrom_names: vec!["chr1".into(), "missing".into()],
+        };
+        let (gene, _, gene_total) = replay_rows(&x, &anno);
+        assert_eq!(gene_total, 4);
+        assert_eq!(gene.get(&(0, 0)), Some(&2));
+        assert_eq!(gene.get(&(0, 1)), Some(&2));
+        let (full, stats, total) =
+            replay_rows_model(&x, &anno, anno::assign::SoloStrand::Forward, true);
+        assert_eq!(total, 2);
+        assert_eq!(full, FxHashMap::from_iter([((0, 0), 2)]));
+        assert_eq!(
+            stats,
+            AssignmentStats {
+                molecule_records: 7,
+                assigned_molecule_records: 4,
+                representative_rows: 8,
+                assigned_representative_rows: 5,
+                umi_classes: 6,
+                assigned_umi_classes: 3
+            }
+        );
+        // Related classes and repeated class records cross reducer batch boundaries.
+        let mut streaming =
+            ReplayRowsAccumulator::with_model(&x, &anno, anno::assign::SoloStrand::Forward, true);
+        for m in &x.mols {
+            streaming.add_archive_chunks(&[vec![m.clone()]]);
+        }
+        assert_eq!(streaming.finish_with_stats(), (full, stats, total));
+    }
 }

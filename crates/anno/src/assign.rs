@@ -41,6 +41,82 @@ impl SoloStrand {
     }
 }
 
+/// STARsolo `GeneFull`: overlap aligned blocks with exon-derived full gene spans.
+/// Built once per replay; the archive and compiled annotation formats are unchanged.
+pub struct GeneFullIndex {
+    chroms: hashbrown::HashMap<u32, Vec<GeneSpan>>,
+}
+
+struct GeneSpan {
+    start: u32,
+    end: u32,
+    max_end: u32,
+    gene: u32,
+    reverse: bool,
+}
+
+impl GeneFullIndex {
+    pub fn new(anno: &crate::Annotation) -> Self {
+        let mut bounds = hashbrown::HashMap::<(u32, u32, bool), (u32, u32)>::new();
+        for t in &anno.transcripts {
+            let (start, end) = t.span();
+            if start >= end {
+                continue;
+            }
+            let entry = bounds
+                .entry((t.chrom, t.gene, t.strand_rev))
+                .or_insert((start, end));
+            entry.0 = entry.0.min(start);
+            entry.1 = entry.1.max(end);
+        }
+        let mut chroms: hashbrown::HashMap<u32, Vec<GeneSpan>> = hashbrown::HashMap::new();
+        for ((chrom, gene, reverse), (start, end)) in bounds {
+            chroms.entry(chrom).or_default().push(GeneSpan {
+                start,
+                end,
+                max_end: 0,
+                gene,
+                reverse,
+            });
+        }
+        for spans in chroms.values_mut() {
+            spans.sort_unstable_by_key(|s| (s.start, s.end, s.gene, s.reverse));
+            let mut max_end = 0;
+            for span in spans {
+                max_end = max_end.max(span.end);
+                span.max_end = max_end;
+            }
+        }
+        Self { chroms }
+    }
+
+    /// Only aligned blocks overlap: genes inside skipped introns are not hit by
+    /// the outer alignment span alone. Junction concordance is not required.
+    pub fn genes_into(&self, p: &Placement, chrom: u32, strand: SoloStrand, out: &mut Vec<u32>) {
+        out.clear();
+        let Some(spans) = self.chroms.get(&chrom) else {
+            return;
+        };
+        let reverse = matches!(p.strand, evidence_io::Strand::Reverse);
+        for block in &p.blocks {
+            if block.start >= block.end {
+                continue;
+            }
+            let hi = spans.partition_point(|s| s.start < block.end);
+            for span in spans[..hi].iter().rev() {
+                if span.max_end <= block.start {
+                    break;
+                }
+                if span.end > block.start && strand.accepts(reverse, span.reverse) {
+                    out.push(span.gene);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+    }
+}
+
 /// STAR's `AlignVsTranscript` states, minus the transcript-distance bookkeeping replay never uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vs {
@@ -430,4 +506,165 @@ mod tests {
         assert!(Unstranded.accepts(true, true));
     }
 
+}
+
+#[cfg(test)]
+mod genefull_tests {
+    use super::*;
+    use crate::{Annotation, Exon};
+    use evidence_io::{Block, Strand};
+
+    fn annotation(transcripts: Vec<Transcript>) -> Annotation {
+        Annotation {
+            gene_ids: Vec::new(),
+            gene_names: Vec::new(),
+            transcript_ids: Vec::new(),
+            source_exons: Vec::new(),
+            chrom_ids: Default::default(),
+            index: crate::build_index(&transcripts),
+            transcripts,
+        }
+    }
+
+    fn tx(gene: u32, chrom: u32, reverse: bool, exons: &[(u32, u32)]) -> Transcript {
+        Transcript {
+            gene,
+            chrom,
+            strand_rev: reverse,
+            exons: exons
+                .iter()
+                .map(|&(start, end)| Exon { start, end })
+                .collect(),
+        }
+    }
+
+    fn placement(blocks: &[(u32, u32)], reverse: bool) -> Placement {
+        Placement {
+            chrom: 99,
+            strand: if reverse {
+                Strand::Reverse
+            } else {
+                Strand::Forward
+            },
+            blocks: blocks
+                .iter()
+                .map(|&(start, end)| Block { start, end })
+                .collect(),
+            junctions: Vec::new(),
+            nm: 0,
+            score: 0,
+            nh: 1,
+            clip: (0, 0),
+        }
+    }
+
+    #[test]
+    fn genefull_boundaries_isoforms_nested_genes_and_skipped_introns() {
+        let a = annotation(vec![
+            tx(0, 0, false, &[(100, 200), (400, 500)]),
+            tx(0, 0, false, &[(700, 800)]),
+            tx(1, 0, false, &[(250, 300)]),
+            tx(2, 0, true, &[(100, 800)]),
+            tx(0, 1, false, &[(900, 1000)]),
+            tx(0, 0, true, &[(900, 1000)]),
+        ]);
+        let index = GeneFullIndex::new(&a);
+        for (blocks, strand, expected) in [
+            (vec![(99, 100)], SoloStrand::Forward, vec![]),
+            (vec![(100, 101)], SoloStrand::Forward, vec![0]),
+            (vec![(799, 800)], SoloStrand::Forward, vec![0]),
+            (vec![(800, 801)], SoloStrand::Forward, vec![]),
+            (vec![(600, 650)], SoloStrand::Forward, vec![0]), // gap between isoforms
+            (vec![(260, 270)], SoloStrand::Forward, vec![0, 1]),
+            (vec![(150, 200), (400, 450)], SoloStrand::Forward, vec![0]),
+            (vec![(150, 190), (410, 450)], SoloStrand::Forward, vec![0]), // novel splice
+            (vec![(100, 110)], SoloStrand::Reverse, vec![2]),
+            (vec![(100, 110)], SoloStrand::Unstranded, vec![0, 2]),
+            (vec![(950, 960)], SoloStrand::Forward, vec![]), // no cross-strand union
+            (vec![(200, 200)], SoloStrand::Unstranded, vec![]),
+        ] {
+            let mut got = vec![999];
+            index.genes_into(&placement(&blocks, false), 0, strand, &mut got);
+            assert_eq!(got, expected, "{blocks:?} {strand:?}");
+        }
+        let mut got = Vec::new();
+        index.genes_into(
+            &placement(&[(950, 960)], false),
+            1,
+            SoloStrand::Forward,
+            &mut got,
+        );
+        assert_eq!(got, vec![0]);
+        index.genes_into(
+            &placement(&[(950, 960)], false),
+            2,
+            SoloStrand::Forward,
+            &mut got,
+        );
+        assert!(got.is_empty());
+    }
+
+    #[test]
+    fn genefull_index_matches_independent_exhaustive_overlap() {
+        let mut seed = 421u64;
+        let mut random = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (seed >> 32) as u32
+        };
+        let transcripts = (0..300)
+            .map(|_| {
+                let start = random() % 2000;
+                tx(
+                    random() % 30,
+                    random() % 4,
+                    random() % 2 == 0,
+                    &[
+                        (start, start + 1 + random() % 30),
+                        (start + 50, start + 100),
+                    ],
+                )
+            })
+            .collect();
+        let a = annotation(transcripts);
+        let index = GeneFullIndex::new(&a);
+        // Oracle scans every exon to derive bounds, then every gene; no interval index.
+        let mut spans = std::collections::BTreeMap::<(u32, u32, bool), (u32, u32)>::new();
+        for t in &a.transcripts {
+            for exon in &t.exons {
+                let span = spans
+                    .entry((t.gene, t.chrom, t.strand_rev))
+                    .or_insert((u32::MAX, 0));
+                span.0 = span.0.min(exon.start);
+                span.1 = span.1.max(exon.end);
+            }
+        }
+        for _ in 0..2000 {
+            let start = random() % 2500;
+            let p = placement(
+                &[(start, start + random() % 100), (start + 150, start + 200)],
+                random() % 2 == 0,
+            );
+            let chrom = random() % 5;
+            for strand in [
+                SoloStrand::Forward,
+                SoloStrand::Reverse,
+                SoloStrand::Unstranded,
+            ] {
+                let mut expected = std::collections::BTreeSet::new();
+                for (&(gene, c, reverse), &(s, e)) in &spans {
+                    if c == chrom
+                        && strand.accepts(matches!(p.strand, Strand::Reverse), reverse)
+                        && p.blocks
+                            .iter()
+                            .any(|b| b.start < b.end && b.start < e && s < b.end)
+                    {
+                        expected.insert(gene);
+                    }
+                }
+                let mut got = Vec::new();
+                index.genes_into(&p, chrom, strand, &mut got);
+                assert_eq!(got, expected.into_iter().collect::<Vec<_>>());
+            }
+        }
+    }
 }
