@@ -4,6 +4,8 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+## [0.3.0] - 2026-09-10
+
 - Add forward, reverse and unstranded assignment to recovery EM, and extend
   STAR-style EM to GeneFull with the same model/strand for unique and ambiguous
   evidence. Record model, strand and counting units in emitted metadata.
@@ -13,8 +15,6 @@ This file records user-visible changes in each Gravlax release.
   expose `--support-memory-mib` and report storage scope and capacity.
 - Query GeneFull directly from aligned blocks using separate strand indexes.
   Preserve archive and compiled-annotation encodings and default Gene results.
-
-## [0.3.0] - 2026-09-10
 
 - Add `dev em --gene-full` for intron-inclusive recovery evaluation and pooled
   emission, with explicit masked-class coverage and counting-model metadata.
