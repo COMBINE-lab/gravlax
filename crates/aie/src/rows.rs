@@ -3100,6 +3100,20 @@ fn row_genes_stranded(
     solo_strand: anno::assign::SoloStrand,
     s: &mut RowScratch,
 ) -> Option<()> {
+    row_genes_model(r, x, anno, bam2anno, mm_missing, solo_strand, None, s)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn row_genes_model(
+    r: &Row,
+    x: &Extracted,
+    anno: &anno::Annotation,
+    bam2anno: &[Option<u32>],
+    mm_missing: MmMissing,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<&anno::assign::GeneFullIndex>,
+    s: &mut RowScratch,
+) -> Option<()> {
     // One-entry memo: same placement key → same genes (s.genes still holds them). The mm-missing
     // mode is constant across one pass, so it cannot alias between cached entries.
     let key = (r.chrom, r.pos, r.shape, r.pattern, r.strand_rev);
@@ -3112,9 +3126,13 @@ fn row_genes_stranded(
     if r.pattern == u32::MAX {
         let ac = (*bam2anno.get(r.chrom as usize)?)?;
         placement_from_parts_into(&mut s.place, r.chrom, r.pos, r.strand_rev, &x.shapes[r.shape as usize], 1);
-        anno::assign::concordant_genes_stranded_into(
-            &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
-        );
+        if let Some(index) = gene_full {
+            index.genes_into(&s.place, ac, solo_strand, &mut s.genes);
+        } else {
+            anno::assign::concordant_genes_stranded_into(
+                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
+            );
+        }
     } else {
         for alt in &x.patterns[r.pattern as usize] {
             let ac = match bam2anno.get(alt.chrom as usize).copied().flatten() {
@@ -3128,9 +3146,13 @@ fn row_genes_stranded(
             let arev = r.strand_rev != alt.strand_flip;
             let shape_id = if alt.shape == SAME_SHAPE { r.shape } else { alt.shape };
             placement_from_parts_into(&mut s.place, alt.chrom, apos, arev, &x.shapes[shape_id as usize], 2);
-            anno::assign::concordant_genes_stranded_into(
-                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
-            );
+            if let Some(index) = gene_full {
+                index.genes_into(&s.place, ac, solo_strand, &mut s.alt_genes);
+            } else {
+                anno::assign::concordant_genes_stranded_into(
+                    &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
+                );
+            }
             for &g in &s.alt_genes {
                 if !s.genes.contains(&g) {
                     s.genes.push(g);
@@ -4125,6 +4147,7 @@ pub(crate) struct ReplayRowsAccumulator<'a> {
     anno: &'a anno::Annotation,
     bam2anno: Vec<Option<u32>>,
     solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<anno::assign::GeneFullIndex>,
     shards: Vec<Vec<ReplayTuple>>,
     n_assigned: u64,
 }
@@ -4135,9 +4158,19 @@ impl<'a> ReplayRowsAccumulator<'a> {
         anno: &'a anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
     ) -> Self {
+        Self::with_model(x, anno, solo_strand, false)
+    }
+
+    pub(crate) fn with_model(
+        x: &'a Extracted,
+        anno: &'a anno::Annotation,
+        solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
+    ) -> Self {
         let bam2anno: Vec<Option<u32>> =
             x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
         Self { x, anno, bam2anno, solo_strand,
+            gene_full: gene_full.then(|| anno::assign::GeneFullIndex::new(anno)),
             shards: (0..REPLAY_SHARDS).map(|_| Vec::new()).collect(), n_assigned: 0 }
     }
 
@@ -4156,9 +4189,9 @@ impl<'a> ReplayRowsAccumulator<'a> {
         let mut n = 0u64;
         for m in mols {
             let mut handle = |r: Row| {
-                if row_genes_stranded(
+                if row_genes_model(
                     &r, self.x, self.anno, &self.bam2anno, MmMissing::SkipAlt,
-                    self.solo_strand, s,
+                    self.solo_strand, self.gene_full.as_ref(), s,
                 ).is_some() {
                     if let [g] = s.genes.as_slice() {
                         n += 1;
@@ -4353,6 +4386,18 @@ pub fn replay_rows_stranded(
     solo_strand: anno::assign::SoloStrand,
 ) -> (FxHashMap<(u32, u32), u32>, u64, u64) {
     let mut replay = ReplayRowsAccumulator::with_strand(x, anno, solo_strand);
+    replay.add_molecules_eager(&x.mols);
+    replay.finish()
+}
+
+/// Gene or intron-inclusive GeneFull assignment with the same global UMI collapse.
+pub fn replay_rows_model(
+    x: &Extracted,
+    anno: &anno::Annotation,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: bool,
+) -> (FxHashMap<(u32, u32), u32>, u64, u64) {
+    let mut replay = ReplayRowsAccumulator::with_model(x, anno, solo_strand, gene_full);
     replay.add_molecules_eager(&x.mols);
     replay.finish()
 }

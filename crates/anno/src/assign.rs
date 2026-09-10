@@ -41,6 +41,68 @@ impl SoloStrand {
     }
 }
 
+/// STARsolo `GeneFull`: overlap aligned blocks with exon-derived full gene spans.
+/// Built once per replay; the archive and compiled annotation formats are unchanged.
+pub struct GeneFullIndex {
+    chroms: hashbrown::HashMap<u32, Vec<GeneSpan>>,
+}
+
+struct GeneSpan {
+    start: u32,
+    end: u32,
+    max_end: u32,
+    gene: u32,
+    reverse: bool,
+}
+
+impl GeneFullIndex {
+    pub fn new(anno: &crate::Annotation) -> Self {
+        let mut bounds = hashbrown::HashMap::<(u32, u32, bool), (u32, u32)>::new();
+        for t in &anno.transcripts {
+            let (start, end) = t.span();
+            if start >= end { continue; }
+            let entry = bounds.entry((t.chrom, t.gene, t.strand_rev)).or_insert((start, end));
+            entry.0 = entry.0.min(start);
+            entry.1 = entry.1.max(end);
+        }
+        let mut chroms: hashbrown::HashMap<u32, Vec<GeneSpan>> = hashbrown::HashMap::new();
+        for ((chrom, gene, reverse), (start, end)) in bounds {
+            chroms.entry(chrom).or_default().push(GeneSpan {
+                start, end, max_end: 0, gene, reverse,
+            });
+        }
+        for spans in chroms.values_mut() {
+            spans.sort_unstable_by_key(|s| (s.start, s.end, s.gene, s.reverse));
+            let mut max_end = 0;
+            for span in spans {
+                max_end = max_end.max(span.end);
+                span.max_end = max_end;
+            }
+        }
+        Self { chroms }
+    }
+
+    /// Only aligned blocks overlap: genes inside skipped introns are not hit by
+    /// the outer alignment span alone. Junction concordance is not required.
+    pub fn genes_into(&self, p: &Placement, chrom: u32, strand: SoloStrand, out: &mut Vec<u32>) {
+        out.clear();
+        let Some(spans) = self.chroms.get(&chrom) else { return; };
+        let reverse = matches!(p.strand, evidence_io::Strand::Reverse);
+        for block in &p.blocks {
+            if block.start >= block.end { continue; }
+            let hi = spans.partition_point(|s| s.start < block.end);
+            for span in spans[..hi].iter().rev() {
+                if span.max_end <= block.start { break; }
+                if span.end > block.start && strand.accepts(reverse, span.reverse) {
+                    out.push(span.gene);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+    }
+}
+
 /// STAR's `AlignVsTranscript` states, minus the transcript-distance bookkeeping replay never uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vs {

@@ -201,6 +201,10 @@ pub struct ReplayRowsArgs {
     /// Emit STARsolo Velocyto semantics (spliced/unspliced/ambiguous matrices) instead of Gene.
     #[arg(long)]
     pub velocity: bool,
+    /// Count aligned-block overlaps with full gene spans (exons and introns), matching
+    /// STARsolo GeneFull. Gene remains the default.
+    #[arg(long, conflicts_with_all = ["velocity", "audit_multigene"])]
+    pub gene_full: bool,
     /// STARsolo cDNA-alignment/transcript strand relationship. 10x 3' uses forward; R2-only 10x
     /// 5' uses reverse.
     #[arg(long, value_enum, default_value_t = SoloStrandArg::Forward)]
@@ -2196,8 +2200,9 @@ impl StreamingReplayArchive {
         &self,
         anno: &anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
     ) -> Result<StreamingReplayResult> {
-        let mut replay = ReplayRowsAccumulator::with_strand(&self.x, anno, solo_strand);
+        let mut replay = ReplayRowsAccumulator::with_model(&self.x, anno, solo_strand, gene_full);
         replay.reserve_assignments(self.n_mols);
         // Two access units per worker smooth decode density and amortize reducer barriers while
         // retaining bounded memory use in complete-command peak-RSS measurements.
@@ -3779,7 +3784,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         let t_open = t0.elapsed().as_secs_f32();
         let (anno, annotation_identity) = load_replay_annotation(&args.gtf, reporting)?;
         let t_anno = t0.elapsed().as_secs_f32();
-        let (counts, n_assigned, total) = archive.replay(&anno, solo_strand)?;
+        let (counts, n_assigned, total) = archive.replay(&anno, solo_strand, args.gene_full)?;
         let t_replay = t0.elapsed().as_secs_f32();
         let artifact = emit_matrix(
             &counts,
@@ -4001,7 +4006,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         );
         return Ok(());
     }
-    let (counts, n_assigned, total) = replay_rows_stranded(&x, &anno, solo_strand);
+    let (counts, n_assigned, total) = crate::rows::replay_rows_model(&x, &anno, solo_strand, args.gene_full);
     let t_replay = t0.elapsed().as_secs_f32();
     let artifact = emit_matrix(
         &counts,
@@ -4770,6 +4775,10 @@ fn replay_report_context(
         serde_json::json!(args.from_molecule_bam),
     );
     parameters.insert("velocity".into(), serde_json::json!(args.velocity));
+    parameters.insert("gene_full".into(), serde_json::json!(args.gene_full));
+    parameters.insert("counting_model".into(), serde_json::json!(
+        if args.velocity { "Velocyto" } else if args.gene_full { "GeneFull" } else { "Gene" }
+    ));
     parameters.insert(
         "audit_multigene".into(),
         serde_json::json!(args.audit_multigene),
