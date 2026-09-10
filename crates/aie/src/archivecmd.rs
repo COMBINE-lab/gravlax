@@ -7,8 +7,8 @@ pub(crate) mod transcriptec;
 
 use crate::rows::{
     extract_rows, extract_rows_for_archive, extract_rows_with_identity, identity_of_consumed_file,
-    replay_rows_stranded, ConsumedFileIdentity, Extracted, ExtractedTerminalTails, MolChain,
-    MolRec, PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
+    AssignmentStats, ConsumedFileIdentity, Extracted, ExtractedTerminalTails, MolChain, MolRec,
+    PatAlt, ReplayRowsAccumulator, SAME_SHAPE,
 };
 use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
@@ -201,6 +201,10 @@ pub struct ReplayRowsArgs {
     /// Emit STARsolo Velocyto semantics (spliced/unspliced/ambiguous matrices) instead of Gene.
     #[arg(long)]
     pub velocity: bool,
+    /// Count aligned-block overlaps with full gene spans (exons and introns), matching
+    /// STARsolo GeneFull. Gene remains the default.
+    #[arg(long, conflicts_with_all = ["velocity", "audit_multigene"])]
+    pub gene_full: bool,
     /// STARsolo cDNA-alignment/transcript strand relationship. 10x 3' uses forward; R2-only 10x
     /// 5' uses reverse.
     #[arg(long, value_enum, default_value_t = SoloStrandArg::Forward)]
@@ -2152,7 +2156,7 @@ struct StreamingReplayArchive {
     n_mols: usize,
 }
 
-type StreamingReplayResult = (FxHashMap<(u32, u32), u32>, u64, u64);
+type StreamingReplayResult = (FxHashMap<(u32, u32), u32>, AssignmentStats, u64);
 
 impl StreamingReplayArchive {
     fn open(path: &Path) -> Result<Self> {
@@ -2196,8 +2200,9 @@ impl StreamingReplayArchive {
         &self,
         anno: &anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
     ) -> Result<StreamingReplayResult> {
-        let mut replay = ReplayRowsAccumulator::with_strand(&self.x, anno, solo_strand);
+        let mut replay = ReplayRowsAccumulator::with_model(&self.x, anno, solo_strand, gene_full);
         replay.reserve_assignments(self.n_mols);
         // Two access units per worker smooth decode density and amortize reducer barriers while
         // retaining bounded memory use in complete-command peak-RSS measurements.
@@ -2224,7 +2229,7 @@ impl StreamingReplayArchive {
                 self.n_mols
             );
         }
-        Ok(replay.finish())
+        Ok(replay.finish_with_stats())
     }
     /// Decode the archive in the same bounded batches as streaming Gene replay, but reduce each
     /// batch immediately to packed (class,gene,evidence-kind) support words.  The final EM owns
@@ -2232,14 +2237,24 @@ impl StreamingReplayArchive {
     fn packed_em_accumulator(
         &self,
         anno: &anno::Annotation,
+        gene_full: bool,
+        solo_strand: anno::assign::SoloStrand,
+        support_memory_budget: usize,
     ) -> Result<crate::rows::PackedEmAccumulator> {
-        let mut em = crate::rows::PackedEmAccumulator::new(&self.x, anno, self.n_mols)?;
+        let mut em = crate::rows::PackedEmAccumulator::new(
+            &self.x,
+            anno,
+            self.n_mols,
+            gene_full,
+            solo_strand,
+            support_memory_budget,
+        )?;
         let threads = rayon::current_num_threads().max(1);
-        // The disk-backed path exists to bound large-archive memory. Eight access units keep its
-        // decoded MolRec window small; classification still subdivides them into 65k tasks and
-        // can use the full Rayon pool. Small in-memory archives retain the faster, benchmarked
-        // two-per-thread decode window.
-        let batch_size = if em.spills_supports() {
+        // Record count is only a decode-window hint, not the support-spill decision. Eight
+        // access units keep large-input decoder scratch small; classification still subdivides
+        // them into 65k tasks and uses the Rayon pool. Actual support volume controls spilling.
+        // Small estimated inputs retain the two-per-thread decode window.
+        let batch_size = if em.small_decode_window() {
             threads.min(8)
         } else {
             threads * 2
@@ -2357,6 +2372,12 @@ pub struct EmArgs {
     pub archive: PathBuf,
     #[arg(long)]
     pub gtf: PathBuf,
+    /// Use intron-inclusive GeneFull candidates. Default: Gene. Also applies to --star.
+    #[arg(long)]
+    pub gene_full: bool,
+    /// cDNA-alignment/gene strand relationship, for both recovery and STAR-style EM.
+    #[arg(long, value_enum, default_value_t = SoloStrandArg::Forward)]
+    pub solo_strand: SoloStrandArg,
     /// Fraction of mixed classes to mask for the labeled evaluation.
     #[arg(long, default_value_t = 0.2)]
     pub mask: f64,
@@ -2369,6 +2390,18 @@ pub struct EmArgs {
     /// absent from the map retain the global fallback and are excluded from all mode scores.
     #[arg(long)]
     pub groups: Option<PathBuf>,
+    /// Score only these barcodes without changing the fitted priors or enabling group modes.
+    /// With --groups, overrides its scoring population while retaining the group assignments.
+    #[arg(long, conflicts_with_all = ["star", "eager"])]
+    pub eval_barcodes: Option<PathBuf>,
+    /// Comma-separated EM modes to run. Defaults to four base modes, or all nine with --groups.
+    /// Group-derived modes require --groups; emission requires pooled among the selected modes.
+    #[arg(long, value_delimiter = ',', value_parser = ["uniform", "cell", "pooled", "blend", "group", "hierarchical", "convex", "dirichlet-proxy", "depth-hybrid"],
+        conflicts_with_all = ["star", "eager", "convex_only", "dirichlet_only", "hybrid_only"])]
+    pub modes: Vec<String>,
+    /// Retained packed support budget in MiB; 0 forces disk spill. Does not cap total process RSS.
+    #[arg(long, default_value_t = 512, conflicts_with_all = ["star", "eager"])]
+    pub support_memory_mib: usize,
     /// Hierarchical pseudo-count mass borrowed from the supplied group distribution.
     #[arg(long, default_value_t = 20.0)]
     pub group_alpha: f64,
@@ -2437,7 +2470,7 @@ pub struct EmArgs {
     /// Barcode list defining emitted column order (for example, STARsolo raw barcodes.tsv).
     #[arg(long)]
     pub barcodes: Option<PathBuf>,
-    /// EM-0: replicate STARsolo --soloMultiMappers EM exactly (per-cell, intersection candidate
+    /// EM-0: use STARsolo --soloMultiMappers EM rules (per-cell, intersection candidate
     /// sets, STAR's init/zeroing/convergence) and emit UniqueAndMult-EM.mtx into --emit.
     #[arg(long)]
     pub star: bool,
@@ -2449,6 +2482,50 @@ pub struct EmArgs {
     /// the masked run's calibration counts.
     #[arg(long)]
     pub plot: Option<PathBuf>,
+}
+
+fn read_em_evaluation_barcodes(path: &PathBuf, cells: &[u32]) -> Result<Vec<bool>> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("read evaluation barcodes {}", path.display()))?;
+    let cell_ids: HbMap<u32, usize> = cells.iter().enumerate().map(|(i, &b)| (b, i)).collect();
+    let mut selected = vec![false; cells.len()];
+    for (line, text) in text.lines().enumerate() {
+        let barcode = text.trim();
+        if barcode.is_empty() {
+            continue;
+        }
+        let barcode = barcode.strip_suffix("-1").unwrap_or(barcode);
+        let packed = if barcode.len() == 16 {
+            umi::pack(barcode.as_bytes())
+        } else {
+            None
+        }
+        .with_context(|| {
+            format!(
+                "{}:{}: expected a 16-base A/C/G/T barcode (optional -1 suffix)",
+                path.display(),
+                line + 1
+            )
+        })?;
+        let &cell = cell_ids.get(&packed).with_context(|| {
+            format!(
+                "{}:{}: barcode {barcode} is not in the archive",
+                path.display(),
+                line + 1
+            )
+        })?;
+        if std::mem::replace(&mut selected[cell], true) {
+            bail!(
+                "{}:{}: duplicate evaluation barcode {barcode}",
+                path.display(),
+                line + 1
+            );
+        }
+    }
+    if !selected.iter().any(|v| *v) {
+        bail!("evaluation barcode list is empty");
+    }
+    Ok(selected)
 }
 
 fn read_em_groups(path: &PathBuf, cells: &[u32], collapse: bool) -> Result<crate::rows::EmGroups> {
@@ -2576,6 +2653,23 @@ fn configure_em_allocator() {}
 
 pub fn run_em(args: EmArgs) -> Result<()> {
     configure_em_allocator();
+    let support_memory_budget = args
+        .support_memory_mib
+        .checked_mul(1 << 20)
+        .context("--support-memory-mib is too large")?;
+    let mut selected = std::collections::HashSet::new();
+    for mode in &args.modes {
+        if !selected.insert(mode) {
+            bail!("duplicate EM mode {mode}");
+        }
+        if args.groups.is_none() && !["uniform", "cell", "pooled", "blend"].contains(&mode.as_str())
+        {
+            bail!("EM mode {mode} requires --groups");
+        }
+    }
+    if args.emit.is_some() && !args.modes.is_empty() && !args.modes.iter().any(|m| m == "pooled") {
+        bail!("--emit requires pooled among --modes");
+    }
     if !args.mask.is_finite() || !(0.0..=1.0).contains(&args.mask) {
         bail!("--mask must be finite and between 0 and 1");
     }
@@ -2629,7 +2723,7 @@ pub fn run_em(args: EmArgs) -> Result<()> {
     let anno = anno::Annotation::from_path(&args.gtf)?;
     if args.star {
         let x = read_archive(&args.archive)?;
-        let m = crate::rows::em_star_matrix(&x, &anno);
+        let m = crate::rows::em_star_matrix(&x, &anno, args.gene_full, args.solo_strand.into());
         let out_dir = args.emit.as_ref().context("--star requires --emit")?;
         let barcodes = args
             .barcodes
@@ -2693,6 +2787,18 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         }
         mtx.flush()?;
         feat.flush()?;
+        std::fs::write(
+            out_dir.join("metadata.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "counting_model": if args.gene_full { "GeneFull" } else { "Gene" },
+                "strand_policy": replay_strand_name(args.solo_strand),
+                "algorithm": "STAR-style per-cell EM",
+                "layer": "unique plus fractional multi-only counts",
+                "counting_unit": "unique replay UMIs after one-mismatch collapse plus fractional multi-only raw UMI classes",
+                "archive": args.archive,
+                "annotation": args.gtf,
+            }))?,
+        )?;
         eprintln!(
             "wrote UniqueAndMult-EM ({} entries) to {}",
             triplets.len(),
@@ -2705,6 +2811,8 @@ pub fn run_em(args: EmArgs) -> Result<()> {
     let mut paired_metrics: Vec<crate::rows::PackedPairedMetrics> = Vec::new();
     let mut group_names: Vec<String> = Vec::new();
     let mut group_eval_cells = 0usize;
+    let mut evaluation_counts = serde_json::Value::Null;
+    let mut support_storage = serde_json::Value::Null;
     let (recovered, cells) = if args.eager {
         let x = read_archive(&args.archive)?;
         let recovered = crate::rows::em_experiment(
@@ -2714,11 +2822,19 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             args.seed,
             args.alpha,
             args.plot.is_some().then_some(&mut cals),
+            args.gene_full,
+            args.solo_strand.into(),
         );
         (recovered, x.cells)
     } else {
         let mut archive = StreamingReplayArchive::open(&args.archive)?;
-        let em = archive.packed_em_accumulator(&anno)?;
+        let em = archive.packed_em_accumulator(
+            &anno,
+            args.gene_full,
+            args.solo_strand.into(),
+            support_memory_budget,
+        )?;
+        support_storage = em.support_storage();
         let cells = std::mem::take(&mut archive.x.cells);
         let cell_of_class = std::mem::take(&mut archive.cell_of_class);
         drop(archive);
@@ -2742,9 +2858,18 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             .as_ref()
             .map(|path| read_em_groups(path, &cells, args.collapse_groups))
             .transpose()?;
+        let evaluation_cells = args
+            .eval_barcodes
+            .as_ref()
+            .map(|path| read_em_evaluation_barcodes(path, &cells))
+            .transpose()?;
+        let evaluation_cells = evaluation_cells
+            .as_deref()
+            .or_else(|| groups.as_ref().map(|g| g.eval_cell.as_slice()));
+        group_eval_cells =
+            evaluation_cells.map_or(cells.len(), |v| v.iter().filter(|b| **b).count());
         if let Some(groups) = &groups {
             group_names = groups.names.clone();
-            group_eval_cells = groups.eval_cell.iter().filter(|v| **v).count();
             eprintln!(
                 "hierarchical EM: {} groups, {} scored cells{}",
                 groups.names.len(),
@@ -2755,9 +2880,8 @@ pub fn run_em(args: EmArgs) -> Result<()> {
                     ""
                 }
             );
-        } else {
-            group_eval_cells = cells.len();
         }
+        evaluation_counts = packed.evaluation_counts(evaluation_cells);
         let recovered = packed.run(
             &anno,
             args.alpha,
@@ -2783,6 +2907,8 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             args.plot.is_some().then_some(&mut cals),
             args.metrics_json.is_some().then_some(&mut metrics),
             args.metrics_json.is_some().then_some(&mut paired_metrics),
+            evaluation_cells,
+            &args.modes,
         );
         (recovered, cells)
     };
@@ -2838,7 +2964,7 @@ pub fn run_em(args: EmArgs) -> Result<()> {
                 })
             })
             .collect();
-        let document = serde_json::json!({
+        let mut document = serde_json::json!({
             "schema_version": 2,
             "archive": args.archive,
             "gtf": args.gtf,
@@ -2880,6 +3006,13 @@ pub fn run_em(args: EmArgs) -> Result<()> {
             "modes": modes,
             "paired_comparisons": paired_comparisons,
         });
+        document["counting_model"] =
+            serde_json::json!(if args.gene_full { "GeneFull" } else { "Gene" });
+        document["strand_policy"] = serde_json::json!(replay_strand_name(args.solo_strand));
+        document["evaluation_counts"] = evaluation_counts;
+        document["support_storage"] = support_storage;
+        document["evaluation_barcodes_file"] = serde_json::json!(args.eval_barcodes);
+        document["requested_modes"] = serde_json::json!(args.modes);
         std::fs::write(path, serde_json::to_vec_pretty(&document)?)
             .with_context(|| format!("write EM metrics {}", path.display()))?;
     }
@@ -2958,6 +3091,17 @@ pub fn run_em(args: EmArgs) -> Result<()> {
         }
         mtx.flush()?;
         feat.flush()?;
+        std::fs::write(
+            out_dir.join("metadata.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "counting_model": if args.gene_full { "GeneFull" } else { "Gene" },
+                "strand_policy": replay_strand_name(args.solo_strand),
+                "counting_unit": "fractional responsibility per UMI class before one-mismatch collapse",
+                "layer": "additive multi-only classes",
+                "archive": args.archive,
+                "annotation": args.gtf,
+            }))?,
+        )?;
         eprintln!(
             "wrote {} recovered entries to {}",
             triplets.len(),
@@ -3779,7 +3923,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         let t_open = t0.elapsed().as_secs_f32();
         let (anno, annotation_identity) = load_replay_annotation(&args.gtf, reporting)?;
         let t_anno = t0.elapsed().as_secs_f32();
-        let (counts, n_assigned, total) = archive.replay(&anno, solo_strand)?;
+        let (counts, assignment_stats, total) =
+            archive.replay(&anno, solo_strand, args.gene_full)?;
         let t_replay = t0.elapsed().as_secs_f32();
         let artifact = emit_matrix(
             &counts,
@@ -3817,7 +3962,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
                 velocity: false,
                 multigene_audit: false,
                 molecules: archive.n_mols as u64,
-                assigned_molecules: Some(n_assigned),
+                assigned_molecules: Some(assignment_stats.assigned_molecule_records),
+                assignment_statistics: Some(assignment_stats),
                 counted_umis: Some(total),
                 matrix_entries: Some(counts.len() as u64),
                 audit: None,
@@ -3826,8 +3972,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             emit_replay_report(&args, &summary, &context, metadata_path.as_deref())?;
         }
         eprintln!(
-            "molecules {} -> assigned {} -> {} UMIs in {} entries | streaming | open+dict {t_open:.1}s, +anno {:.1}s, +decode/replay {:.1}s, total {:.1}s",
-            archive.n_mols, n_assigned, total, counts.len(), t_anno - t_open,
+            "molecule records {} -> records with assignment {}; representative rows {} assigned / {} total; UMI classes {} assigned / {} total -> {} collapsed UMIs in {} entries (all input; not restricted to called nuclei) | streaming | open+dict {t_open:.1}s, +anno {:.1}s, +decode/replay {:.1}s, total {:.1}s",
+            archive.n_mols, assignment_stats.assigned_molecule_records, assignment_stats.assigned_representative_rows, assignment_stats.representative_rows, assignment_stats.assigned_umi_classes, assignment_stats.umi_classes, total, counts.len(), t_anno - t_open,
             t_replay - t_anno, t0.elapsed().as_secs_f32()
         );
         exit_without_teardown();
@@ -3925,6 +4071,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             multigene_audit: true,
             molecules: x.mols.len() as u64,
             assigned_molecules: None,
+            assignment_statistics: None,
             counted_umis: None,
             matrix_entries: None,
             audit: Some(audit),
@@ -3988,6 +4135,7 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
                 multigene_audit: false,
                 molecules: x.mols.len() as u64,
                 assigned_molecules: None,
+                assignment_statistics: None,
                 counted_umis: Some(n_counted),
                 matrix_entries: Some(vc.len() as u64),
                 audit: None,
@@ -4001,7 +4149,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         );
         return Ok(());
     }
-    let (counts, n_assigned, total) = replay_rows_stranded(&x, &anno, solo_strand);
+    let (counts, assignment_stats, total) =
+        crate::rows::replay_rows_model(&x, &anno, solo_strand, args.gene_full);
     let t_replay = t0.elapsed().as_secs_f32();
     let artifact = emit_matrix(
         &counts,
@@ -4055,7 +4204,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
             velocity: false,
             multigene_audit: false,
             molecules: x.mols.len() as u64,
-            assigned_molecules: Some(n_assigned),
+            assigned_molecules: Some(assignment_stats.assigned_molecule_records),
+            assignment_statistics: Some(assignment_stats),
             counted_umis: Some(total),
             matrix_entries: Some(counts.len() as u64),
             audit: None,
@@ -4064,8 +4214,8 @@ pub fn run_replay_rows(args: ReplayRowsArgs) -> Result<()> {
         emit_replay_report(&args, &summary, &context, metadata_path.as_deref())?;
     }
     eprintln!(
-        "molecules {} -> assigned {} -> {} UMIs in {} entries | eager | load {t_load:.1}s, +anno {:.1}s, +replay {:.1}s, total {:.1}s",
-        x.mols.len(), n_assigned, total, counts.len(),
+        "molecule records {} -> records with assignment {}; representative rows {} assigned / {} total; UMI classes {} assigned / {} total -> {} collapsed UMIs in {} entries (all input; not restricted to called nuclei) | eager | load {t_load:.1}s, +anno {:.1}s, +replay {:.1}s, total {:.1}s",
+        x.mols.len(), assignment_stats.assigned_molecule_records, assignment_stats.assigned_representative_rows, assignment_stats.representative_rows, assignment_stats.assigned_umi_classes, assignment_stats.umi_classes, total, counts.len(),
         t_anno - t_load, t_replay - t_anno, t0.elapsed().as_secs_f32()
     );
     exit_without_teardown();
@@ -4185,7 +4335,9 @@ struct ReplayReportSummary {
     velocity: bool,
     multigene_audit: bool,
     molecules: u64,
+    /// Records with at least one uniquely assigned representative (not rows).
     assigned_molecules: Option<u64>,
+    assignment_statistics: Option<AssignmentStats>,
     counted_umis: Option<u64>,
     matrix_entries: Option<u64>,
     audit: Option<crate::rows::MultigeneAuditSummary>,
@@ -4770,6 +4922,21 @@ fn replay_report_context(
         serde_json::json!(args.from_molecule_bam),
     );
     parameters.insert("velocity".into(), serde_json::json!(args.velocity));
+    parameters.insert("gene_full".into(), serde_json::json!(args.gene_full));
+    parameters.insert(
+        "assignment_statistics_scope".into(),
+        serde_json::json!("all input records; not restricted to called nuclei"),
+    );
+    parameters.insert(
+        "counting_model".into(),
+        serde_json::json!(if args.velocity {
+            "Velocyto"
+        } else if args.gene_full {
+            "GeneFull"
+        } else {
+            "Gene"
+        }),
+    );
     parameters.insert(
         "audit_multigene".into(),
         serde_json::json!(args.audit_multigene),

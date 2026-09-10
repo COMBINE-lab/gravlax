@@ -1,9 +1,10 @@
 ---
 title: aie dev em
-description: Cross-cell EM multimapper recovery from the stored paralog evidence.
+description: Gene and GeneFull EM recovery from archived ambiguous gene evidence.
 ---
 
-EM multimapper recovery over the archive's paralog-pattern evidence. Two modes
+EM recovery over archived ambiguous gene evidence, including multiple placements
+and overlapping gene spans at a single placement. Two modes
 share one command:
 
 - **Evaluation** (default): a masked-evidence protocol scores recovery
@@ -26,6 +27,18 @@ aie dev em sample.aie --gtf gencode.v49.gtf
 # emit the recovered-counts layer:
 aie dev em sample.aie --gtf gencode.v49.gtf \
   --mask 0 --emit em-layer/ --barcodes barcodes.tsv
+
+# score the same called nuclei with four base models, fitting priors on all barcodes:
+aie dev em sample.aie --gtf gencode.v49.gtf --gene-full \
+  --solo-strand forward --eval-barcodes called-nuclei.tsv --metrics-json metrics.json
+
+# run only pooled recovery, preserving that model's complete-evaluation result:
+aie dev em sample.aie --gtf gencode.v49.gtf --gene-full \
+  --eval-barcodes called-nuclei.tsv --modes pooled --metrics-json pooled.json
+
+# STAR-style unique-plus-EM matrix with reverse-strand GeneFull assignment:
+aie dev em sample.aie --gtf gencode.v49.gtf --gene-full --solo-strand reverse \
+  --star --emit star-em/ --barcodes barcodes.tsv
 ```
 
 ## Options
@@ -33,10 +46,15 @@ aie dev em sample.aie --gtf gencode.v49.gtf \
 | Option | Default | Description |
 |---|---|---|
 | `--gtf <GTF>` | required | Annotation defining the gene candidates |
+| `--gene-full` | off | Use intron-inclusive GeneFull candidates; supported by recovery, eager, and STAR-style EM |
+| `--solo-strand <STRAND>` | `forward` | cDNA-alignment/gene relationship: `forward` (same), `reverse` (opposite), or `unstranded` (either); applies to both unique counts and ambiguous candidates |
 | `--mask <FRAC>` | `0.2` | Fraction of mixed classes to mask for the labeled evaluation; `0` switches to emission |
 | `--seed <SEED>` | `7` | Masking RNG seed |
 | `--alpha <ALPHA>` | `20` | Blend-mode global-prior weight |
-| `--groups <TSV>` | — | Two-column barcode/group map; adds group and hierarchical evaluation modes and fixes the scored cell set |
+| `--groups <TSV>` | — | Two-column barcode/group map; adds group and hierarchical evaluation modes and fixes the scored cell set unless overridden by `--eval-barcodes` |
+| `--eval-barcodes <TSV>` | — | One barcode per line; sets the scored population independently of group assignments and prior fitting; overrides the scoring population from `--groups` |
+| `--modes <LIST>` | four base modes, or nine with groups | Comma-separated subset of `uniform,cell,pooled,blend,group,hierarchical,convex,dirichlet-proxy,depth-hybrid`; group-derived modes require `--groups` |
+| `--support-memory-mib <MiB>` | `512` | Budget for retained compact support arrays; actual candidate volume triggers spill; `0` forces disk. Decoder scratch, spill buffers and final EM arrays are additional memory |
 | `--group-alpha <ALPHA>` | `20` | Hierarchical group-prior pseudo-count mass |
 | `--global-alpha <ALPHA>` | `5` | Hierarchical whole-sample pseudo-count mass |
 | `--convex-cell-weight <W>` | `0.10` | Candidate-normalized convex weight on the target-cell distribution |
@@ -55,9 +73,31 @@ aie dev em sample.aie --gtf gencode.v49.gtf \
 | `--candidate-genes-only` | off | Stop after writing `--candidate-genes-out` |
 | `--emit <DIR>` | — | With `--mask 0`: write `em.mtx` (real-valued, additive) into this directory; requires `--barcodes` |
 | `--barcodes <BARCODES>` | — | Barcode list defining emitted column order |
-| `--star` | off | Use the STARsolo-compatible `--soloMultiMappers EM` design (per-cell, intersection candidate sets, STAR's init/zeroing/convergence) and emit `UniqueAndMult-EM.mtx` into `--emit` |
+| `--star` | off | Use the STARsolo `--soloMultiMappers EM` design (per-cell, intersection candidate sets, STAR's init/zeroing/convergence) with the selected Gene/GeneFull model and strand; emit `UniqueAndMult-EM.mtx` into `--emit` |
 | `--eager` | off | Use the historical full-materialization implementation as a semantic/performance reference |
 | `--plot <SVG/PNG>` | — | With a masked run, write a per-mode reliability diagram |
+
+`--gene-full` applies the same exon-derived gene spans as GeneFull replay when
+constructing unique and ambiguous evidence. Masking and the EM update rules are
+unchanged. For GeneFull, alternatives on unannotated chromosomes contribute no
+candidates; the historical Gene experiment retains its whole-row exclusion.
+Metrics record the counting model and scoped masked, truth-lost, and evaluable
+class counts. Accuracy is per evaluable UMI class before one-mismatch collapse;
+it is conditional on the unique-evidence label surviving masking. `--eval-barcodes`
+restricts scoring without adding group models. If it is absent, `--groups`
+restricts scoring to its barcodes. The pooled prior still uses all archive
+barcodes after masking, including barcodes outside the scored population.
+Classes eligible for evaluation can change between
+Gene and GeneFull, so their accuracies describe different labeled populations.
+
+`--modes` runs the selected models in their usual canonical order; it does not
+change their candidate sets, initialization, ten updates, or scoring rules.
+Paired comparisons are emitted only when both participating modes are selected.
+Emission requires `pooled` among the selected modes. The older `--convex-only`,
+`--dirichlet-only`, and `--hybrid-only` flags remain available but cannot be
+combined with `--modes`. Scoring selection, mode selection and support-memory
+controls apply to the packed recovery implementation and cannot be combined
+with `--eager` or `--star`.
 
 ## Sharing models
 
@@ -141,16 +181,29 @@ deterministic cell shards, and stores candidates as flat `u32` labels with
 temporary shard streams and finalize one shard at a time; small inputs retain
 the in-memory path. On an evaluated 10,000-cell dataset this reduced peak RSS from
 7,653,508 to 3,846,008 KiB at 35.86 s, with byte-identical metrics and stdout.
-Temporary shards are removed on success or error.
+Temporary shards are removed on success or error. The support budget now checks
+the actual compact candidate volume before growing retained arrays; it can
+switch to disk partway through an archive. A record with several GeneFull
+candidates contributes several support words. `support_storage` in metrics
+reports whether spilling occurred and the peak retained support capacity in
+bytes. This budget is not a limit on total process RSS. Set `TMPDIR` to choose
+the filesystem for temporary shards.
 
 ## The emitted layer
 
 `em.mtx` is an **additive, opt-in layer** of real-valued recovered counts: the
-base replay matrices are never modified. Responsibilities are calibrated, so
-they can be consumed as probabilities; thresholding at responsibility > 0.8
-keeps the layer's high-confidence core. Use `--star` to request the
-STARsolo-compatible update scheme; cross-tool byte identity has not yet been
-established.
+base replay matrices are never modified. Responsibilities are model-derived probabilities; assess calibration on comparable
+evidence before applying confidence thresholds. Calibration differs between
+Gene and GeneFull and between datasets. Use `--star` to request the
+STARsolo update scheme. Synthetic GeneFull matrices agree with STARsolo 2.7.11b
+within text-output rounding for all three strand policies, including nested,
+antisense, and multiple-placement evidence. General byte identity is not claimed:
+the archive retains representative geometry, and unique-count replay has its
+own UMI filtering and tie rules. In particular, a Gene fixture with tied unique
+support retains the lowest gene id in replay while STARsolo removes that UMI;
+the EM increment agrees separately. The STAR-style matrix combines unique
+replay UMIs after one-mismatch collapse with fractional counts for multi-only
+raw UMI classes. Its metadata records this counting unit, model and strand.
 
 The built-in masked analysis is useful but does not prove that pooled or
 group-aware sharing is unbiased: it defines truth using mixed classes whose

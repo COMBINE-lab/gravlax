@@ -1,6 +1,6 @@
 ---
 title: aie replay-rows
-description: Quantify a compatible GTF from an .aie index using Gene or Velocyto semantics.
+description: Quantify a compatible GTF from an .aie index using Gene, GeneFull, or Velocyto semantics.
 ---
 
 Quantify a compatible GTF from an `.aie` archive. Replay uses the fixed genome
@@ -33,6 +33,7 @@ aie replay-rows sample.aie \
 | `--gtf <GTF/AIC>` | required | The GTF or compiled `.aic` annotation to replay; coordinates and contig names must match the archive's reference genome |
 | `--barcodes <BARCODES>` | required | Barcode list defining output column order (e.g. a raw `barcodes.tsv`) |
 | `--out-dir <OUT_DIR>` | required | Receives `matrix.mtx`, `features.tsv`, `barcodes.tsv` |
+| `--gene-full` | off | Count aligned-block overlaps with full gene spans, including introns; incompatible with `--velocity` and `--audit-multigene` |
 | `--velocity` | off | Emit STARsolo Velocyto semantics (spliced/unspliced/ambiguous matrices) instead of Gene |
 | `--audit-multigene` | off | Print the multi-gene ambiguity audit (the EM upside bound) instead of emitting a matrix |
 | `--solo-strand <STRAND>` | `forward` | STARsolo-compatible assignment strand: `forward`, `reverse`, or `unstranded`; 10x 5′ Gene expression uses `reverse` |
@@ -53,6 +54,36 @@ filtering, and greedy 1-mismatch tie-merging over the stored UMI adjacency
 graph. `--velocity` additionally ports the Velocyto transcript-set
 intersection with its flank-tolerance classifier, applying the same UMI
 correction map the Gene collapse produces.
+
+### Intron-inclusive GeneFull
+
+`--gene-full` uses the span from the first to the last annotated exon of each
+gene, including gaps between disjoint isoforms. It unions genes overlapping
+any aligned block on the selected strand. Junction concordance is not
+required, and a gene inside a skipped alignment intron is not hit solely
+because it lies within the outer alignment span. Gene spans are kept separate
+by chromosome and strand when a gene identifier occurs in multiple contexts;
+they are never extended across chromosomes or opposing strands.
+
+This is STARsolo `GeneFull`, not `GeneFull_ExonOverIntron` or
+`GeneFull_Ex50pAS`. The existing best-gene filtering and global UMI-collapse
+policy apply after assignment. Overlapping/nested genes can make evidence
+ambiguous, so GeneFull need not increase every individual gene count.
+
+```sh
+aie replay-rows nuclei.aie --gene-full --gtf annotation.aic \
+  --barcodes raw-barcodes.tsv --out-dir genefull/ --report-format json
+```
+
+The barcode file orders columns and must include all counted barcodes. Replay
+does not call nuclei. Emit both models with the same raw barcode list, then
+subset both matrices to the same called nuclei to isolate counting-model
+effects. Evaluate changes in nucleus calling separately. Historical
+span-extreme archives retain representative geometry, not every read; use
+`--geometry-fidelity` at ingest when exact unique-read geometry is required.
+Deletion-spanning blocks and representative reduction can differ from STAR's
+per-read geometry. Neither counting model restores discarded sequence or
+recomputes genome alignments.
 
 For repeated replay, compile the GTF once with
 [`aie compile-annotation`](/gravlax/cli/compile-annotation/) and pass the
@@ -107,3 +138,37 @@ transaction for the whole directory. Report and metadata destinations are
 preflighted before replay; each metadata/report file is itself atomically
 installed without replacement. For a fresh, unambiguous result, use a new
 output directory.
+
+## Counting units
+
+Reports identify `counting_model` as `Gene`, `GeneFull`, or `Velocyto` in
+`provenance.parameters`. Gene and GeneFull additionally report
+`assignment_statistics`, covering **all consumed input, without restriction to called nuclei**:
+
+| Field | Counting unit and denominator |
+|---|---|
+| `molecule_records` | Archived locus records; the same cell/UMI class may occur in several records |
+| `assigned_molecule_records` | Records with at least one uniquely assigned representative; denominator `molecule_records` |
+| `representative_rows` | Unique-chain representatives plus aggregated alternative-placement signatures |
+| `assigned_representative_rows` | Rows with exactly one candidate gene; denominator `representative_rows` |
+| `umi_classes` | Ingest UMI classes across all input cells |
+| `assigned_umi_classes` | Classes with uniquely assigned evidence before 1-mismatch collapse; denominator `umi_classes` |
+
+`assigned_molecules` now aliases `assigned_molecule_records`. Earlier reports
+incorrectly populated it with a representative-row count. `counted_umis` and
+`matrix_entries` describe the full input count map. Subset the emitted matrix and sum it to
+obtain UMIs in a called-nucleus set.
+Archive records, representative rows, UMI classes, and final collapsed UMIs
+are distinct units and cannot be substituted into one another's fractions.
+
+## Python
+
+```python
+from gravlax import Client, read_mex
+
+report = Client().replay(
+    "nuclei.aie", "annotation.aic", "raw-barcodes.tsv", "genefull",
+    gene_full=True,
+)
+counts = read_mex("genefull")
+```

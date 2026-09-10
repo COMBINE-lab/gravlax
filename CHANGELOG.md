@@ -4,6 +4,74 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+## [0.2.2] - 2026-09-10
+
+### Compatibility and assignment statistics
+
+Existing `.aie` archives, including legacy v1 archives, and compiled `.aic`
+annotations remain usable without re-ingestion or migration. Archive and
+annotation encodings and default Gene count matrices are unchanged.
+
+**Reporting change:** `replay-rows` reports now define `assigned_molecules` as
+molecule records with at least one uniquely assigned representative. Previously
+this field counted assigned representative rows, so its value can decrease even
+when the emitted count matrix is identical. It now aliases
+`assignment_statistics.assigned_molecule_records`; use
+`assignment_statistics.molecule_records` as its denominator. Consumers needing
+the previous row count must use `assignment_statistics.assigned_representative_rows`,
+with `assignment_statistics.representative_rows` as the denominator.
+
+Assignment statistics separately report molecule records, representative rows
+and raw UMI classes across the full consumed input, including barcodes outside
+the called-nucleus set. These are not collapsed-UMI counts. `counted_umis` reports
+the full-input post-collapse total; use the emitted matrix sum for a selected
+barcode population. This reporting correction also applies to default Gene
+replay; archive compatibility does not imply unchanged report-field semantics.
+
+### GeneFull replay and EM
+
+- Add `replay-rows --gene-full` for intron-inclusive, strand-aware gene-span
+  assignment from aligned blocks, with the existing global UMI collapse.
+  Support streaming/eager archives, BAM input, and compiled annotations.
+  Skipped alignment gaps alone do not assign a gene.
+- Add Python `Client.replay(..., gene_full=True, solo_strand=...)` and record
+  the counting model in replay reports and MEX provenance. Reject incompatible
+  velocity/audit flags.
+- Add `dev em --gene-full` for recovery evaluation and pooled emission, with
+  explicit masked-class coverage and counting-model metadata. Accuracy is
+  conditional on evaluable raw UMI classes before one-mismatch collapse.
+- Add `dev em --solo-strand forward|reverse|unstranded` to recovery EM and its
+  eager reference, and support `--star --gene-full` under all three strand
+  policies. Apply the same model and strand to unique and ambiguous evidence;
+  record them and the output counting units in metadata. Gene/forward remains
+  the command default.
+
+### Execution controls and validation
+
+- Add independent `dev em --eval-barcodes` and `--modes` selection, preserving
+  full-input prior fitting and the existing default models. Selecting fewer
+  models reduces work without changing retained models' results.
+- Spill packed EM supports according to actual retained candidate volume;
+  expose `--support-memory-mib` (512 MiB by default; zero forces spilling) and
+  report storage scope and capacity. This budget is not a whole-process memory
+  cap and does not establish a reduction in peak process memory.
+- Query GeneFull directly from aligned blocks using separate strand indexes.
+  Isolated forward/reverse lookups were approximately 1.77 times faster; whole
+  replay and EM timings do not establish a comparable end-to-end speedup.
+- Validate against an exhaustive overlap oracle, synthetic STARsolo comparisons
+  for both counting models and all strands, streaming/eager and forced-spill
+  equivalence, and matched brain-nucleus matrices and EM. Fixed-nucleus EM keeps
+  the original 6,460 nuclei and preserves the manuscript's shared metrics;
+  nucleus calling is assessed separately from this fixed-population comparison.
+  Default Gene replay matrices and EM results are preserved. The existing Gene
+  UMI tie-breaking difference from STARsolo remains; synthetic EM agreement is
+  not a claim of universal STARsolo equivalence.
+
+See [GeneFull replay validation](docs/genefull-validation.md),
+[EM validation](docs/genefull-em-validation.md), and
+[strand and optimization validation](docs/genefull-em-strands-optimization.md)
+for counting units, denominators, biological comparisons and measured tradeoffs.
+
 ## [0.2.1] - 2026-09-07
 
 - Make rooted collection sources and parent layers relocatable through an optional

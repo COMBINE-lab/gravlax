@@ -17,6 +17,25 @@ def completed(argv, stdout: str, *, returncode: int = 0, stderr: str = ""):
 
 
 class UniformClientTests(unittest.TestCase):
+    def test_replay_model_validation_and_safe_path_tokens(self):
+        client = Client(binary="definitely-not-run")
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            client.replay("a", "b", "c", "d", gene_full=True, velocity=True)
+        with self.assertRaisesRegex(TypeError, "bool"):
+            client.replay("a", "b", "c", "d", gene_full="yes")
+        with self.assertRaisesRegex(ValueError, "solo_strand"):
+            client.replay("a", "b", "c", "d", solo_strand="invalid")
+        with patch.object(client, "result_bundle", return_value="report") as run:
+            result = client.replay("-sample.aie", "annotation file.gtf", "bc.tsv", "out dir", gene_full=True)
+            self.assertEqual(result, "report")
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[-2:], ["--", "-sample.aie"])
+            self.assertIn("--gene-full", argv)
+            self.assertIn("--gtf=annotation file.gtf", argv)
+            self.assertIn("--report-format=json", argv)
+            client.replay("a", "b", "c", "d")
+            self.assertNotIn("--gene-full", run.call_args.args[0])
+
     @patch("gravlax.client.subprocess.run")
     def test_region_wrapper_requests_the_uniform_json_contract(self, run):
         run.return_value = completed([], json.dumps(region_bundle()))

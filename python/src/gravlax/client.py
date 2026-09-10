@@ -1281,6 +1281,45 @@ class Client:
         result = self.run(args)
         return AnnotationComparisonResult.from_json(result.stdout)
 
+    def replay(
+        self,
+        archive: PathToken,
+        annotation_file: PathToken,
+        barcodes: PathToken,
+        out_dir: PathToken,
+        *,
+        gene_full: bool = False,
+        velocity: bool = False,
+        solo_strand: str = "forward",
+        eager: bool = False,
+    ) -> UniformResultBundle:
+        """Write a MEX matrix and return its operation report.
+
+        GeneFull counts overlaps with exon-derived gene spans, including introns.
+        The barcode file orders output columns and must cover all counted barcodes.
+        This does not call nuclei. Assignment statistics cover all input.
+        """
+
+        for name, value in (("gene_full", gene_full), ("velocity", velocity), ("eager", eager)):
+            if not isinstance(value, bool):
+                raise TypeError(f"{name} must be bool")
+        if gene_full and velocity:
+            raise ValueError("gene_full and velocity are mutually exclusive")
+        solo_strand = _choice(solo_strand, {"forward", "reverse", "unstranded"}, "solo_strand")
+        args: list[PathToken] = [
+            "replay-rows", _option("gtf", annotation_file),
+            _option("barcodes", barcodes), _option("out-dir", out_dir),
+            _option("solo-strand", solo_strand), "--report-format=json",
+        ]
+        if gene_full:
+            args.append("--gene-full")
+        if velocity:
+            args.append("--velocity")
+        if eager:
+            args.append("--eager")
+        args.extend(["--", _token(archive, "archive")])
+        return self.result_bundle(args)
+
     def transcript_ecs(
         self,
         archive: PathToken,

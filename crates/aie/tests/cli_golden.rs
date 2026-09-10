@@ -455,6 +455,73 @@ fn bam_archive_and_post_correction_bam_replays_match() {
         "packed and eager EM summaries differ"
     );
 
+    let full_gtf = scratch.0.join("genefull-intronic.gtf");
+    std::fs::write(
+        &full_gtf,
+        concat!(
+            "chr1\ttest\texon\t1\t20\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+            "chr1\ttest\texon\t1999900\t2000000\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+        ),
+    )
+    .unwrap();
+    let full_metrics = scratch.0.join("genefull-em-metrics.json");
+    let mut full_em = Command::new(bin);
+    full_em
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--gene-full")
+        .arg("--mask")
+        .arg("0")
+        .arg("--metrics-json")
+        .arg(&full_metrics);
+    let full_em = run(full_em);
+    assert_eq!(full_em.stdout, packed_em.stdout);
+    let full_metrics: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(full_metrics).unwrap()).unwrap();
+    assert_eq!(full_metrics["counting_model"], "GeneFull");
+    assert!(
+        full_metrics["evaluation_counts"]["all_input_single_gene_classes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    let intronic_gene_metrics = scratch.0.join("intronic-gene-em.json");
+    let mut intronic_gene = Command::new(bin);
+    intronic_gene
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--mask")
+        .arg("0")
+        .arg("--metrics-json")
+        .arg(&intronic_gene_metrics);
+    run(intronic_gene);
+    let intronic_gene_metrics: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(intronic_gene_metrics).unwrap()).unwrap();
+    assert_eq!(
+        intronic_gene_metrics["evaluation_counts"]["all_input_single_gene_classes"],
+        0
+    );
+
+    assert_eq!(
+        full_metrics["evaluation_counts"]["unit"],
+        "UMI classes before one-mismatch collapse"
+    );
+    let mut full_eager = Command::new(bin);
+    full_eager
+        .arg("em")
+        .arg(&archive)
+        .arg("--gtf")
+        .arg(&full_gtf)
+        .arg("--gene-full")
+        .arg("--mask")
+        .arg("0")
+        .arg("--eager");
+    assert_eq!(run(full_eager).stdout, full_em.stdout);
+
     let groups = scratch.0.join("groups.tsv");
     let metrics = scratch.0.join("hierarchical-metrics.json");
     let candidates = scratch.0.join("candidate-genes.txt");
@@ -850,6 +917,152 @@ fn bam_archive_and_post_correction_bam_replays_match() {
             assert_eq!(forward, std::fs::read(out.join(name)).unwrap(),
                 "{name} differs under reverse-strand replay through {}", out.display());
         }
+    }
+}
+
+#[test]
+fn em_scoring_selection_modes_and_spill_preserve_inference() {
+    let scratch = Scratch::new();
+    let bam = scratch.0.join("em.bam");
+    let archive = scratch.0.join("em.aie");
+    let whitelist = scratch.0.join("barcodes.tsv");
+    let selected = scratch.0.join("selected.tsv");
+    let groups = scratch.0.join("groups.tsv");
+    let gtf = scratch.0.join("em.gtf");
+    std::fs::write(&whitelist, format!("{BARCODE}\n{SECOND_BARCODE}\n")).unwrap();
+    std::fs::write(&selected, format!("{SECOND_BARCODE}-1\n")).unwrap();
+    std::fs::write(&groups, format!("{SECOND_BARCODE}\tfixed\n")).unwrap();
+    std::fs::write(
+        &gtf,
+        concat!(
+            "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"A\"; transcript_id \"A\";\n",
+            "chr1\tX\texon\t401\t500\t.\t+\t.\tgene_id \"A\"; transcript_id \"A\";\n",
+            "chr1\tX\texon\t251\t300\t.\t+\t.\tgene_id \"B\"; transcript_id \"B\";\n",
+        ),
+    )
+    .unwrap();
+    let header = sam::Header::builder()
+        .add_reference_sequence(
+            "chr1",
+            Map::<ReferenceSequence>::new(NonZero::new(2_000_000).unwrap()),
+        )
+        .build();
+    let mut writer = bam::io::Writer::new(std::fs::File::create(&bam).unwrap());
+    writer.write_header(&header).unwrap();
+    for start in [201, 251] {
+        for barcode in [BARCODE, SECOND_BARCODE] {
+            writer
+                .write_alignment_record(
+                    &header,
+                    &tagged_record_for_barcode(
+                        &format!("{barcode}-{start}"),
+                        start,
+                        "AAAAAAAAAAAA",
+                        Flags::empty(),
+                        1,
+                        barcode,
+                    ),
+                )
+                .unwrap();
+        }
+    }
+    writer.try_finish().unwrap();
+    let bin = env!("CARGO_BIN_EXE_aie");
+    let mut ingest = Command::new(bin);
+    ingest
+        .arg("ingest-archive")
+        .arg(&bam)
+        .arg("--whitelist")
+        .arg(&whitelist)
+        .arg("--out")
+        .arg(&archive);
+    run(ingest);
+    let base = || {
+        let mut cmd = Command::new(bin);
+        cmd.arg("dev")
+            .arg("em")
+            .arg(&archive)
+            .arg("--gtf")
+            .arg(&gtf)
+            .args(["--gene-full", "--mask", "1"]);
+        cmd
+    };
+    let mut results = Vec::new();
+    for (name, grouped, mode, spill) in [
+        ("legacy-groups", true, None, false),
+        ("scored", false, None, false),
+        ("pooled", false, Some("pooled"), false),
+        ("spilled", false, Some("pooled"), true),
+        ("paired", true, Some("convex,pooled"), false),
+    ] {
+        let metrics = scratch.0.join(format!("{name}.json"));
+        let mut cmd = base();
+        cmd.arg("--metrics-json").arg(&metrics);
+        if grouped {
+            cmd.arg("--groups").arg(&groups);
+        } else {
+            cmd.arg("--eval-barcodes").arg(&selected);
+        }
+        if let Some(mode) = mode {
+            cmd.args(["--modes", mode]);
+        }
+        if spill {
+            cmd.args(["--support-memory-mib", "0"]);
+        }
+        run(cmd);
+        let result: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(metrics).unwrap()).unwrap();
+        assert_eq!(result["scored_cells"], 1);
+        assert_eq!(result["evaluation_counts"]["all_input_masked_classes"], 2);
+        assert_eq!(
+            result["evaluation_counts"]["scored_population_evaluable_classes"],
+            1
+        );
+        assert_eq!(result["support_storage"]["spilled"], spill);
+        results.push(result);
+    }
+    let pooled = |v: &serde_json::Value| {
+        v["modes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "pooled")
+            .unwrap()
+            .clone()
+    };
+    for result in &results[1..] {
+        assert_eq!(pooled(result), pooled(&results[0]));
+    }
+    assert_eq!(results[0]["modes"].as_array().unwrap().len(), 9);
+    assert_eq!(results[1]["modes"].as_array().unwrap().len(), 4);
+    assert_eq!(results[2]["modes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        results[4]["paired_comparisons"].as_array().unwrap().len(),
+        1
+    );
+    for flags in [
+        vec!["--modes", "group"],
+        vec!["--modes", "pooled,pooled"],
+        vec!["--solo-strand", "invalid"],
+        vec!["--star", "--modes", "pooled"],
+        vec!["--eager", "--modes", "pooled"],
+    ] {
+        assert!(!base().args(flags).output().unwrap().status.success());
+    }
+    for text in [
+        "",
+        "invalid\n",
+        "TTTTTTTTTTTTTTTT\n",
+        &format!("{BARCODE}\n{BARCODE}-1\n"),
+    ] {
+        std::fs::write(&selected, text).unwrap();
+        assert!(!base()
+            .arg("--eval-barcodes")
+            .arg(&selected)
+            .output()
+            .unwrap()
+            .status
+            .success());
     }
 }
 

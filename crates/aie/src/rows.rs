@@ -452,9 +452,15 @@ pub fn velocity_rows_stranded(
 /// reads' gene sets; EM initializes at unique+uniform, zeroes counts < 0.01 each iteration, and
 /// stops at max-abs-change < 0.01 or 100 iterations. Returns unique + EM-multimapper totals per
 /// (cell, gene) — the UniqueAndMult-EM matrix.
-pub fn em_star_matrix(x: &Extracted, anno: &anno::Annotation) -> FxHashMap<(u32, u32), f64> {
-    // Unique side = the byte-exact Gene replay.
-    let (unique_counts, _, _) = replay_rows(x, anno);
+pub fn em_star_matrix(
+    x: &Extracted,
+    anno: &anno::Annotation,
+    gene_full: bool,
+    solo_strand: anno::assign::SoloStrand,
+) -> FxHashMap<(u32, u32), f64> {
+    // Unique counts and ambiguous candidates must use the same counting model and strand.
+    let (unique_counts, _, _) = replay_rows_model(x, anno, solo_strand, gene_full);
+    let gene_full = gene_full.then(|| anno::assign::GeneFullIndex::new(anno));
 
     let bam2anno: Vec<Option<u32>> =
         x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
@@ -462,8 +468,21 @@ pub fn em_star_matrix(x: &Extracted, anno: &anno::Annotation) -> FxHashMap<(u32,
     let per_row: Vec<Option<(u32, u32, Vec<u32>)>> = rows
         .par_iter()
         .map_init(RowScratch::default, |s, r| {
-            row_genes(r, x, anno, &bam2anno, MmMissing::SkipAlt, s)?;
-            if s.genes.is_empty() { None } else { Some((r.cell, r.umi_class, s.genes.clone())) }
+            row_genes_model(
+                r,
+                x,
+                anno,
+                &bam2anno,
+                MmMissing::SkipAlt,
+                solo_strand,
+                gene_full.as_ref(),
+                s,
+            )?;
+            if s.genes.is_empty() {
+                None
+            } else {
+                Some((r.cell, r.umi_class, s.genes.clone()))
+            }
         })
         .collect();
 
@@ -719,6 +738,7 @@ pub fn multigene_audit_stranded(
 // observed (class, gene) support item survive classification.  Cell shards make the sort/reduce
 // working set bounded and give the EM a deterministic reduction order.
 const EM_SHARDS: usize = 64;
+#[cfg(test)]
 const EM_IN_MEMORY_SUPPORT_BUDGET: usize = 512 << 20;
 const EM_GENE_MASK: u32 = (1 << 30) - 1;
 const EM_MULTI_FLAG: u32 = 1 << 30;
@@ -733,6 +753,7 @@ struct EmSupport {
 }
 
 #[derive(Default, Clone, Copy)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct EmCounters {
     single: u64,
     mixed: u64,
@@ -751,6 +772,7 @@ impl std::ops::AddAssign for EmCounters {
     }
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct PackedEmShard {
     // Sorted packed (cell,gene) universe needed by either the base counts or a target.
     cell_gene_keys: Vec<u64>,
@@ -761,6 +783,8 @@ struct PackedEmShard {
     target_genes: Vec<u32>,
     target_local: Vec<u32>,
     target_truth: Vec<u32>,
+    masked_cells: Vec<u32>,
+    truth_lost_cells: Vec<u32>,
 }
 
 impl PackedEmShard {
@@ -772,6 +796,7 @@ impl PackedEmShard {
 
 /// Packed, cell-sharded input to the recovery EM.  It contains no molecule/row table, no hash
 /// table, and no per-class or per-target heap allocation.
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub(crate) struct PackedEm {
     shards: Vec<PackedEmShard>,
     global_base: Vec<f64>,
@@ -880,9 +905,14 @@ pub(crate) struct PackedPairedMetrics {
 pub(crate) struct PackedEmAccumulator {
     n_classes: u32,
     gene_count: usize,
+    gene_full: Option<anno::assign::GeneFullIndex>,
+    solo_strand: anno::assign::SoloStrand,
     bam2anno: Vec<Option<u32>>,
     shards: Vec<Vec<EmSupport>>,
     spill: Option<EmSupportSpill>,
+    support_memory_budget: usize,
+    small_decode_window: bool,
+    peak_retained_support_bytes: usize,
 }
 
 struct EmSupportSpill {
@@ -1001,6 +1031,9 @@ impl PackedEmAccumulator {
         x: &Extracted,
         anno: &anno::Annotation,
         expected_molecules: usize,
+        gene_full: bool,
+        solo_strand: anno::assign::SoloStrand,
+        support_memory_budget: usize,
     ) -> Result<Self> {
         if anno.gene_ids.len() > EM_GENE_MASK as usize + 1 {
             bail!("annotation has too many genes for packed EM labels");
@@ -1013,17 +1046,30 @@ impl PackedEmAccumulator {
         Ok(Self {
             n_classes: x.n_classes,
             gene_count: anno.gene_ids.len(),
+            gene_full: gene_full.then(|| anno::assign::GeneFullIndex::new(anno)),
+            solo_strand,
             bam2anno,
             shards: (0..EM_SHARDS).map(|_| Vec::new()).collect(),
-            spill: (expected_molecules.saturating_mul(std::mem::size_of::<EmSupport>())
-                > EM_IN_MEMORY_SUPPORT_BUDGET)
-                .then(EmSupportSpill::new)
-                .transpose()?,
+            spill: None,
+            support_memory_budget,
+            small_decode_window: expected_molecules
+                .saturating_mul(std::mem::size_of::<EmSupport>())
+                > support_memory_budget,
+            peak_retained_support_bytes: 0,
         })
     }
 
-    pub(crate) fn spills_supports(&self) -> bool {
-        self.spill.is_some()
+    pub(crate) fn small_decode_window(&self) -> bool {
+        self.small_decode_window
+    }
+
+    pub(crate) fn support_storage(&self) -> serde_json::Value {
+        serde_json::json!({
+            "spilled": self.spill.is_some(),
+            "retained_support_budget_bytes": self.support_memory_budget,
+            "peak_retained_support_capacity_bytes": self.peak_retained_support_bytes,
+            "scope": "retained compact support arrays; excludes decoder batches, spill buffers and final EM state",
+        })
     }
 
     fn classify(
@@ -1037,7 +1083,22 @@ impl PackedEmAccumulator {
         for m in mols {
             let shard = m.cell as usize % EM_SHARDS;
             let mut handle = |r: Row| {
-                if row_genes(&r, x, anno, &self.bam2anno, MmMissing::DropRow, s).is_none()
+                let missing = if self.gene_full.is_some() {
+                    MmMissing::SkipAlt
+                } else {
+                    MmMissing::DropRow
+                };
+                if row_genes_model(
+                    &r,
+                    x,
+                    anno,
+                    &self.bam2anno,
+                    missing,
+                    self.solo_strand,
+                    self.gene_full.as_ref(),
+                    s,
+                )
+                .is_none()
                     || s.genes.is_empty()
                 {
                     return;
@@ -1107,6 +1168,26 @@ impl PackedEmAccumulator {
                 compact_em_supports(support);
             }
         });
+        // Decide from actual compact (class,gene,flags) supports, not one guessed word per
+        // molecule. GeneFull can expand a record into many candidate genes. Include existing
+        // capacity and the incoming batch before reserving persistent arrays; once spilled,
+        // stay on disk. Decoder/worker scratch and final CSR state are separate working sets.
+        if self.spill.is_none() {
+            let incoming: usize = parts.iter().flatten().map(Vec::len).sum();
+            let retained: usize = self.shards.iter().map(Vec::capacity).sum();
+            if retained
+                .saturating_add(incoming)
+                .saturating_mul(std::mem::size_of::<EmSupport>())
+                > self.support_memory_budget
+            {
+                let mut spill = EmSupportSpill::new()?;
+                for (shard, support) in self.shards.iter_mut().enumerate() {
+                    spill.append(shard, support)?;
+                    *support = Vec::new();
+                }
+                self.spill = Some(spill);
+            }
+        }
         if let Some(spill) = &mut self.spill {
             for worker_shards in &parts {
                 for (shard, support) in worker_shards.iter().enumerate() {
@@ -1122,6 +1203,10 @@ impl PackedEmAccumulator {
                     dst.append(src);
                 }
             }
+            self.peak_retained_support_bytes = self.peak_retained_support_bytes.max(
+                self.shards.iter().map(Vec::capacity).sum::<usize>()
+                    * std::mem::size_of::<EmSupport>(),
+            );
         }
         Ok(())
     }
@@ -1265,6 +1350,8 @@ fn build_em_shard(
     let mut target_cells = Vec::new();
     let mut target_genes = Vec::new();
     let mut target_truth = Vec::new();
+    let mut masked_cells = Vec::new();
+    let mut truth_lost_cells = Vec::new();
     let mut unique_events: Vec<u64> = Vec::new();
     let mut key_events: Vec<u64> = Vec::new();
     let mut counters = EmCounters::default();
@@ -1308,6 +1395,7 @@ fn build_em_shard(
             let truth = unique_genes[0];
             if em_masked(seed, cell, class, mask_frac) {
                 counters.masked += 1;
+                masked_cells.push(cell);
                 let cands: SmallVec<[u32; 4]> = class_genes
                     .iter()
                     .filter(|(_, flags)| flags & EM_MULTI_FLAG != 0)
@@ -1326,6 +1414,7 @@ fn build_em_shard(
                     )?;
                 } else {
                     counters.truth_lost += 1;
+                    truth_lost_cells.push(cell);
                 }
             } else {
                 let key = cell_gene_key(cell, truth);
@@ -1386,6 +1475,8 @@ fn build_em_shard(
             target_genes,
             target_local,
             target_truth,
+            masked_cells,
+            truth_lost_cells,
         },
         counters,
     ))
@@ -1688,6 +1779,32 @@ fn paired_metrics(
 }
 
 impl PackedEm {
+    pub(crate) fn evaluation_counts(&self, evaluation_cells: Option<&[bool]>) -> serde_json::Value {
+        let selected = |cell: &&u32| evaluation_cells.is_none_or(|cells| cells[**cell as usize]);
+        let masked: usize = self
+            .shards
+            .iter()
+            .map(|s| s.masked_cells.iter().filter(selected).count())
+            .sum();
+        let truth_lost: usize = self
+            .shards
+            .iter()
+            .map(|s| s.truth_lost_cells.iter().filter(selected).count())
+            .sum();
+        serde_json::json!({
+            "unit": "UMI classes before one-mismatch collapse",
+            "scored_population_masked_classes": masked,
+            "scored_population_truth_lost_classes": truth_lost,
+            "scored_population_evaluable_classes": masked - truth_lost,
+            "all_input_single_gene_classes": self.counters.single,
+            "all_input_mixed_classes": self.counters.mixed,
+            "all_input_multi_only_classes": self.counters.multi_only,
+            "all_input_masked_classes": self.counters.masked,
+            "all_input_truth_lost_classes": self.counters.truth_lost,
+            "prior_fit_scope": "all input archive barcodes after masking",
+        })
+    }
+
     /// Run the four fixed sharing modes, plus optional group, additive-hierarchical,
     /// candidate-normalized convex, posterior-mean Dirichlet-proxy, and monotone depth-hybrid
     /// modes, over packed CSR labels. Each iteration walks shards in a fixed order and classes in
@@ -1714,6 +1831,8 @@ impl PackedEm {
         cal_out: Option<&mut Vec<EmCalibrationRow>>,
         metrics_out: Option<&mut Vec<PackedModeMetrics>>,
         paired_metrics_out: Option<&mut Vec<PackedPairedMetrics>>,
+        evaluation_cells: Option<&[bool]>,
+        selected_modes: &[String],
     ) -> Option<FxHashMap<(u32, u32), f64>> {
         if let Some(groups) = groups {
             assert_eq!(groups.cell_group.len(), groups.eval_cell.len());
@@ -1728,7 +1847,7 @@ impl PackedEm {
                     .zip(&s.target_cells)
                     .filter(|(truth, cell)| {
                         **truth != EM_NO_TRUTH
-                            && groups.is_none_or(|g| g.eval_cell[**cell as usize])
+                            && evaluation_cells.is_none_or(|v| v[**cell as usize])
                     })
                     .count()
             })
@@ -1764,6 +1883,10 @@ impl PackedEm {
                 ("depth-hybrid", 8),
             ]);
         }
+        if !selected_modes.is_empty() {
+            modes.retain(|(name, _)| selected_modes.iter().any(|s| s == name));
+        }
+        let needs_groups = modes.iter().any(|(_, mode)| *mode >= 4);
         let mut cal_rows = Vec::new();
         let mut metric_rows = Vec::new();
         let collect_paired = paired_metrics_out.is_some()
@@ -1774,7 +1897,7 @@ impl PackedEm {
         let mut target_observations: Vec<(String, Vec<PackedTargetObservation>)> = Vec::new();
         let mut impact: Option<(Vec<Vec<f64>>, Vec<f64>, u64)> = None;
 
-        let group_base = groups.map(|groups| {
+        let group_base = groups.filter(|_| needs_groups).map(|groups| {
             let mut base = vec![0.0f64; groups.names.len() * self.global_base.len()];
             for shard in &self.shards {
                 for (&key, &count) in shard.cell_gene_keys.iter().zip(&shard.unique_base) {
@@ -1798,7 +1921,7 @@ impl PackedEm {
                     for i in 0..shard.target_cells.len() {
                         let truth = shard.target_truth[i];
                         if truth == EM_NO_TRUTH
-                            || groups.is_some_and(|g| !g.eval_cell[shard.target_cells[i] as usize])
+                            || evaluation_cells.is_some_and(|v| !v[shard.target_cells[i] as usize])
                         {
                             continue;
                         }
@@ -2029,7 +2152,7 @@ impl PackedEm {
                             }
                             if final_iter
                                 && truth != EM_NO_TRUTH
-                                && groups.is_none_or(|g| g.eval_cell[cell])
+                                && evaluation_cells.is_none_or(|v| v[cell])
                             {
                                 let truth_i = shard.target_genes[range.clone()]
                                     .iter()
@@ -2141,7 +2264,6 @@ impl PackedEm {
                         .iter()
                         .find(|(candidate, _)| candidate == name)
                         .map(|(_, observations)| observations.as_slice())
-                        .expect("paired EM mode was not collected")
                 };
                 *out = [
                     ("depth-hybrid", "pooled"),
@@ -2151,8 +2273,13 @@ impl PackedEm {
                     ("convex", "pooled"),
                 ]
                 .into_iter()
-                .map(|(candidate, reference)| {
-                    paired_metrics(candidate, find(candidate), reference, find(reference))
+                .filter_map(|(candidate, reference)| {
+                    Some(paired_metrics(
+                        candidate,
+                        find(candidate)?,
+                        reference,
+                        find(reference)?,
+                    ))
                 })
                 .collect();
             }
@@ -2605,6 +2732,7 @@ classes with gene evidence: single-gene-counted 4 | MULTI-ONLY (fully discarded,
 /// vectors, masks a seeded 20% of mixed classes down to their multi-gene evidence (truth is the
 /// gene supported by their unique rows), and scores per-cell, pooled, and blended EM against a
 /// uniform baseline.
+#[allow(clippy::too_many_arguments)]
 pub fn em_experiment(
     x: &Extracted,
     anno: &anno::Annotation,
@@ -2612,9 +2740,15 @@ pub fn em_experiment(
     seed: u64,
     alpha: f64,
     cal_out: Option<&mut Vec<EmCalibrationRow>>,
+    gene_full: bool,
+    solo_strand: anno::assign::SoloStrand,
 ) -> Option<FxHashMap<(u32, u32), f64>> {
-    let bam2anno: Vec<Option<u32>> =
-        x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
+    let gene_full = gene_full.then(|| anno::assign::GeneFullIndex::new(anno));
+    let bam2anno: Vec<Option<u32>> = x
+        .chrom_names
+        .iter()
+        .map(|n| anno.chrom_ids.get(n).copied())
+        .collect();
     let rows = flatten(&x.mols);
     // Per row: candidate genes + weight, tagged unique(1 gene) / multi(>1). DropRow preserves the
     // historical semantics: an mm alternative on an unannotated chromosome discards the row.
@@ -2622,7 +2756,21 @@ pub fn em_experiment(
     let per_row: Vec<Option<EmRowEvidence>> = rows
         .par_iter()
         .map_init(RowScratch::default, |s, r| {
-            row_genes(r, x, anno, &bam2anno, MmMissing::DropRow, s)?;
+            let missing = if gene_full.is_some() {
+                MmMissing::SkipAlt
+            } else {
+                MmMissing::DropRow
+            };
+            row_genes_model(
+                r,
+                x,
+                anno,
+                &bam2anno,
+                missing,
+                solo_strand,
+                gene_full.as_ref(),
+                s,
+            )?;
             if s.genes.is_empty() {
                 None
             } else {
@@ -3078,19 +3226,6 @@ enum MmMissing {
 /// Candidate genes for one row, into `s.genes` — same gene order as the old allocating code.
 /// Returns `None` exactly when the old code early-returned before inspecting genes: a unique row
 /// on an unannotated chromosome, or (with `DropRow`) any mm alternative on one.
-fn row_genes(
-    r: &Row,
-    x: &Extracted,
-    anno: &anno::Annotation,
-    bam2anno: &[Option<u32>],
-    mm_missing: MmMissing,
-    s: &mut RowScratch,
-) -> Option<()> {
-    row_genes_stranded(
-        r, x, anno, bam2anno, mm_missing, anno::assign::SoloStrand::Forward, s,
-    )
-}
-
 fn row_genes_stranded(
     r: &Row,
     x: &Extracted,
@@ -3100,8 +3235,22 @@ fn row_genes_stranded(
     solo_strand: anno::assign::SoloStrand,
     s: &mut RowScratch,
 ) -> Option<()> {
-    // One-entry memo: same placement key → same genes (s.genes still holds them). The mm-missing
-    // mode is constant across one pass, so it cannot alias between cached entries.
+    row_genes_model(r, x, anno, bam2anno, mm_missing, solo_strand, None, s)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn row_genes_model(
+    r: &Row,
+    x: &Extracted,
+    anno: &anno::Annotation,
+    bam2anno: &[Option<u32>],
+    mm_missing: MmMissing,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<&anno::assign::GeneFullIndex>,
+    s: &mut RowScratch,
+) -> Option<()> {
+    // One-entry memo: same placement key → same genes (s.genes still holds them). Annotation,
+    // counting model, strand policy and missing-contig policy are fixed for each scratch's pass.
     let key = (r.chrom, r.pos, r.shape, r.pattern, r.strand_rev);
     if s.last_key == Some(key) {
         return if s.last_none { None } else { Some(()) };
@@ -3111,10 +3260,30 @@ fn row_genes_stranded(
     s.genes.clear();
     if r.pattern == u32::MAX {
         let ac = (*bam2anno.get(r.chrom as usize)?)?;
-        placement_from_parts_into(&mut s.place, r.chrom, r.pos, r.strand_rev, &x.shapes[r.shape as usize], 1);
-        anno::assign::concordant_genes_stranded_into(
-            &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
-        );
+        if let Some(index) = gene_full {
+            index.genes_for_blocks_into(
+                ac,
+                r.strand_rev,
+                solo_strand,
+                x.shapes[r.shape as usize]
+                    .blocks
+                    .iter()
+                    .map(|&(off, len)| (r.pos + off, r.pos + off + len)),
+                &mut s.genes,
+            );
+        } else {
+            placement_from_parts_into(
+                &mut s.place,
+                r.chrom,
+                r.pos,
+                r.strand_rev,
+                &x.shapes[r.shape as usize],
+                1,
+            );
+            anno::assign::concordant_genes_stranded_into(
+                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.genes,
+            );
+        }
     } else {
         for alt in &x.patterns[r.pattern as usize] {
             let ac = match bam2anno.get(alt.chrom as usize).copied().flatten() {
@@ -3126,11 +3295,35 @@ fn row_genes_stranded(
             };
             let apos = (r.pos as i64 + alt.offset) as u32;
             let arev = r.strand_rev != alt.strand_flip;
-            let shape_id = if alt.shape == SAME_SHAPE { r.shape } else { alt.shape };
-            placement_from_parts_into(&mut s.place, alt.chrom, apos, arev, &x.shapes[shape_id as usize], 2);
-            anno::assign::concordant_genes_stranded_into(
-                &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
-            );
+            let shape_id = if alt.shape == SAME_SHAPE {
+                r.shape
+            } else {
+                alt.shape
+            };
+            if let Some(index) = gene_full {
+                index.genes_for_blocks_into(
+                    ac,
+                    arev,
+                    solo_strand,
+                    x.shapes[shape_id as usize]
+                        .blocks
+                        .iter()
+                        .map(|&(off, len)| (apos + off, apos + off + len)),
+                    &mut s.alt_genes,
+                );
+            } else {
+                placement_from_parts_into(
+                    &mut s.place,
+                    alt.chrom,
+                    apos,
+                    arev,
+                    &x.shapes[shape_id as usize],
+                    2,
+                );
+                anno::assign::concordant_genes_stranded_into(
+                    &s.place, anno, ac, solo_strand, &mut s.txbuf, &mut s.alt_genes,
+                );
+            }
             for &g in &s.alt_genes {
                 if !s.genes.contains(&g) {
                     s.genes.push(g);
@@ -4118,6 +4311,28 @@ fn extract_rows_inner(
 type ReplayTuple = (u32, u32, u32, u32); // (cell, class, gene, weight)
 const REPLAY_SHARDS: usize = 64;
 
+/// Assignment counts over all consumed input, not restricted to called nuclei.
+/// A molecule record can contain several representative rows, and a UMI class
+/// can occur in several records. None of these units is a collapsed UMI.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, PartialEq, Eq)]
+pub(crate) struct AssignmentStats {
+    pub molecule_records: u64,
+    pub assigned_molecule_records: u64,
+    pub representative_rows: u64,
+    pub assigned_representative_rows: u64,
+    pub umi_classes: u64,
+    pub assigned_umi_classes: u64,
+}
+
+impl AssignmentStats {
+    fn add(&mut self, other: Self) {
+        self.molecule_records += other.molecule_records;
+        self.assigned_molecule_records += other.assigned_molecule_records;
+        self.representative_rows += other.representative_rows;
+        self.assigned_representative_rows += other.assigned_representative_rows;
+    }
+}
+
 /// Bounded input-side reducer. Only assignment tuples survive each decoded archive batch; final
 /// aggregation remains global, so chunk boundaries cannot affect UMI classes or counts.
 pub(crate) struct ReplayRowsAccumulator<'a> {
@@ -4125,20 +4340,41 @@ pub(crate) struct ReplayRowsAccumulator<'a> {
     anno: &'a anno::Annotation,
     bam2anno: Vec<Option<u32>>,
     solo_strand: anno::assign::SoloStrand,
+    gene_full: Option<anno::assign::GeneFullIndex>,
     shards: Vec<Vec<ReplayTuple>>,
-    n_assigned: u64,
+    stats: AssignmentStats,
 }
 
 impl<'a> ReplayRowsAccumulator<'a> {
+    #[cfg(test)]
     pub(crate) fn with_strand(
         x: &'a Extracted,
         anno: &'a anno::Annotation,
         solo_strand: anno::assign::SoloStrand,
     ) -> Self {
-        let bam2anno: Vec<Option<u32>> =
-            x.chrom_names.iter().map(|n| anno.chrom_ids.get(n).copied()).collect();
-        Self { x, anno, bam2anno, solo_strand,
-            shards: (0..REPLAY_SHARDS).map(|_| Vec::new()).collect(), n_assigned: 0 }
+        Self::with_model(x, anno, solo_strand, false)
+    }
+
+    pub(crate) fn with_model(
+        x: &'a Extracted,
+        anno: &'a anno::Annotation,
+        solo_strand: anno::assign::SoloStrand,
+        gene_full: bool,
+    ) -> Self {
+        let bam2anno: Vec<Option<u32>> = x
+            .chrom_names
+            .iter()
+            .map(|n| anno.chrom_ids.get(n).copied())
+            .collect();
+        Self {
+            x,
+            anno,
+            bam2anno,
+            solo_strand,
+            gene_full: gene_full.then(|| anno::assign::GeneFullIndex::new(anno)),
+            shards: (0..REPLAY_SHARDS).map(|_| Vec::new()).collect(),
+            stats: AssignmentStats::default(),
+        }
     }
 
     pub(crate) fn reserve_assignments(&mut self, expected: usize) {
@@ -4148,42 +4384,77 @@ impl<'a> ReplayRowsAccumulator<'a> {
         }
     }
 
-    fn classify(&self, mols: &[MolRec], s: &mut RowScratch)
-        -> (u64, Vec<Vec<ReplayTuple>>)
-    {
-        let mut shards: Vec<Vec<ReplayTuple>> =
-            (0..REPLAY_SHARDS).map(|_| Vec::new()).collect();
-        let mut n = 0u64;
+    fn classify(
+        &self,
+        mols: &[MolRec],
+        s: &mut RowScratch,
+    ) -> (AssignmentStats, Vec<Vec<ReplayTuple>>) {
+        let mut shards: Vec<Vec<ReplayTuple>> = (0..REPLAY_SHARDS).map(|_| Vec::new()).collect();
+        let mut stats = AssignmentStats::default();
         for m in mols {
+            stats.molecule_records += 1;
+            let mut assigned = false;
             let mut handle = |r: Row| {
-                if row_genes_stranded(
-                    &r, self.x, self.anno, &self.bam2anno, MmMissing::SkipAlt,
-                    self.solo_strand, s,
-                ).is_some() {
+                stats.representative_rows += 1;
+                if row_genes_model(
+                    &r,
+                    self.x,
+                    self.anno,
+                    &self.bam2anno,
+                    MmMissing::SkipAlt,
+                    self.solo_strand,
+                    self.gene_full.as_ref(),
+                    s,
+                )
+                .is_some()
+                {
                     if let [g] = s.genes.as_slice() {
-                        n += 1;
-                        shards[r.cell as usize % REPLAY_SHARDS]
-                            .push((r.cell, r.umi_class, *g, r.weight));
+                        stats.assigned_representative_rows += 1;
+                        assigned = true;
+                        shards[r.cell as usize % REPLAY_SHARDS].push((
+                            r.cell,
+                            r.umi_class,
+                            *g,
+                            r.weight,
+                        ));
                     }
                 }
             };
             for ch in &m.chains {
                 for (pos, shape) in &ch.reps {
-                    handle(Row { cell: m.cell, umi_class: m.umi_class, chrom: m.chrom, pos: *pos,
-                        strand_rev: m.strand_rev, shape: *shape, weight: ch.weight,
-                        pattern: u32::MAX });
+                    handle(Row {
+                        cell: m.cell,
+                        umi_class: m.umi_class,
+                        chrom: m.chrom,
+                        pos: *pos,
+                        strand_rev: m.strand_rev,
+                        shape: *shape,
+                        weight: ch.weight,
+                        pattern: u32::MAX,
+                    });
                 }
             }
             for (pos, shape, pattern, weight) in &m.mms {
-                handle(Row { cell: m.cell, umi_class: m.umi_class, chrom: m.chrom, pos: *pos,
-                    strand_rev: m.strand_rev, shape: *shape, weight: *weight, pattern: *pattern });
+                handle(Row {
+                    cell: m.cell,
+                    umi_class: m.umi_class,
+                    chrom: m.chrom,
+                    pos: *pos,
+                    strand_rev: m.strand_rev,
+                    shape: *shape,
+                    weight: *weight,
+                    pattern: *pattern,
+                });
             }
+            stats.assigned_molecule_records += u64::from(assigned);
         }
-        (n, shards)
+        (stats, shards)
     }
 
-    fn append_parts(&mut self, mut parts: Vec<(u64, Vec<Vec<ReplayTuple>>)>) {
-        self.n_assigned += parts.iter().map(|(n, _)| *n).sum::<u64>();
+    fn append_parts(&mut self, mut parts: Vec<(AssignmentStats, Vec<Vec<ReplayTuple>>)>) {
+        for (stats, _) in &parts {
+            self.stats.add(*stats);
+        }
         for k in 0..REPLAY_SHARDS {
             self.shards[k].reserve(parts.iter().map(|(_, p)| p[k].len()).sum());
         }
@@ -4197,20 +4468,29 @@ impl<'a> ReplayRowsAccumulator<'a> {
     /// Fine reducer tasks let work stealing smooth gene-density differences within the fixed
     /// decode window without concatenating molecule records.
     pub(crate) fn add_archive_chunks(&mut self, chunks: &[Vec<MolRec>]) {
-        let tasks: Vec<&[MolRec]> = chunks.iter()
-            .flat_map(|chunk| chunk.chunks(1 << 16)).collect();
-        let parts: Vec<_> = tasks.into_par_iter()
-            .map_init(RowScratch::default, |s, part| self.classify(part, s)).collect();
+        let tasks: Vec<&[MolRec]> = chunks
+            .iter()
+            .flat_map(|chunk| chunk.chunks(1 << 16))
+            .collect();
+        let parts: Vec<_> = tasks
+            .into_par_iter()
+            .map_init(RowScratch::default, |s, part| self.classify(part, s))
+            .collect();
         self.append_parts(parts);
     }
 
     /// Preserve the original parallel shard assembly for a performance-faithful `--eager` arm.
     fn add_molecules_eager(&mut self, mols: &[MolRec]) {
-        let parts: Vec<_> = mols.par_chunks(1 << 19)
-            .map_init(RowScratch::default, |s, part| self.classify(part, s)).collect();
-        self.n_assigned += parts.iter().map(|(n, _)| *n).sum::<u64>();
+        let parts: Vec<_> = mols
+            .par_chunks(1 << 19)
+            .map_init(RowScratch::default, |s, part| self.classify(part, s))
+            .collect();
+        for (stats, _) in &parts {
+            self.stats.add(*stats);
+        }
         let mut shards: Vec<Vec<ReplayTuple>> = (0..REPLAY_SHARDS)
-            .map(|k| Vec::with_capacity(parts.iter().map(|(_, p)| p[k].len()).sum())).collect();
+            .map(|k| Vec::with_capacity(parts.iter().map(|(_, p)| p[k].len()).sum()))
+            .collect();
         shards.par_iter_mut().enumerate().for_each(|(k, dst)| {
             for (_, worker_shards) in &parts {
                 dst.extend_from_slice(&worker_shards[k]);
@@ -4219,11 +4499,17 @@ impl<'a> ReplayRowsAccumulator<'a> {
         self.shards = shards;
     }
 
+    #[cfg(test)]
     pub(crate) fn finish(self) -> (FxHashMap<(u32, u32), u32>, u64, u64) {
+        let (counts, stats, total) = self.finish_with_stats();
+        (counts, stats.assigned_representative_rows, total)
+    }
+
+    pub(crate) fn finish_with_stats(self) -> (FxHashMap<(u32, u32), u32>, AssignmentStats, u64) {
         let Self {
             x,
             shards,
-            n_assigned,
+            mut stats,
             ..
         } = self;
 
@@ -4251,9 +4537,9 @@ impl<'a> ReplayRowsAccumulator<'a> {
         }
         drop(cur);
 
-        let counted: Vec<((u32, u32), u32)> = shards
+        let counted_shards: Vec<_> = shards
             .into_par_iter()
-            .flat_map_iter(|mut shard| {
+            .map(|mut shard| {
                 // Sorting groups (cell, class) runs with genes as sub-runs; weight sums, the
                 // MultiGeneUMI_CR best-gene choice and the per-(cell, gene) collapse all read off
                 // contiguous slices. Semantics identical to the old nested-map pipeline.
@@ -4327,17 +4613,24 @@ impl<'a> ReplayRowsAccumulator<'a> {
                     out.push(((cell, gene), roots));
                     g0 = g1;
                 }
-                out
+                (out, kept.len() as u64)
             })
             .collect();
 
-    let total: u64 = counted.iter().map(|(_, n)| *n as u64).sum();
-    (counted.into_iter().collect(), n_assigned, total)
+        stats.umi_classes = u64::from(x.n_classes);
+        stats.assigned_umi_classes = counted_shards.iter().map(|(_, n)| *n).sum();
+        let counted: FxHashMap<_, _> = counted_shards
+            .into_iter()
+            .flat_map(|(rows, _)| rows)
+            .collect();
+        let total = counted.values().map(|n| u64::from(*n)).sum();
+        (counted, stats, total)
     }
 }
 
 /// Quantify one annotation from rows alone. The eager entry point remains the reference used by
 /// BAM, molecule-BAM, EM, velocity helpers, and `replay-rows --eager`.
+#[cfg(test)]
 pub fn replay_rows(
     x: &Extracted,
     anno: &anno::Annotation,
@@ -4347,6 +4640,7 @@ pub fn replay_rows(
 
 /// Strand-parameterized [`replay_rows`]. Existing callers retain `Forward` through the wrapper;
 /// the CLI selects this explicitly for non-3' chemistries.
+#[cfg(test)]
 pub fn replay_rows_stranded(
     x: &Extracted,
     anno: &anno::Annotation,
@@ -4355,4 +4649,354 @@ pub fn replay_rows_stranded(
     let mut replay = ReplayRowsAccumulator::with_strand(x, anno, solo_strand);
     replay.add_molecules_eager(&x.mols);
     replay.finish()
+}
+
+/// Gene or intron-inclusive GeneFull assignment with the same global UMI collapse.
+pub(crate) fn replay_rows_model(
+    x: &Extracted,
+    anno: &anno::Annotation,
+    solo_strand: anno::assign::SoloStrand,
+    gene_full: bool,
+) -> (FxHashMap<(u32, u32), u32>, AssignmentStats, u64) {
+    let mut replay = ReplayRowsAccumulator::with_model(x, anno, solo_strand, gene_full);
+    replay.add_molecules_eager(&x.mols);
+    replay.finish_with_stats()
+}
+
+#[cfg(test)]
+mod genefull_replay_tests {
+    use super::*;
+
+    #[test]
+    fn star_em_models_strands_and_mixed_classes() {
+        use anno::assign::SoloStrand::{Forward, Reverse, Unstranded};
+        let path =
+            std::env::temp_dir().join(format!("gravlax-star-strands-{}.gtf", std::process::id()));
+        std::fs::write(
+            &path,
+            concat!(
+                "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"A\"; transcript_id \"A\";\n",
+                "chr1\tX\texon\t401\t500\t.\t+\t.\tgene_id \"A\"; transcript_id \"A\";\n",
+                "chr1\tX\texon\t251\t300\t.\t+\t.\tgene_id \"B\"; transcript_id \"B\";\n",
+                "chr1\tX\texon\t101\t500\t.\t-\t.\tgene_id \"C\"; transcript_id \"C\";\n",
+            ),
+        )
+        .unwrap();
+        let anno = anno::Annotation::from_gtf(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let mut x = Extracted {
+            mols: [210, 260]
+                .into_iter()
+                .enumerate()
+                .map(|(class, pos)| MolRec {
+                    cell: 0,
+                    umi_class: class as u32,
+                    chrom: 0,
+                    strand_rev: false,
+                    chains: smallvec::smallvec![MolChain {
+                        weight: 1,
+                        reps: smallvec::smallvec![(pos, 0)]
+                    }],
+                    mms: SmallVec::new(),
+                })
+                .collect(),
+            edges: vec![],
+            cells: vec![0],
+            shapes: vec![Shape {
+                blocks: vec![(0, 20)],
+            }],
+            patterns: vec![],
+            n_classes: 2,
+            chrom_names: vec!["chr1".into()],
+        };
+        assert_eq!(
+            em_star_matrix(&x, &anno, false, Forward),
+            FxHashMap::from_iter([((0, 1), 1.0)])
+        );
+        // STAR stops once the largest change is below 0.01, before the minor component reaches zero.
+        assert_eq!(
+            em_star_matrix(&x, &anno, true, Forward),
+            FxHashMap::from_iter([((0, 0), 1.9921875), ((0, 1), 0.0078125)])
+        );
+        for full in [false, true] {
+            assert_eq!(
+                em_star_matrix(&x, &anno, full, Reverse),
+                FxHashMap::from_iter([((0, 2), 2.0)])
+            );
+            let unstranded = em_star_matrix(&x, &anno, full, Unstranded);
+            assert!((unstranded.values().sum::<f64>() - 2.0).abs() < 1e-12);
+            let forward = em_star_matrix(&x, &anno, full, Forward);
+            for m in &mut x.mols {
+                m.strand_rev = true;
+            }
+            assert_eq!(em_star_matrix(&x, &anno, full, Reverse), forward);
+            assert_eq!(em_star_matrix(&x, &anno, full, Unstranded), unstranded);
+            for m in &mut x.mols {
+                m.strand_rev = false;
+            }
+        }
+        // Unique and ambiguous records sharing a class must not count twice in STAR-style EM.
+        x.mols[1].umi_class = 0;
+        x.n_classes = 1;
+        assert_eq!(
+            em_star_matrix(&x, &anno, true, Forward),
+            FxHashMap::from_iter([((0, 0), 1.0)])
+        );
+        // An alternative may flip orientation relative to its anchor. Missing-contig
+        // alternatives do not erase the annotated candidates in the STAR-style path.
+        x.mols.truncate(1);
+        x.mols[0].chains.clear();
+        x.mols[0].mms.push((210, 0, 0, 1));
+        x.chrom_names.push("missing".into());
+        x.patterns.push(vec![
+            PatAlt {
+                chrom: 0,
+                offset: 0,
+                strand_flip: false,
+                shape: SAME_SHAPE,
+            },
+            PatAlt {
+                chrom: 0,
+                offset: 0,
+                strand_flip: true,
+                shape: SAME_SHAPE,
+            },
+            PatAlt {
+                chrom: 1,
+                offset: 0,
+                strand_flip: false,
+                shape: SAME_SHAPE,
+            },
+        ]);
+        for strand in [Forward, Reverse, Unstranded] {
+            assert_eq!(
+                em_star_matrix(&x, &anno, false, strand),
+                FxHashMap::from_iter([((0, 2), 1.0)])
+            );
+            assert_eq!(
+                em_star_matrix(&x, &anno, true, strand),
+                FxHashMap::from_iter([((0, 0), 0.5), ((0, 2), 0.5)])
+            );
+        }
+    }
+
+    #[test]
+    fn genefull_em_masks_nested_candidates_and_audits_scored_classes() {
+        let path =
+            std::env::temp_dir().join(format!("gravlax-genefull-em-{}.gtf", std::process::id()));
+        let mut gtf = String::new();
+        for (gene, start, end) in [
+            ("A", 101, 200),
+            ("A", 401, 500),
+            ("B", 251, 300),
+            ("C", 601, 700),
+            ("D", 801, 900),
+        ] {
+            gtf.push_str(&format!("chr1\tX\texon\t{start}\t{end}\t.\t+\t.\tgene_id \"{gene}\"; transcript_id \"{gene}1\";\n"));
+        }
+        std::fs::write(&path, gtf).unwrap();
+        let anno = anno::Annotation::from_gtf(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let molecule = |class, cell, pos| MolRec {
+            cell,
+            umi_class: class,
+            chrom: 0,
+            strand_rev: false,
+            chains: smallvec::smallvec![MolChain {
+                weight: 1,
+                reps: smallvec::smallvec![(pos, 0)]
+            }],
+            mms: SmallVec::new(),
+        };
+        let mut mols = vec![
+            molecule(0, 0, 110),
+            molecule(0, 0, 260),
+            molecule(1, 0, 210),
+            molecule(2, 0, 260),
+            molecule(3, 0, 110),
+            molecule(3, 0, 610),
+            molecule(4, 1, 110),
+            molecule(4, 1, 260),
+            molecule(5, 0, 210),
+        ];
+        mols[5].chains.clear();
+        mols[5].mms.push((610, 0, 0, 1));
+        mols[8].chains.clear();
+        mols[8].mms.push((210, 0, 1, 1));
+        let alt = |chrom, offset| PatAlt {
+            chrom,
+            offset,
+            strand_flip: false,
+            shape: SAME_SHAPE,
+        };
+        let x = Extracted {
+            mols,
+            edges: vec![],
+            cells: vec![0, 1],
+            shapes: vec![Shape {
+                blocks: vec![(0, 20)],
+            }],
+            patterns: vec![vec![alt(0, 0), alt(0, 200)], vec![alt(1, 0), alt(0, 0)]],
+            n_classes: 6,
+            chrom_names: vec!["chr1".into(), "missing".into()],
+        };
+        for full in [false, true] {
+            let mut em = PackedEmAccumulator::new(
+                &x,
+                &anno,
+                x.mols.len(),
+                full,
+                anno::assign::SoloStrand::Forward,
+                EM_IN_MEMORY_SUPPORT_BUDGET,
+            )
+            .unwrap();
+            // Split repeated classes across decoder batches; the global class is still masked once.
+            for m in &x.mols {
+                em.add_archive_chunks(&[vec![m.clone()]], &x, &anno)
+                    .unwrap();
+            }
+            let packed = em.finish(&[0, 0, 0, 0, 1, 0], 1.0, 7).unwrap();
+            for budget in [0, 16, 40] {
+                let mut spilled = PackedEmAccumulator::new(
+                    &x,
+                    &anno,
+                    0,
+                    full,
+                    anno::assign::SoloStrand::Forward,
+                    budget,
+                )
+                .unwrap();
+                for m in &x.mols {
+                    spilled
+                        .add_archive_chunks(&[vec![m.clone()]], &x, &anno)
+                        .unwrap();
+                }
+                assert!(
+                    spilled.spill.is_some(),
+                    "actual supports must trigger spill even with a zero record estimate"
+                );
+                let spill_dir = spilled.spill.as_ref().unwrap().dir.clone();
+                assert!(spilled.peak_retained_support_bytes <= budget);
+                let observed = spilled.finish(&[0, 0, 0, 0, 1, 0], 1.0, 7).unwrap();
+                assert_eq!(observed, packed);
+                assert!(!spill_dir.exists(), "completed spill must be cleaned up");
+            }
+            let all = packed.evaluation_counts(None);
+            if full {
+                assert_eq!(all["all_input_single_gene_classes"], 2);
+                assert_eq!(all["all_input_multi_only_classes"], 1);
+                assert_eq!(all["scored_population_masked_classes"], 3);
+                assert_eq!(all["scored_population_truth_lost_classes"], 1);
+                assert_eq!(all["scored_population_evaluable_classes"], 2);
+                let groups = EmGroups {
+                    cell_group: vec![0, 0],
+                    eval_cell: vec![true, false],
+                    names: vec!["fixed".into()],
+                };
+                let fixed = packed.evaluation_counts(Some(&groups.eval_cell));
+                assert_eq!(fixed["scored_population_masked_classes"], 2);
+                assert_eq!(fixed["scored_population_truth_lost_classes"], 1);
+                assert_eq!(fixed["scored_population_evaluable_classes"], 1);
+                let target = &packed.shards[0];
+                let at = target
+                    .target_truth
+                    .iter()
+                    .position(|&truth| truth == 0)
+                    .unwrap();
+                assert_eq!(&target.target_genes[target.target_range(at)], &[0, 1]);
+                // Unique A evidence for the masked class cannot leak into the fitted prior.
+                assert_eq!(packed.global_base[0], 2.0);
+            } else {
+                assert_eq!(all["scored_population_masked_classes"], 1);
+                assert_eq!(all["scored_population_truth_lost_classes"], 1);
+                assert_eq!(all["scored_population_evaluable_classes"], 0);
+            }
+        }
+    }
+
+    #[test]
+    fn genefull_alternatives_global_collapse_and_statistic_units() {
+        let path =
+            std::env::temp_dir().join(format!("gravlax-genefull-{}.gtf", std::process::id()));
+        std::fs::write(
+            &path,
+            concat!(
+                "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"A\"; transcript_id \"A1\";\n",
+                "chr1\tX\texon\t401\t500\t.\t+\t.\tgene_id \"A\"; transcript_id \"A1\";\n",
+                "chr1\tX\texon\t251\t300\t.\t+\t.\tgene_id \"B\"; transcript_id \"B1\";\n"
+            ),
+        )
+        .unwrap();
+        let anno = anno::Annotation::from_gtf(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let molecule = |class, pos| MolRec {
+            cell: 0,
+            umi_class: class,
+            chrom: 0,
+            strand_rev: false,
+            chains: smallvec::smallvec![MolChain {
+                weight: 2,
+                reps: smallvec::smallvec![(pos, 0)]
+            }],
+            mms: SmallVec::new(),
+        };
+        let mut mols = vec![
+            molecule(0, 210),
+            molecule(1, 210),
+            molecule(0, 410),
+            molecule(2, 260),
+            molecule(3, 210),
+            molecule(4, 210),
+            molecule(5, 210),
+        ];
+        mols[0].chains[0].reps.push((220, 0));
+        for (i, pattern) in [(4, 0), (5, 1)] {
+            mols[i].chains.clear();
+            mols[i].mms.push((210, 0, pattern, 1));
+        }
+        mols[6].chrom = 1; // missing annotation chromosome
+        let alt = |offset| PatAlt {
+            chrom: 0,
+            offset,
+            strand_flip: false,
+            shape: SAME_SHAPE,
+        };
+        let x = Extracted {
+            mols,
+            edges: vec![(0, 1)],
+            cells: vec![0],
+            shapes: vec![Shape {
+                blocks: vec![(0, 20)],
+            }],
+            patterns: vec![vec![alt(0), alt(200)], vec![alt(0), alt(50)]],
+            n_classes: 6,
+            chrom_names: vec!["chr1".into(), "missing".into()],
+        };
+        let (gene, _, gene_total) = replay_rows(&x, &anno);
+        assert_eq!(gene_total, 4);
+        assert_eq!(gene.get(&(0, 0)), Some(&2));
+        assert_eq!(gene.get(&(0, 1)), Some(&2));
+        let (full, stats, total) =
+            replay_rows_model(&x, &anno, anno::assign::SoloStrand::Forward, true);
+        assert_eq!(total, 2);
+        assert_eq!(full, FxHashMap::from_iter([((0, 0), 2)]));
+        assert_eq!(
+            stats,
+            AssignmentStats {
+                molecule_records: 7,
+                assigned_molecule_records: 4,
+                representative_rows: 8,
+                assigned_representative_rows: 5,
+                umi_classes: 6,
+                assigned_umi_classes: 3
+            }
+        );
+        // Related classes and repeated class records cross reducer batch boundaries.
+        let mut streaming =
+            ReplayRowsAccumulator::with_model(&x, &anno, anno::assign::SoloStrand::Forward, true);
+        for m in &x.mols {
+            streaming.add_archive_chunks(&[vec![m.clone()]]);
+        }
+        assert_eq!(streaming.finish_with_stats(), (full, stats, total));
+    }
 }
