@@ -6,6 +6,9 @@ This file records user-visible changes in each Gravlax release.
 
 ## [0.3.0] - 2026-09-10
 
+- Add `dev em --gene-full` for intron-inclusive recovery evaluation and pooled
+  emission, with explicit masked-class coverage and counting-model metadata.
+  Validate matched fixed-nucleus EM, annotation contrasts, and extension controls.
 - Add `replay-rows --gene-full` for intron-inclusive, strand-aware gene-span
   assignment from aligned blocks, with the existing global UMI collapse.
   Support streaming/eager archives, BAM input, and compiled annotations.
