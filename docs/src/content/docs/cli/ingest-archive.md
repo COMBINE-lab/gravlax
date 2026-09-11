@@ -51,6 +51,7 @@ aie ingest-archive align/Aligned.sortedByCoord.out.bam \
 | `--alignment-input <PATH>` | — | Hash one source-read or other aligner input and retain its locator; repeat in the aligner's original input order |
 | `--alignment-log <PATH>` | — | Hash an aligner log that records resolved defaults and retain its locator |
 | `--alignment-chemistry <TEXT>` | — | Record the caller-declared library chemistry used for alignment and strand interpretation |
+| `--geometry-fidelity` | off | Retain every distinct accepted unique-read geometry with its exact read multiplicity, instead of two coordinate-extreme representatives per junction chain. See [When to use geometry fidelity](#when-to-use-geometry-fidelity) |
 | `--report-format <FORMAT>` | — | Opt in to a versioned `text`, `tsv`, or `json` operation report |
 | `--report-output <PATH>` | stdout | Atomically publish the report without replacing an existing file; requires `--report-format` |
 
@@ -88,6 +89,38 @@ sample identifiers, or command arguments. The declared junction catalogue is
 embedded exactly; source reads, annotations, and logs are represented by
 identities and locators rather than copied into the archive.
 :::
+
+## When to use geometry fidelity
+
+By default a UMI class stores each junction chain as a read count plus two
+coordinate-extreme representatives. `--geometry-fidelity` (0.2.2) instead keeps
+every distinct unique-read geometry once, with its exact multiplicity, inside
+the same cell/UMI/locus record. Gene counting does not need it. Use it when a
+downstream analysis depends on every read in a UMI class — the ambiguous
+component of RNA velocity, or per-read geometry queries — and the storage
+premium is acceptable.
+
+Measured on 10x PBMC 5k (383.9M reads, GENCODE v49, 5,038 called cells,
+gravlax 0.2.2; ingest took 7.4 minutes at 24 threads in both modes):
+
+| Quantity | Default | `--geometry-fidelity` |
+|---|---|---|
+| Archive size | 544.0 MB (11.3 bits/read) | 692.7 MB (14.4 bits/read) |
+| Gene count-matrix deviation from STARsolo | 0.307% | 0.253% |
+| RNA-velocity spliced deviation | 2.67% | 2.35% |
+| RNA-velocity unspliced deviation | 0.86% | 0.85% |
+| RNA-velocity ambiguous deviation | 6.13% | 4.67% |
+
+The archive grows by 27%. Gene counts barely move, so a workflow that only
+replays Gene or GeneFull matrices gains little for that cost. The largest
+change is the ambiguous velocity component, and even there representative
+reduction accounts for only about a quarter of the 6.13% deviation; the rest
+comes from alignment differences and no archive setting recovers it.
+
+Older readers reject the `distinct-unique-geometries-v1` provenance rule, so an
+archive built with this switch is not readable by pre-0.2.0 tools. The other
+experimental ingest switches are described on
+[The `.aie` format](/gravlax/format/#experimental-archive-improvements).
 
 ## Uniform operation report
 
