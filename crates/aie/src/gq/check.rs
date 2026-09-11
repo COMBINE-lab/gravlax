@@ -356,7 +356,7 @@ impl<'a> Compiler<'a> {
                     for ((param, ty), (_, arg)) in f.parameters.iter().zip(args) {
                         let value = self.node(arg, u, locals)?;
                         if let Some(ty) = ty {
-                            self.check_type(ty, &value, u, f.exported)?;
+                            self.check_type(ty, &value, u, f.exported, &f.name, param)?;
                         }
                         bound.insert(param.clone(), value);
                     }
@@ -370,7 +370,7 @@ impl<'a> Compiler<'a> {
                         self.node(&f.body, u, &bound)?
                     };
                     if let Some(ty) = &f.returns {
-                        self.check_type(ty, &result, u, f.exported)?;
+                        self.check_type(ty, &result, u, f.exported, &f.name, "return")?;
                     }
                     self.active.remove(name);
                     return Ok(result);
@@ -381,9 +381,18 @@ impl<'a> Compiler<'a> {
         };
         Ok(Node { at, ty, op })
     }
-    fn check_type(&self, declared: &str, node: &Node, unit: Unit, exported: bool) -> Result<()> {
+    fn check_type(
+        &self,
+        declared: &str,
+        node: &Node,
+        unit: Unit,
+        exported: bool,
+        function: &str,
+        slot: &str,
+    ) -> Result<()> {
+        let at = node.at;
         if exported && node.ty == Type::Truth && !declared.starts_with("Predicate<") {
-            bail!("exported Truth predicates must declare Predicate<Unit,Assembly,StrandFrame>");
+            bail!("byte {at}: exported fn {function} {slot} is a Truth predicate and must declare Predicate<Unit,Assembly,StrandFrame>");
         }
         let (base, qualifiers) = if let Some((base, args)) = declared.split_once('<') {
             (
@@ -425,7 +434,7 @@ impl<'a> Compiler<'a> {
             };
             if args.len() != 2 {
                 if exported {
-                    bail!("exported coordinate types require explicit <Assembly,StrandFrame>");
+                    bail!("byte {at}: exported fn {function} {slot} requires an explicit <Assembly,StrandFrame> annotation");
                 }
                 return Ok(());
             }
@@ -981,7 +990,7 @@ fn validate_definitions(doc: &ast::Document) -> Result<()> {
                 ]
                 .contains(&declared)
                 {
-                    bail!("exported scientific type {declared} requires explicit unit/assembly/strand qualifiers");
+                    bail!("byte {}: exported fn {} declares bare scientific type {declared}; write explicit unit/assembly/strand qualifiers",f.at,f.name);
                 }
             }
         }
