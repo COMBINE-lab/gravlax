@@ -4,6 +4,21 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+### `collection find-events` exact reduction
+
+Cohort-wide `collection find-events` reduces exact molecule evidence through a
+packed sorted-hit representation instead of hash maps keyed by
+`(entity, UMI class)`, reduces source archives one at a time with their chunks
+decoded in parallel, and shares one routing-target arena rather than copying a
+target list per archive, chunk and junction posting. On an eight-archive
+1.33 GB SEZ cohort the routed novel-versus-GENCODE-v32 cassette search went from
+93.8 s and 11.8 GiB peak RSS to 13.1 s and 1.9 GiB, with byte-identical results.
+
+A search is now rejected while planning if it retains more than 33,554,432
+candidates, which the packed reducer cannot address; lower `--max-candidates`
+or strengthen the catalogue predicates. Events with more than three components
+are likewise rejected rather than silently dropping component counts.
+
 ### `collection find-events` stage profile
 
 `collection find-events` now reports a per-stage wall-clock and peak-RSS
