@@ -23,6 +23,9 @@ enum Command {
     Check(CheckArgs),
     /// Print an explicit annotation-free STAR recipe for a supported chemistry.
     Recipe(RecipeArgs),
+    /// Write a splice-junction seed file in STAR `--sjdbFileChrStartEnd` format from a GTF or
+    /// compiled annotation, for optional junction-seeded alignment.
+    Junctions(JunctionsArgs),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum, Serialize)]
@@ -123,6 +126,34 @@ struct RecipeArgs {
     /// Inputs are plain FASTQ; omit STAR's `--readFilesCommand zcat`.
     #[arg(long)]
     plain_fastq: bool,
+
+    /// Seed alignment with a fixed splice-junction list in STAR `--sjdbFileChrStartEnd` format
+    /// (see `aie ingest junctions`). Off by default: the default recipe inserts no junctions.
+    /// Seeding leaves the archive annotation-independent with respect to gene models; the seed
+    /// file is recorded in archive provenance at ingest.
+    #[arg(long, value_name = "FILE")]
+    junction_seed: Option<PathBuf>,
+
+    /// STAR `--sjdbOverhang` used when a seed is inserted at mapping time (cDNA read length
+    /// minus one; STAR's own default is 100). Only emitted with `--junction-seed`.
+    #[arg(long, default_value_t = 100, value_name = "N")]
+    sjdb_overhang: usize,
+
+    /// Omit per-library two-pass junction discovery (`--twopassMode Basic`). Off by default.
+    #[arg(long)]
+    one_pass: bool,
+}
+
+#[derive(ClapArgs)]
+struct JunctionsArgs {
+    /// Annotation to derive junctions from: an uncompressed GTF or a compiled `.aic` file.
+    #[arg(long, value_name = "PATH")]
+    gtf: PathBuf,
+
+    /// Output seed file (tab-separated `chrom  intron_start  intron_end  strand`, 1-based
+    /// inclusive intron coordinates, STAR `--sjdbFileChrStartEnd` format). Not overwritten.
+    #[arg(long, value_name = "FILE")]
+    out: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -768,6 +799,9 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     let whitelist = args
         .whitelist
         .unwrap_or_else(|| PathBuf::from(args.chemistry.default_whitelist()));
+    if args.junction_seed.is_some() && args.sjdb_overhang == 0 {
+        bail!("--sjdb-overhang must be at least 1");
+    }
     println!(
         "# Gravlax annotation-free STAR recipe for {}",
         args.chemistry.label()
@@ -775,9 +809,25 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     println!(
         "# Read order is cDNA R2, then barcode/UMI R1. The genome directory must have been built without a GTF or annotation-derived splice junctions."
     );
+    if let Some(seed) = &args.junction_seed {
+        println!(
+            "# Optional junction seeding: {} is inserted at mapping time. Gene models are still deferred to replay; the seed and its digest are recorded in the archive at ingest.",
+            shell_quote(seed)
+        );
+    }
+    if args.one_pass {
+        println!(
+            "# Optional one-pass mode: no per-library junction discovery. Junctions come only from the aligner's own detection{}.",
+            if args.junction_seed.is_some() { " and the seed" } else { "" }
+        );
+    }
     println!("STAR \\");
     println!("  --runThreadN {} \\", args.threads);
     println!("  --genomeDir {} \\", shell_quote(&args.genome_dir));
+    if let Some(seed) = &args.junction_seed {
+        println!("  --sjdbFileChrStartEnd {} \\", shell_quote(seed));
+        println!("  --sjdbOverhang {} \\", args.sjdb_overhang);
+    }
     println!(
         "  --readFilesIn {} {} \\",
         shell_quote(&args.read2),
@@ -786,7 +836,9 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     if !args.plain_fastq {
         println!("  --readFilesCommand zcat \\");
     }
-    println!("  --twopassMode Basic \\");
+    if !args.one_pass {
+        println!("  --twopassMode Basic \\");
+    }
     println!("  --soloType CB_UMI_Simple \\");
     println!("  --soloCBstart 1 \\");
     println!("  --soloCBlen 16 \\");
@@ -809,10 +861,77 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
         shell_quote(&whitelist),
         args.chemistry.label()
     );
+    // Provenance flags that describe exactly how this recipe supplied junctions.
+    let prefix = shell_quote(&args.out_prefix);
+    let mut provenance = match (&args.junction_seed, args.one_pass) {
+        (Some(seed), true) => format!(
+            "--junction-discovery frozen-catalogue --junction-catalogue {seed} --alignment-annotation {seed}",
+            seed = shell_quote(seed)
+        ),
+        (Some(seed), false) => format!(
+            "--junction-discovery per-library-two-pass --junction-catalogue {prefix}_STARpass1/SJ.out.tab --alignment-annotation {seed}",
+            seed = shell_quote(seed)
+        ),
+        (None, true) => "--junction-discovery one-pass".to_string(),
+        (None, false) => format!(
+            "--junction-discovery per-library-two-pass --junction-catalogue {prefix}_STARpass1/SJ.out.tab"
+        ),
+    };
+    provenance.push_str(&format!(
+        " --alignment-chemistry {}",
+        args.chemistry.label()
+    ));
     println!(
-        "aie ingest-archive {}Aligned.sortedByCoord.out.bam --whitelist {} --out sample.aie",
-        shell_quote(&args.out_prefix),
+        "aie ingest-archive {}Aligned.sortedByCoord.out.bam --whitelist {} \\",
+        prefix,
         shell_quote(&whitelist)
+    );
+    println!("  {} \\", provenance);
+    println!("  --out sample.aie");
+    Ok(())
+}
+
+fn run_junctions(args: JunctionsArgs) -> Result<()> {
+    if args.out.exists() {
+        bail!("refusing to overwrite {}", args.out.display());
+    }
+    let annotation = anno::Annotation::from_path(&args.gtf)
+        .with_context(|| format!("reading annotation {}", args.gtf.display()))?;
+    let mut names: Vec<Option<&str>> = vec![None; annotation.chrom_ids.len()];
+    for (name, id) in &annotation.chrom_ids {
+        if let Some(slot) = names.get_mut(*id as usize) {
+            *slot = Some(name.as_str());
+        }
+    }
+    let mut junctions: std::collections::BTreeSet<(String, u32, u32, char)> =
+        std::collections::BTreeSet::new();
+    for transcript in &annotation.transcripts {
+        let Some(Some(chrom)) = names.get(transcript.chrom as usize) else {
+            bail!("annotation transcript references an unnamed chromosome");
+        };
+        let strand = if transcript.strand_rev { '-' } else { '+' };
+        for pair in transcript.exons.windows(2) {
+            let (left, right) = (pair[0], pair[1]);
+            if right.start > left.end {
+                // Exons are 0-based half-open; STAR wants 1-based inclusive intron coordinates.
+                junctions.insert((chrom.to_string(), left.end + 1, right.start, strand));
+            }
+        }
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&args.out)
+        .with_context(|| format!("creating {}", args.out.display()))?;
+    for (chrom, start, end, strand) in &junctions {
+        writeln!(file, "{chrom}\t{start}\t{end}\t{strand}")?;
+    }
+    file.flush()?;
+    println!(
+        "wrote {} junctions from {} transcripts to {}",
+        junctions.len(),
+        annotation.transcripts.len(),
+        args.out.display()
     );
     Ok(())
 }
@@ -821,5 +940,6 @@ pub fn run(args: Args) -> Result<()> {
     match args.command {
         Command::Check(args) => run_check(args),
         Command::Recipe(args) => run_recipe(args),
+        Command::Junctions(args) => run_junctions(args),
     }
 }

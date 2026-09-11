@@ -220,7 +220,99 @@ fn chemistry_recipes_are_explicit_and_annotation_free() {
         assert!(recipe.contains("--outSAMattributes NH HI AS nM CR CY UR UY"));
         assert!(recipe.contains("--outSAMmultNmax 50"));
         assert!(!recipe.contains("--sjdbGTFfile"));
+        assert!(!recipe.contains("--sjdbFileChrStartEnd"));
+        assert!(recipe.contains("--twopassMode Basic"));
+        assert!(recipe.contains("--junction-discovery per-library-two-pass"));
     }
+}
+
+#[test]
+fn recipe_junction_seed_and_one_pass_are_optional_and_declared() {
+    let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args([
+            "ingest",
+            "recipe",
+            "--chemistry",
+            "10x-3p-v3",
+            "--junction-seed",
+            "v32.junctions.tab",
+            "--sjdb-overhang",
+            "90",
+            "--one-pass",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let recipe = String::from_utf8_lossy(&output.stdout);
+    assert!(recipe.contains("--sjdbFileChrStartEnd v32.junctions.tab"));
+    assert!(recipe.contains("--sjdbOverhang 90"));
+    assert!(!recipe.contains("--twopassMode"));
+    assert!(!recipe.contains("--sjdbGTFfile"));
+    assert!(recipe.contains(
+        "--junction-discovery frozen-catalogue --junction-catalogue v32.junctions.tab --alignment-annotation v32.junctions.tab"
+    ));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args([
+            "ingest",
+            "recipe",
+            "--chemistry",
+            "10x-3p-v3",
+            "--junction-seed",
+            "v32.junctions.tab",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let recipe = String::from_utf8_lossy(&output.stdout);
+    assert!(recipe.contains("--twopassMode Basic"));
+    assert!(recipe.contains(
+        "--junction-discovery per-library-two-pass --junction-catalogue align/_STARpass1/SJ.out.tab --alignment-annotation v32.junctions.tab"
+    ));
+}
+
+#[test]
+fn junctions_command_writes_star_seed_format() {
+    let scratch = Scratch::new();
+    let gtf = scratch.0.join("spliced.gtf");
+    std::fs::write(
+        &gtf,
+        concat!(
+            "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+            "chr1\tX\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n",
+            "chr1\tX\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1b\";\n",
+            "chr1\tX\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1b\";\n",
+            "chr2\tX\texon\t501\t600\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T2\";\n",
+            "chr2\tX\texon\t701\t800\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T2\";\n",
+            "chr3\tX\texon\t901\t950\t.\t+\t.\tgene_id \"G3\"; transcript_id \"T3\";\n",
+        ),
+    )
+    .unwrap();
+    let out = scratch.0.join("seed.tab");
+    let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["ingest", "junctions", "--gtf"])
+        .arg(&gtf)
+        .arg("--out")
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seed = std::fs::read_to_string(&out).unwrap();
+    // 1-based inclusive intron coordinates; the duplicate chr1 junction from T1b is emitted once.
+    assert_eq!(seed, "chr1\t201\t300\t+\nchr2\t601\t700\t-\n");
+    let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["ingest", "junctions", "--gtf"])
+        .arg(&gtf)
+        .arg("--out")
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to overwrite"));
 }
 
 fn write_ingest_bam(path: &Path) {

@@ -4,6 +4,15 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+- Add optional junction-seeded and one-pass ingest alignment. `aie ingest
+  junctions` writes a STAR `--sjdbFileChrStartEnd` seed file from a GTF or
+  compiled annotation, and `aie ingest recipe` accepts `--junction-seed`,
+  `--sjdb-overhang`, and `--one-pass`. Both options are off by default; the
+  default recipe is unchanged. The printed `ingest-archive` command carries the
+  matching `--junction-discovery`, `--junction-catalogue`, and
+  `--alignment-annotation` declarations, so the seed and discovery mode are
+  recorded in archive provenance. No archive-format change.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics
