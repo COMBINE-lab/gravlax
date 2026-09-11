@@ -13,6 +13,21 @@ This file records user-visible changes in each Gravlax release.
   `--alignment-annotation` declarations, so the seed and discovery mode are
   recorded in archive provenance. No archive-format change.
 
+- `aie ingest recipe` now derives the default `--sjdbOverhang` from
+  `--chemistry` instead of using a fixed 100: 90 for 10x 3' v3/v3.1 (91 bp cDNA
+  reads) and 97 for 10x 3' v2 (98 bp cDNA reads), following STAR's read length
+  minus one rule. `--sjdb-overhang <N>` still overrides it, and the flag is
+  still emitted only with `--junction-seed`.
+
+- `aie inspect-archive` now shows alignment provenance in its human-readable
+  output. The legacy text summary and the `--format text`/`--format tsv`
+  reports list the provenance status, junction discovery mode, junction
+  catalogue role, digest and data-row count, alignment annotation digest and
+  locator, alignment chemistry, index identity, and aligner program versions.
+  Archives without a manifest report a single line saying none is recorded.
+  The `--json` output is unchanged; `--format json` gains the same rows as an
+  `alignment_provenance` table. No archive-format change.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics

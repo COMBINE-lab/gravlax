@@ -237,7 +237,7 @@ fn recipe_junction_seed_and_one_pass_are_optional_and_declared() {
             "--junction-seed",
             "v32.junctions.tab",
             "--sjdb-overhang",
-            "90",
+            "74",
             "--one-pass",
         ])
         .output()
@@ -245,7 +245,7 @@ fn recipe_junction_seed_and_one_pass_are_optional_and_declared() {
     assert!(output.status.success());
     let recipe = String::from_utf8_lossy(&output.stdout);
     assert!(recipe.contains("--sjdbFileChrStartEnd v32.junctions.tab"));
-    assert!(recipe.contains("--sjdbOverhang 90"));
+    assert!(recipe.contains("--sjdbOverhang 74"));
     assert!(!recipe.contains("--twopassMode"));
     assert!(!recipe.contains("--sjdbGTFfile"));
     assert!(recipe.contains(
@@ -269,6 +269,39 @@ fn recipe_junction_seed_and_one_pass_are_optional_and_declared() {
     assert!(recipe.contains(
         "--junction-discovery per-library-two-pass --junction-catalogue align/_STARpass1/SJ.out.tab --alignment-annotation v32.junctions.tab"
     ));
+}
+
+#[test]
+fn recipe_sjdb_overhang_defaults_to_the_chemistry_cdna_read_length() {
+    // STAR's rule is the cDNA read length minus one: 91 bp for 10x 3' v3/v3.1, 98 bp for v2.
+    for (chemistry, overhang) in [("10x-3p-v3", "90"), ("10x-3p-v2", "97")] {
+        let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+            .args([
+                "ingest",
+                "recipe",
+                "--chemistry",
+                chemistry,
+                "--junction-seed",
+                "v32.junctions.tab",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let recipe = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            recipe.contains(&format!("--sjdbOverhang {overhang}")),
+            "{chemistry} recipe did not default --sjdbOverhang to {overhang}: {recipe}"
+        );
+        assert!(!recipe.contains("--sjdbOverhang 100"));
+    }
+
+    // Without a seed the recipe still emits no junction flags at all.
+    let output = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["ingest", "recipe", "--chemistry", "10x-3p-v3"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("--sjdbOverhang"));
 }
 
 #[test]
@@ -313,6 +346,51 @@ fn junctions_command_writes_star_seed_format() {
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to overwrite"));
+}
+
+/// Same single-record fixture as [`write_ingest_bam`], plus the `@PG` line an aligner leaves
+/// behind, so provenance rendering has a program name and version to show.
+fn write_ingest_bam_with_aligner(path: &Path) {
+    use noodles_sam::header::record::value::map::{program::tag as program_tag, Program};
+
+    let header = sam::Header::builder()
+        .add_reference_sequence(
+            "chr1",
+            Map::<ReferenceSequence>::new(NonZero::new(10_000).unwrap()),
+        )
+        .add_program(
+            "STAR",
+            Map::<Program>::builder()
+                .insert(program_tag::NAME, "STAR")
+                .insert(program_tag::VERSION, "2.7.11b")
+                .build()
+                .unwrap(),
+        )
+        .build();
+    let data: Data = [
+        (Tag::new(b'C', b'R'), Value::from("AAAAAAAAAAAAAAAA")),
+        (Tag::new(b'C', b'Y'), Value::from("IIIIIIIIIIIIIIII")),
+        (Tag::new(b'U', b'R'), Value::from("ACGTACGTACGT")),
+        (Tag::ALIGNMENT_HIT_COUNT, Value::from(1u8)),
+    ]
+    .into_iter()
+    .collect();
+    let cigar: Cigar = [Op::new(Kind::Match, 50)].into_iter().collect();
+    let record = RecordBuf::builder()
+        .set_name("read-1")
+        .set_flags(Flags::empty())
+        .set_reference_sequence_id(0)
+        .set_alignment_start(Position::try_from(101).unwrap())
+        .set_cigar(cigar)
+        .set_sequence(Sequence::from(vec![b'A'; 50]))
+        .set_quality_scores(QualityScores::from(vec![30; 50]))
+        .set_data(data)
+        .build();
+    let file = std::fs::File::create(path).unwrap();
+    let mut writer = bam::io::Writer::new(file);
+    writer.write_header(&header).unwrap();
+    writer.write_alignment_record(&header, &record).unwrap();
+    writer.try_finish().unwrap();
 }
 
 fn write_ingest_bam(path: &Path) {
@@ -390,6 +468,117 @@ fn write_broken_multimap_bam(path: &Path) {
     writer.write_alignment_record(&header, &primary).unwrap();
     writer.write_alignment_record(&header, &secondary).unwrap();
     writer.try_finish().unwrap();
+}
+
+#[test]
+fn inspect_archive_text_summary_shows_alignment_provenance() {
+    let scratch = Scratch::new();
+    let bam = scratch.0.join("input.bam");
+    let whitelist = scratch.0.join("whitelist.txt");
+    let catalogue = scratch.0.join("frozen.sjdb.tab");
+    let annotation = scratch.0.join("alignment.sjdb.tab");
+    let archive = scratch.0.join("provenance.aie");
+    write_ingest_bam_with_aligner(&bam);
+    std::fs::write(&whitelist, "AAAAAAAAAAAAAAAA\n").unwrap();
+    std::fs::write(
+        &catalogue,
+        "# frozen junction catalogue\nchr1\t120\t140\t1\nchr1\t220\t240\t1\n",
+    )
+    .unwrap();
+    std::fs::write(&annotation, "chr1\t120\t140\t1\n").unwrap();
+
+    let ingest = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["ingest-archive"])
+        .arg(&bam)
+        .arg("--whitelist")
+        .arg(&whitelist)
+        .arg("--out")
+        .arg(&archive)
+        .args([
+            "--zstd-level",
+            "1",
+            "--junction-discovery",
+            "frozen-catalogue",
+        ])
+        .arg("--junction-catalogue")
+        .arg(&catalogue)
+        .arg("--alignment-annotation")
+        .arg(&annotation)
+        .args(["--alignment-chemistry", "10x-3p-v3"])
+        .args(["--alignment-index-identity", "star-index:fixture-v1"])
+        .output()
+        .unwrap();
+    assert!(
+        ingest.status.success(),
+        "ingest failed: {}",
+        String::from_utf8_lossy(&ingest.stderr)
+    );
+
+    // The digests shown in the human-readable summaries must be the ones the manifest records.
+    let json = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["inspect-archive"])
+        .arg(&archive)
+        .arg("--json")
+        .output()
+        .unwrap();
+    assert!(json.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    let alignment = &value["molecular_evidence"]["alignment_provenance"]["alignment"];
+    let catalogue_digest = alignment["junction_catalogue"]["identity"]["blake3"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let annotation_digest = alignment["alignment_annotation"]["identity"]["blake3"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(catalogue_digest, annotation_digest);
+
+    let legacy = Command::new(env!("CARGO_BIN_EXE_aie"))
+        .args(["inspect-archive"])
+        .arg(&archive)
+        .output()
+        .unwrap();
+    assert!(legacy.status.success());
+    let text = String::from_utf8_lossy(&legacy.stdout).into_owned();
+    for expected in [
+        "alignment provenance: gravlax.alignment-provenance.v1",
+        "junction_discovery: frozen-catalogue",
+        "junction_catalogue_role: frozen-external",
+        "junction_catalogue_data_rows: 2",
+        "alignment_chemistry: 10x-3p-v3",
+        "index_identity: star-index:fixture-v1",
+        "aligner_programs: STAR 2.7.11b",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+    }
+    assert!(text.contains(&format!(
+        "junction_catalogue_blake3: full-file-blake3-v1:{catalogue_digest}"
+    )));
+    assert!(text.contains(&format!(
+        "alignment_annotation_blake3: full-file-blake3-v1:{annotation_digest}"
+    )));
+    assert!(text.contains(&format!(
+        "alignment_annotation_locator: {}",
+        annotation.display()
+    )));
+    assert!(!text.contains("alignment provenance: none recorded"));
+
+    for format in ["text", "tsv"] {
+        let uniform = Command::new(env!("CARGO_BIN_EXE_aie"))
+            .args(["inspect-archive"])
+            .arg(&archive)
+            .args(["--format", format])
+            .output()
+            .unwrap();
+        assert!(uniform.status.success());
+        let rendered = String::from_utf8_lossy(&uniform.stdout).into_owned();
+        let separator = if format == "tsv" { "\t" } else { " | " };
+        assert!(rendered.contains(&format!("junction_discovery{separator}frozen-catalogue")));
+        assert!(rendered.contains(&format!(
+            "junction_catalogue_blake3{separator}full-file-blake3-v1:{catalogue_digest}"
+        )));
+    }
 }
 
 #[test]
