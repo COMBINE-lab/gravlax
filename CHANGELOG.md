@@ -12,7 +12,13 @@ packed sorted-hit representation instead of hash maps keyed by
 decoded in parallel, and shares one routing-target arena rather than copying a
 target list per archive, chunk and junction posting. On an eight-archive
 1.33 GB SEZ cohort the routed novel-versus-GENCODE-v32 cassette search went from
-93.8 s and 11.8 GiB peak RSS to 13.1 s and 1.9 GiB, with byte-identical results.
+93.8 s wall and 12.7 GB peak RSS to 9.2 s and 3.0 GB, with byte-identical
+results.
+
+Candidate discovery also stopped holding an ordered set of heap-allocated
+event keys and a coordinate map of the whole catalogue: components are stored
+inline, definitions are deduplicated by sorting, and the catalogue is looked up
+by binary search and released once the exact plan exists.
 
 A search is now rejected while planning if it retains more than 33,554,432
 candidates, which the packed reducer cannot address; lower `--max-candidates`

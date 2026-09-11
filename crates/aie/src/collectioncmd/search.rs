@@ -227,7 +227,10 @@ struct EntityKey {
     strand_rev: Option<bool>,
     /// Transcript/evidence strand after applying STARsolo semantics; `None` is reported as `.`.
     reported_strand_rev: Option<bool>,
-    components: Vec<Component>,
+    /// At most three: a junction has one, an alternative site two, a cassette three. Keeping them
+    /// inline avoids one heap allocation per attempted definition, of which a cohort-wide search
+    /// makes millions.
+    components: SmallVec<[Component; 3]>,
 }
 
 impl EntityKey {
@@ -367,8 +370,39 @@ fn mask_is_informative(kind: SearchKind, mask: u8) -> bool {
 struct SampleCount {
     entity: u32,
     group: u32,
-    counts: MaskCounts,
+    counts: SampleMaskCounts,
     cells: u32,
+}
+
+/// `MaskCounts` narrowed for storage. Each field counts distinct archive UMI classes within one
+/// archive, which is itself bounded by a `u32` class dictionary, so nothing can overflow.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SampleMaskCounts {
+    support: u32,
+    include_only: u32,
+    exclude_only: u32,
+    both: u32,
+}
+
+impl SampleMaskCounts {
+    fn narrow(counts: MaskCounts) -> Result<Self> {
+        Ok(Self {
+            support: u32::try_from(counts.support).context("exact class count exceeds u32")?,
+            include_only: u32::try_from(counts.include_only)
+                .context("exact class count exceeds u32")?,
+            exclude_only: u32::try_from(counts.exclude_only)
+                .context("exact class count exceeds u32")?,
+            both: u32::try_from(counts.both).context("exact class count exceeds u32")?,
+        })
+    }
+
+    fn metric(self, kind: SearchKind) -> u32 {
+        if kind.is_junction() {
+            self.support
+        } else {
+            self.include_only + self.exclude_only
+        }
+    }
 }
 
 /// Cohort-wide exact evidence for one candidate entity. Recurrence is counted rather than
@@ -651,54 +685,79 @@ fn scan_chain_junctions(chain: &CollectionChain) -> Result<Vec<GlobalJunction>> 
     Ok(rows)
 }
 
-fn route_samples(row: &GlobalJunction) -> BTreeSet<usize> {
-    row.routes
-        .iter()
-        .map(|route| route.archive as usize)
-        .collect()
+fn coordinate_of_row(row: &GlobalJunction) -> Coordinate {
+    Coordinate {
+        chrom: row.chrom,
+        donor: row.donor,
+        acceptor: row.acceptor,
+    }
 }
 
+/// The catalogue merges collection layers through a coordinate-keyed map, so its rows are unique
+/// and ascending. Planning relies on that to look a coordinate up by binary search and to keep
+/// each archive's routes an append-only sorted vector, so the invariant is checked once.
+fn require_sorted_catalogue(rows: &[GlobalJunction]) -> Result<()> {
+    if rows
+        .windows(2)
+        .any(|pair| coordinate_of_row(&pair[1]) <= coordinate_of_row(&pair[0]))
+    {
+        bail!("junction catalogue rows must be unique and ascending by coordinate");
+    }
+    Ok(())
+}
+
+fn catalogue_row(rows: &[GlobalJunction], coordinate: Coordinate) -> Option<&GlobalJunction> {
+    rows.binary_search_by(|row| coordinate_of_row(row).cmp(&coordinate))
+        .ok()
+        .map(|index| &rows[index])
+}
+
+/// Catalogue support bound and route recurrence for one candidate definition. `samples` and
+/// `donors` are caller-owned scratch buffers: a cohort-wide search evaluates millions of
+/// definitions, and a fresh set per definition dominated both time and memory.
 fn candidate_catalogue_stats(
     components: &[Component],
-    row_of: &BTreeMap<Coordinate, usize>,
     rows: &[GlobalJunction],
     design: &Design,
+    samples: &mut Vec<u32>,
+    donors: &mut Vec<u32>,
 ) -> Result<(u64, usize, usize)> {
-    let first = components.first().context("candidate has no components")?;
-    let first_row = &rows[*row_of
-        .get(&first.coordinate)
-        .context("candidate component is absent from the junction catalogue")?];
-    let mut minimum_support = first_row.support_upper_bound;
-    let mut possible = BTreeSet::new();
+    if components.is_empty() {
+        bail!("candidate has no components");
+    }
+    samples.clear();
+    donors.clear();
+    let mut minimum_support = u64::MAX;
     for component in components {
-        let row = &rows[*row_of
-            .get(&component.coordinate)
-            .context("candidate component is absent from the junction catalogue")?];
+        let row = catalogue_row(rows, component.coordinate)
+            .context("candidate component is absent from the junction catalogue")?;
         minimum_support = minimum_support.min(row.support_upper_bound);
-        possible.extend(route_samples(row));
+        samples.extend(row.routes.iter().map(|route| route.archive));
     }
     // Exact informative support is an OR over a candidate's component junctions (the molecule
     // mask later determines its side). Their route union is therefore the safe recurrence upper
     // bound, including when alternative evidence is distributed across samples or donors.
-    let donors: FxHashSet<usize> = possible
-        .iter()
-        .map(|&sample| design.donor_of_sample[sample])
-        .collect();
-    Ok((minimum_support, possible.len(), donors.len()))
+    samples.sort_unstable();
+    samples.dedup();
+    for &sample in samples.iter() {
+        let donor = design
+            .donor_of_sample
+            .get(sample as usize)
+            .context("junction route references missing collection archive")?;
+        donors.push(u32::try_from(*donor).context("biological donor index exceeds u32")?);
+    }
+    donors.sort_unstable();
+    donors.dedup();
+    Ok((minimum_support, samples.len(), donors.len()))
 }
 
-struct CandidateBuilder<'a> {
-    rows: &'a [GlobalJunction],
-    row_of: &'a BTreeMap<Coordinate, usize>,
-    design: &'a Design,
-    min_support: u64,
-    min_samples: usize,
-    min_donors: usize,
-    max_candidates: usize,
+/// Collects every attempted splice-event definition. Deduplication is a sort over the collected
+/// keys rather than an ordered set of heap-allocated keys, which halved the stage's peak memory:
+/// a cohort-wide cassette search attempts millions of definitions.
+struct CandidateBuilder {
     max_candidates_considered: usize,
     attempted: usize,
-    seen: BTreeSet<EntityKey>,
-    out: Vec<Candidate>,
+    keys: Vec<EntityKey>,
 }
 
 #[derive(Clone, Copy)]
@@ -716,7 +775,7 @@ struct CandidateDiscovery {
     distinct: usize,
 }
 
-impl CandidateBuilder<'_> {
+impl CandidateBuilder {
     fn push(&mut self, key: EntityKey) -> Result<()> {
         if self.attempted == self.max_candidates_considered {
             bail!(
@@ -725,26 +784,7 @@ impl CandidateBuilder<'_> {
             );
         }
         self.attempted += 1;
-        if !self.seen.insert(key.clone()) {
-            return Ok(());
-        }
-        let (support, samples, donors) =
-            candidate_catalogue_stats(&key.components, self.row_of, self.rows, self.design)?;
-        if support < self.min_support || samples < self.min_samples || donors < self.min_donors {
-            return Ok(());
-        }
-        if self.out.len() == self.max_candidates {
-            bail!(
-                "reverse-search catalogue exceeds --max-candidates {}; increase --min-support/--min-samples/--min-donors or raise the explicit limit",
-                self.max_candidates
-            );
-        }
-        self.out.push(Candidate {
-            key,
-            catalogue_support_upper_bound: support,
-            catalogue_samples: samples,
-            catalogue_donors: donors,
-        });
+        self.keys.push(key);
         Ok(())
     }
 }
@@ -791,41 +831,16 @@ fn discover_candidates(
     if thresholds.max_candidates_considered == 0 {
         bail!("--max-candidates-considered must be at least 1");
     }
-    let row_of: BTreeMap<Coordinate, usize> = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            (
-                Coordinate {
-                    chrom: row.chrom,
-                    donor: row.donor,
-                    acceptor: row.acceptor,
-                },
-                index,
-            )
-        })
-        .collect();
+    require_sorted_catalogue(rows)?;
     let eligible: Vec<Coordinate> = rows
         .iter()
         .filter(|row| row.support_upper_bound >= thresholds.min_support)
-        .map(|row| Coordinate {
-            chrom: row.chrom,
-            donor: row.donor,
-            acceptor: row.acceptor,
-        })
+        .map(coordinate_of_row)
         .collect();
     let mut builder = CandidateBuilder {
-        rows,
-        row_of: &row_of,
-        design,
-        min_support: thresholds.min_support,
-        min_samples: thresholds.min_samples,
-        min_donors: thresholds.min_donors,
-        max_candidates: thresholds.max_candidates,
         max_candidates_considered: thresholds.max_candidates_considered,
         attempted: 0,
-        seen: BTreeSet::new(),
-        out: Vec::new(),
+        keys: Vec::new(),
     };
 
     if kinds.contains(&SearchKind::Junction) {
@@ -836,7 +851,7 @@ fn discover_candidates(
                     chrom: coordinate.chrom,
                     strand_rev,
                     reported_strand_rev,
-                    components: vec![component(*coordinate, ComponentSide::Support)],
+                    components: smallvec::smallvec![component(*coordinate, ComponentSide::Support)],
                 })?;
             }
         }
@@ -867,7 +882,7 @@ fn discover_candidates(
         for (&(chrom, donor), acceptors) in &by_donor {
             for left in 0..acceptors.len() {
                 for right in left + 1..acceptors.len() {
-                    let components = vec![
+                    let components: SmallVec<[Component; 3]> = smallvec::smallvec![
                         component(
                             Coordinate {
                                 chrom,
@@ -911,7 +926,7 @@ fn discover_candidates(
         for (&(chrom, acceptor), donors) in &by_acceptor {
             for left in 0..donors.len() {
                 for right in left + 1..donors.len() {
-                    let components = vec![
+                    let components: SmallVec<[Component; 3]> = smallvec::smallvec![
                         component(
                             Coordinate {
                                 chrom,
@@ -984,7 +999,7 @@ fn discover_candidates(
                             chrom: skip.chrom,
                             strand_rev,
                             reported_strand_rev,
-                            components: vec![
+                            components: smallvec::smallvec![
                                 component(left, ComponentSide::Include),
                                 component(right, ComponentSide::Include),
                                 component(*skip, ComponentSide::Exclude),
@@ -996,13 +1011,42 @@ fn discover_candidates(
         }
     }
 
-    builder
-        .out
-        .sort_unstable_by(|left, right| left.key.cmp(&right.key));
+    // Deduplicate by sorting the attempted keys, then apply the catalogue predicates in key
+    // order. The retained list is therefore already in its reported order, and `--max-candidates`
+    // still fails on exactly the same searches the incremental check failed on.
+    let mut keys = builder.keys;
+    keys.par_sort_unstable();
+    keys.dedup();
+    let distinct = keys.len();
+    let mut candidates = Vec::new();
+    let mut samples = Vec::new();
+    let mut donors = Vec::new();
+    for key in keys {
+        let (support, catalogue_samples, catalogue_donors) =
+            candidate_catalogue_stats(&key.components, rows, design, &mut samples, &mut donors)?;
+        if support < thresholds.min_support
+            || catalogue_samples < thresholds.min_samples
+            || catalogue_donors < thresholds.min_donors
+        {
+            continue;
+        }
+        if candidates.len() == thresholds.max_candidates {
+            bail!(
+                "reverse-search catalogue exceeds --max-candidates {}; increase --min-support/--min-samples/--min-donors or raise the explicit limit",
+                thresholds.max_candidates
+            );
+        }
+        candidates.push(Candidate {
+            key,
+            catalogue_support_upper_bound: support,
+            catalogue_samples,
+            catalogue_donors,
+        });
+    }
     Ok(CandidateDiscovery {
-        candidates: builder.out,
+        candidates,
         attempted: builder.attempted,
-        distinct: builder.seen.len(),
+        distinct,
     })
 }
 
@@ -1059,24 +1103,13 @@ fn route_candidates(
             .context("routed target arena lost its coordinate range")?
             .1 = end;
     }
-    // The catalogue merges layers through a coordinate-keyed map, so its rows are unique and
-    // ascending. Relying on that keeps each archive's routes an append-only sorted vector.
-    if rows.windows(2).any(|pair| {
-        (pair[1].chrom, pair[1].donor, pair[1].acceptor)
-            <= (pair[0].chrom, pair[0].donor, pair[0].acceptor)
-    }) {
-        bail!("junction catalogue rows must be unique and ascending by coordinate");
-    }
+    require_sorted_catalogue(rows)?;
     let mut per_archive: Vec<Vec<RoutedTarget>> =
         (0..collection.archives.len()).map(|_| Vec::new()).collect();
     let mut target_associations = 0usize;
     let mut chunk_postings = 0usize;
     for row in rows {
-        let coordinate = Coordinate {
-            chrom: row.chrom,
-            donor: row.donor,
-            acceptor: row.acceptor,
-        };
+        let coordinate = coordinate_of_row(row);
         let Ok(index) = coordinates.binary_search(&coordinate) else {
             continue;
         };
@@ -1400,6 +1433,41 @@ fn molecule_packed_hits(
 }
 
 /// One archive's exact hits, already OR-reduced per `(entity, class)` and sorted.
+/// Entity-range buckets used to merge one archive's chunk hits. Each decoded chunk sorts its own
+/// hits once and records where each bucket starts; the merge then gathers one bucket at a time, so
+/// the transient copy is a fraction of the archive rather than a second copy of all of it.
+const EXACT_MERGE_BUCKETS: usize = 32;
+
+/// One worker's reduced hits for a group of chunks, partitioned into `EXACT_MERGE_BUCKETS`
+/// entity ranges.
+struct ChunkHits {
+    hits: Vec<u64>,
+    /// `EXACT_MERGE_BUCKETS + 1` ascending offsets into `hits`.
+    bucket_offsets: Vec<u32>,
+}
+
+/// Entity bits dropped to name a merge bucket, so that every entity falls in one of the buckets
+/// and buckets stay in entity order.
+fn merge_bucket_shift(entities: usize) -> u32 {
+    let bits = usize::BITS - entities.saturating_sub(1).leading_zeros();
+    bits.saturating_sub(EXACT_MERGE_BUCKETS.trailing_zeros())
+}
+
+fn bucket_offsets(hits: &[u64], shift: u32) -> Result<Vec<u32>> {
+    let mut offsets = Vec::with_capacity(EXACT_MERGE_BUCKETS + 1);
+    offsets.push(0u32);
+    for bucket in 1..EXACT_MERGE_BUCKETS {
+        let limit = (bucket as u64)
+            .checked_shl(shift + EXACT_HIT_ENTITY_SHIFT)
+            .unwrap_or(u64::MAX);
+        let offset = hits.partition_point(|&hit| hit < limit);
+        offsets.push(u32::try_from(offset).context("chunk exact hit count exceeds u32")?);
+    }
+    offsets.push(u32::try_from(hits.len()).context("chunk exact hit count exceeds u32")?);
+    Ok(offsets)
+}
+
+/// Decode every selected chunk in parallel and reduce it to sorted, bucketed packed hits.
 fn archive_packed_hits(
     archive: &mut LazyArchive,
     chunks: &[ChunkInfo],
@@ -1407,46 +1475,73 @@ fn archive_packed_hits(
     chunk_wanted: &[ChunkTargets],
     arena: &[Target],
     budget: &ExactMatchBudget,
-) -> Result<Vec<u64>> {
+    shift: u32,
+) -> Result<Vec<ChunkHits>> {
     let shapes = archive.shapes()?;
-    let chunk_hits: Vec<Vec<u64>> = {
-        let (reader, tables) = archive.reader_and_tables();
-        let reader = &*reader;
-        selected
-            .par_iter()
-            .map(|&chunk_index| -> Result<Vec<u64>> {
-                let (compressed, raw_len) =
-                    reader.read_compressed_at(&format!("c{chunk_index}"))?;
-                let raw = evidence_io::format::decompress(&compressed, raw_len)?;
-                let molecules = decode_chunk(&raw, &chunks[chunk_index], None, tables)?;
+    let (reader, tables) = archive.reader_and_tables();
+    let reader = &*reader;
+    // Chunks are decoded in groups that share one growing hit buffer. An archive's hits live
+    // until it has been merged, so accumulating them in a few dozen buffers instead of one per
+    // chunk keeps the allocator's growth slack to a fraction of the archive.
+    let group = selected
+        .len()
+        .div_ceil(rayon::current_num_threads().saturating_mul(4).max(1))
+        .max(1);
+    selected
+        .par_chunks(group)
+        .map(|group| -> Result<ChunkHits> {
+            let mut hits = Vec::new();
+            let mut scratch = Vec::new();
+            for &chunk_index in group {
+                // The compressed and decompressed chunk buffers are released before the molecules
+                // are matched, so a worker holds one chunk's worth rather than three.
+                let molecules = {
+                    let (compressed, raw_len) =
+                        reader.read_compressed_at(&format!("c{chunk_index}"))?;
+                    let raw = evidence_io::format::decompress(&compressed, raw_len)?;
+                    decode_chunk(&raw, &chunks[chunk_index], None, tables)?
+                };
                 let matcher = ChunkMatch {
                     shapes: &shapes,
                     wanted: &chunk_wanted[chunk_index],
                     arena,
                     budget,
                 };
-                let mut hits = Vec::new();
-                let mut scratch = Vec::new();
                 for molecule in &molecules {
                     molecule_packed_hits(molecule, matcher, &mut scratch, &mut hits)?;
                 }
-                hits.sort_unstable();
-                reduce_sorted_exact_hits(&mut hits);
-                Ok(hits)
+            }
+            hits.sort_unstable();
+            reduce_sorted_exact_hits(&mut hits);
+            // These live until the whole archive is merged, so give back the growth slack.
+            hits.shrink_to_fit();
+            let bucket_offsets = bucket_offsets(&hits, shift)?;
+            Ok(ChunkHits {
+                hits,
+                bucket_offsets,
             })
-            .collect::<Result<_>>()?
-    };
+        })
+        .collect()
+}
+
+/// Gather one entity-range bucket from every chunk, then sort and OR-reduce it.
+fn merge_bucket(chunk_hits: &[ChunkHits], bucket: usize) -> Result<Vec<u64>> {
     let total = chunk_hits
         .iter()
-        .try_fold(0usize, |total, hits| total.checked_add(hits.len()))
+        .try_fold(0usize, |total, chunk| {
+            let span = (chunk.bucket_offsets[bucket + 1] - chunk.bucket_offsets[bucket]) as usize;
+            total.checked_add(span)
+        })
         .context("exact hit count overflow")?;
-    let mut hits: Vec<u64> = Vec::with_capacity(total);
-    for mut chunk in chunk_hits {
-        hits.append(&mut chunk);
+    let mut merged = Vec::with_capacity(total);
+    for chunk in chunk_hits {
+        let start = chunk.bucket_offsets[bucket] as usize;
+        let end = chunk.bucket_offsets[bucket + 1] as usize;
+        merged.extend_from_slice(&chunk.hits[start..end]);
     }
-    hits.par_sort_unstable();
-    reduce_sorted_exact_hits(&mut hits);
-    Ok(hits)
+    merged.par_sort_unstable();
+    reduce_sorted_exact_hits(&mut merged);
+    Ok(merged)
 }
 
 /// One archive's per-entity exact aggregate plus its sparse per-group count rows.
@@ -1538,7 +1633,7 @@ fn aggregate_exact_slice(
                 out.rows.push(SampleCount {
                     entity,
                     group,
-                    counts,
+                    counts: SampleMaskCounts::narrow(counts)?,
                     cells: u32::try_from(group_cells).context("group cell count exceeds u32")?,
                 });
             }
@@ -1593,16 +1688,22 @@ fn exact_archive(
             .collect::<Vec<_>>(),
     )?;
     let mut archive = open_source(collection, sample, None)?;
-    let hits = archive_packed_hits(
+    let shift = merge_bucket_shift(candidates.len());
+    let chunk_hits = archive_packed_hits(
         &mut archive,
         &chunks,
         &selected,
         &chunk_wanted,
         arena,
         budget,
+        shift,
     )?;
     drop(chunk_wanted);
-    archive.prefetch_coc(hits.iter().map(|&hit| unpack_exact_hit(hit).1))?;
+    archive.prefetch_coc(
+        chunk_hits
+            .iter()
+            .flat_map(|chunk| chunk.hits.iter().map(|&hit| unpack_exact_hit(hit).1)),
+    )?;
     // Resolving each cell's group through a dense per-cell table keeps the aggregation free of
     // barcode hashing and lets out-of-scope cells be skipped with one comparison.
     let cell_dictionary = archive.cells()?;
@@ -1619,19 +1720,27 @@ fn exact_archive(
         vec![0u32; cell_dictionary.len()]
     };
     let group_count = groups.names.len();
-    let parts = entity_hit_slices(&hits, rayon::current_num_threads().saturating_mul(4));
-    let aggregates: Vec<ArchiveAggregate> = parts
-        .par_iter()
-        .map(|slice| {
-            aggregate_exact_slice(slice, &archive, &group_of_cell, group_count, candidates)
-        })
-        .collect::<Result<_>>()?;
-    let mut entities = Vec::with_capacity(aggregates.iter().map(|part| part.entities.len()).sum());
-    let mut rows = Vec::with_capacity(aggregates.iter().map(|part| part.rows.len()).sum());
-    for mut part in aggregates {
-        entities.append(&mut part.entities);
-        rows.append(&mut part.rows);
+    let mut entities = Vec::new();
+    let mut rows = Vec::new();
+    for bucket in 0..EXACT_MERGE_BUCKETS {
+        let merged = merge_bucket(&chunk_hits, bucket)?;
+        if merged.is_empty() {
+            continue;
+        }
+        let parts = entity_hit_slices(&merged, rayon::current_num_threads().saturating_mul(4));
+        let aggregates: Vec<ArchiveAggregate> = parts
+            .par_iter()
+            .map(|slice| {
+                aggregate_exact_slice(slice, &archive, &group_of_cell, group_count, candidates)
+            })
+            .collect::<Result<_>>()?;
+        for mut part in aggregates {
+            entities.append(&mut part.entities);
+            rows.append(&mut part.rows);
+        }
     }
+    drop(chunk_hits);
+    release_free_heap();
     let actual_bytes = archive.reader().bytes_read();
     Ok((
         ArchiveExact {
@@ -1718,12 +1827,22 @@ fn reduce_exact(
     }
     let mut exact = ExactAggregate::new(candidates.len(), required_groups.len());
     // Archives are reduced one at a time, with their chunks decoded in parallel, so only one
-    // archive's packed hits are ever resident. Reducing them in donor order additionally lets
+    // archive's packed hits are ever resident. Samples of one donor stay contiguous, which lets
     // distinct-donor recurrence be a counter plus the previous donor instead of a per-entity set.
+    // Donor groups then go in decreasing routed-posting order, so the archive with the most exact
+    // evidence is reduced while the fewest per-group count rows have accumulated.
+    let mut donor_cost = vec![0usize; design.donor_names.len()];
+    for (sample, routes) in plan.per_archive.iter().enumerate() {
+        let postings: usize = routes.iter().map(|route| route.posts.len()).sum();
+        donor_cost[design.donor_of_sample[sample]] += postings;
+    }
     let mut order: Vec<usize> = (0..collection.archives.len())
         .filter(|&sample| !plan.per_archive[sample].is_empty())
         .collect();
-    order.sort_unstable_by_key(|&sample| (design.donor_of_sample[sample], sample));
+    order.sort_unstable_by_key(|&sample| {
+        let donor = design.donor_of_sample[sample];
+        (std::cmp::Reverse(donor_cost[donor]), donor, sample)
+    });
     let mut archives = Vec::with_capacity(order.len());
     for sample in order {
         let (archive, entities) = exact_archive(
@@ -1750,8 +1869,7 @@ fn reduce_exact(
                     continue;
                 }
                 let kind = candidates[row.entity as usize].key.kind;
-                let metric = u32::try_from(row.counts.metric(kind))
-                    .context("exact group UMI-class count exceeds u32")?;
+                let metric = row.counts.metric(kind);
                 let slot = &mut exact.required_group_metrics
                     [row.entity as usize * required_groups.len() + ordinal];
                 *slot = slot
@@ -1759,6 +1877,7 @@ fn reduce_exact(
                     .context("exact group UMI-class count overflow")?;
             }
         }
+        release_free_heap();
         archives.push(archive);
     }
     archives.sort_unstable_by_key(|archive| archive.sample);
@@ -2942,6 +3061,17 @@ struct StagePeakRssBytes {
     output: u64,
 }
 
+/// Return freed heap pages to the operating system. Reducing one cohort archive allocates and
+/// frees hundreds of megabytes of packed hits; without this the allocator keeps those pages, and
+/// the next archive's peak is measured on top of them. This is advisory and a no-op elsewhere.
+fn release_free_heap() {
+    #[cfg(target_env = "gnu")]
+    // SAFETY: `malloc_trim` takes no pointers and only releases already-free heap pages.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 /// Current process peak RSS in bytes, or zero where the platform does not publish one. Reading
 /// `VmHWM` costs one small file read per stage boundary and never fails the search.
 fn peak_rss_bytes() -> u64 {
@@ -3516,26 +3646,26 @@ fn stream_result<W: Write>(
                         row.string(&data.design.donor_names[donor])?;
                         row.string(&data.groups.names[count.group as usize])?;
                         if candidate.key.kind.is_junction() {
-                            row.uint64(count.counts.support as u64)?;
+                            row.uint64(u64::from(count.counts.support))?;
                             for _ in 0..5 {
                                 row.null()?;
                             }
                         } else if candidate.key.kind.is_alternative_site() {
                             row.null()?;
-                            row.uint64(count.counts.include_only as u64)?;
-                            row.uint64(count.counts.exclude_only as u64)?;
+                            row.uint64(u64::from(count.counts.include_only))?;
+                            row.uint64(u64::from(count.counts.exclude_only))?;
                             row.null()?;
                             row.null()?;
-                            row.uint64(count.counts.both as u64)?;
+                            row.uint64(u64::from(count.counts.both))?;
                         } else {
                             row.null()?;
                             row.null()?;
                             row.null()?;
-                            row.uint64(count.counts.include_only as u64)?;
-                            row.uint64(count.counts.exclude_only as u64)?;
-                            row.uint64(count.counts.both as u64)?;
+                            row.uint64(u64::from(count.counts.include_only))?;
+                            row.uint64(u64::from(count.counts.exclude_only))?;
+                            row.uint64(u64::from(count.counts.both))?;
                         }
-                        row.uint64(count.counts.metric(candidate.key.kind) as u64)?;
+                        row.uint64(u64::from(count.counts.metric(candidate.key.kind)))?;
                         row.uint64(u64::from(count.cells))?;
                         Ok(())
                     })?;
@@ -3886,6 +4016,10 @@ pub(super) fn run(args: Args) -> Result<()> {
         |r| &mut r.discover_candidates,
     );
     let routes = route_candidates(collection, &catalogue, &candidates, args.max_routed_entries)?;
+    // The catalogue's rows and their route postings are not needed once the exact plan exists.
+    let catalogue_junctions = catalogue.len() as u64;
+    drop(catalogue);
+    release_free_heap();
     clock.lap(|s| &mut s.route_candidates, |r| &mut r.route_candidates);
     let exact_match_budget = ExactMatchBudget::new(args.max_exact_match_attempts)?;
     let (archives, exact) = reduce_exact(
@@ -4016,7 +4150,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         multimapper_placements_included: false,
         multimapper_alternatives_available_to_search: false,
         requested_kinds,
-        catalogue_junctions: catalogue.len() as u64,
+        catalogue_junctions,
         splice_candidate_definitions_attempted: splice_candidates_attempted as u64,
         splice_candidate_definitions_distinct: splice_candidates_distinct as u64,
         candidate_entities: (candidates.len() + tail_capability.candidate_clusters) as u64,
@@ -4612,7 +4746,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
@@ -4664,7 +4798,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor,
@@ -4730,7 +4864,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4793,7 +4927,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
@@ -4839,7 +4973,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4905,7 +5039,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4989,7 +5123,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -5146,6 +5280,8 @@ mod tests {
         for donor in [300, 350, 400] {
             cassette_rows.push(junction(donor, 500));
         }
+        // The catalogue is always unique and ascending by coordinate; planning relies on it.
+        cassette_rows.sort_unstable_by_key(|row| (row.chrom, row.donor, row.acceptor));
         let cassette_error = discover_candidates(
             &cassette_rows,
             &[SearchKind::Cassette].into_iter().collect(),
@@ -5370,7 +5506,7 @@ mod tests {
                 chrom,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom,
                         donor: 100,
@@ -5454,7 +5590,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
