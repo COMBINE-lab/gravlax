@@ -342,6 +342,16 @@ annotation interval index restricts classification to local transcripts, and
 Observed route, match-attempt, and annotation-comparison counts are recorded in
 summary and provenance.
 
+`data.summary.stage_seconds` and `data.summary.stage_peak_rss_bytes` record a
+per-stage wall clock and the process peak resident set observed at the end of
+`load_catalogue`, `discover_candidates`, `route_candidates`, `exact_counting`,
+`terminal_tails`, `annotation_classification`, and `output`. The peak is a
+kernel high-water mark, so the values are non-decreasing and attribute a peak to
+the last stage that could have caused it. Like `total_seconds`, the profile is
+sampled before the result tables are streamed, so `output` covers assembling the
+summary aggregates rather than serializing them. Human output prints the same
+rows on stderr. These are timing diagnostics, not scientific results.
+
 ### Query options
 
 | Command | Argument or option | Default | Description |

@@ -4,6 +4,15 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+### `collection find-events` stage profile
+
+`collection find-events` now reports a per-stage wall-clock and peak-RSS
+profile. `data.summary.stage_seconds` and `data.summary.stage_peak_rss_bytes`
+record `load_catalogue`, `discover_candidates`, `route_candidates`,
+`exact_counting`, `terminal_tails`, `annotation_classification` and `output`;
+human output prints the same rows on stderr. Like `total_seconds`, the profile
+is sampled before the result tables are streamed. No scientific field changed.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics

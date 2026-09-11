@@ -2610,6 +2610,78 @@ fn keep_entity(
         && (!args.novel_only || gap.incompatible_with_every_transcript)
 }
 
+/// Per-stage wall clock, recorded in execution order. The window matches `total_seconds`: both
+/// are sampled before the result tables are streamed, so `output` covers assembling the result
+/// summary aggregates rather than serializing the tables.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+struct StageSeconds {
+    load_catalogue: f64,
+    discover_candidates: f64,
+    route_candidates: f64,
+    exact_counting: f64,
+    terminal_tails: f64,
+    annotation_classification: f64,
+    output: f64,
+}
+
+/// Process peak resident set size observed at the end of each stage. The kernel reports a high
+/// water mark, so these values are monotonically non-decreasing and attribute a peak to the last
+/// stage that could have caused it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+struct StagePeakRssBytes {
+    load_catalogue: u64,
+    discover_candidates: u64,
+    route_candidates: u64,
+    exact_counting: u64,
+    terminal_tails: u64,
+    annotation_classification: u64,
+    output: u64,
+}
+
+/// Current process peak RSS in bytes, or zero where the platform does not publish one. Reading
+/// `VmHWM` costs one small file read per stage boundary and never fails the search.
+fn peak_rss_bytes() -> u64 {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return 0;
+    };
+    status
+        .lines()
+        .find_map(|line| {
+            let rest = line.strip_prefix("VmHWM:")?;
+            let kib: u64 = rest.split_whitespace().next()?.parse().ok()?;
+            kib.checked_mul(1024)
+        })
+        .unwrap_or(0)
+}
+
+/// Stopwatch that attributes each elapsed interval to one named stage.
+struct StageClock {
+    last: std::time::Instant,
+    seconds: StageSeconds,
+    peak_rss: StagePeakRssBytes,
+}
+
+impl StageClock {
+    fn new(started: std::time::Instant) -> Self {
+        Self {
+            last: started,
+            seconds: StageSeconds::default(),
+            peak_rss: StagePeakRssBytes::default(),
+        }
+    }
+
+    fn lap(
+        &mut self,
+        seconds: fn(&mut StageSeconds) -> &mut f64,
+        rss: fn(&mut StagePeakRssBytes) -> &mut u64,
+    ) {
+        let now = std::time::Instant::now();
+        *seconds(&mut self.seconds) = now.duration_since(self.last).as_secs_f64();
+        *rss(&mut self.peak_rss) = peak_rss_bytes();
+        self.last = now;
+    }
+}
+
 #[derive(Serialize)]
 struct SearchSummary<'a> {
     coordinates: &'static str,
@@ -2672,6 +2744,8 @@ struct SearchSummary<'a> {
     source_archive_identity_bytes_read: u64,
     collection_sidecar_bytes_read: u64,
     total_seconds: f64,
+    stage_seconds: StageSeconds,
+    stage_peak_rss_bytes: StagePeakRssBytes,
     terminal_tail_available_archives: u64,
     terminal_tail_unavailable_archives: u64,
     terminal_tail_available_donors: u64,
@@ -3283,6 +3357,50 @@ fn validate_group_scope(collection: &Collection, groups: &Groups) -> Result<u64>
         )
 }
 
+/// Report the stage profile on stderr so the human output carries the same accounting the JSON
+/// summary records in `stage_seconds`/`stage_peak_rss_bytes`.
+fn eprint_stage_profile(seconds: &StageSeconds, peak_rss: &StagePeakRssBytes) {
+    let stages: [(&str, f64, u64); 7] = [
+        (
+            "load_catalogue",
+            seconds.load_catalogue,
+            peak_rss.load_catalogue,
+        ),
+        (
+            "discover_candidates",
+            seconds.discover_candidates,
+            peak_rss.discover_candidates,
+        ),
+        (
+            "route_candidates",
+            seconds.route_candidates,
+            peak_rss.route_candidates,
+        ),
+        (
+            "exact_counting",
+            seconds.exact_counting,
+            peak_rss.exact_counting,
+        ),
+        (
+            "terminal_tails",
+            seconds.terminal_tails,
+            peak_rss.terminal_tails,
+        ),
+        (
+            "annotation_classification",
+            seconds.annotation_classification,
+            peak_rss.annotation_classification,
+        ),
+        ("output", seconds.output, peak_rss.output),
+    ];
+    for (name, elapsed, rss) in stages {
+        eprintln!(
+            "collection find-events stage {name}: {elapsed:.3}s, peak rss {:.3} GiB",
+            rss as f64 / (1024.0 * 1024.0 * 1024.0)
+        );
+    }
+}
+
 fn human_output(data: &OutputData<'_>) {
     if data.tail_capability.requested {
         eprintln!(
@@ -3350,6 +3468,7 @@ fn human_output(data: &OutputData<'_>) {
 
 pub(super) fn run(args: Args) -> Result<()> {
     let started = std::time::Instant::now();
+    let mut clock = StageClock::new(started);
     let chain = open_collection_chain_with_locations(
         &args.collection,
         args.uniform_output.locations.as_deref(),
@@ -3433,6 +3552,7 @@ pub(super) fn run(args: Args) -> Result<()> {
     let annotation_context = annotation
         .as_ref()
         .zip(annotation_comparison_budget.as_ref());
+    clock.lap(|s| &mut s.load_catalogue, |r| &mut r.load_catalogue);
     let discovery = discover_candidates(
         &catalogue,
         &kinds,
@@ -3456,7 +3576,12 @@ pub(super) fn run(args: Args) -> Result<()> {
     } else {
         AnnotationCandidateExclusions::default()
     };
+    clock.lap(
+        |s| &mut s.discover_candidates,
+        |r| &mut r.discover_candidates,
+    );
     let routes = route_candidates(collection, &catalogue, &candidates, args.max_routed_entries)?;
+    clock.lap(|s| &mut s.route_candidates, |r| &mut r.route_candidates);
     let exact_match_budget = ExactMatchBudget::new(args.max_exact_match_attempts)?;
     let (mut archives, exact) = reduce_exact(
         collection,
@@ -3467,6 +3592,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         &exact_match_budget,
     )?;
     archives.sort_unstable_by_key(|archive| archive.sample);
+    clock.lap(|s| &mut s.exact_counting, |r| &mut r.exact_counting);
     let (tails, tail_capability) = if kinds.contains(&SearchKind::TerminalTail) {
         scan_terminal_tails(
             collection,
@@ -3493,6 +3619,7 @@ pub(super) fn run(args: Args) -> Result<()> {
             args.max_candidates,
         );
     }
+    clock.lap(|s| &mut s.terminal_tails, |r| &mut r.terminal_tails);
 
     let solo_strand: anno::assign::SoloStrand = args.solo_strand.into();
     let gap: Vec<Option<GapClassification>> = candidates
@@ -3525,6 +3652,10 @@ pub(super) fn run(args: Args) -> Result<()> {
             .then_some(entity)
         })
         .collect();
+    clock.lap(
+        |s| &mut s.annotation_classification,
+        |r| &mut r.annotation_classification,
+    );
 
     let unique_chunks: usize = archives.iter().map(|archive| archive.unique_chunks).sum();
     let independent_chunks: usize = archives
@@ -3546,6 +3677,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         .into_iter()
         .map(|chrom| collection.chroms[chrom as usize].clone())
         .collect();
+    clock.lap(|s| &mut s.output, |r| &mut r.output);
     let summary = SearchSummary {
         coordinates:
             "0-based junction boundaries and strand-aware terminal cleavage anchors; entity intervals are half-open",
@@ -3636,6 +3768,8 @@ pub(super) fn run(args: Args) -> Result<()> {
         source_archive_identity_bytes_read: identity_bytes,
         collection_sidecar_bytes_read: sidecar_bytes,
         total_seconds: started.elapsed().as_secs_f64(),
+        stage_seconds: clock.seconds,
+        stage_peak_rss_bytes: clock.peak_rss,
         terminal_tail_available_archives: tail_capability.available_archives as u64,
         terminal_tail_unavailable_archives: tail_capability.unavailable_archives as u64,
         terminal_tail_available_donors: tail_capability.available_donors as u64,
@@ -3777,6 +3911,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         })?;
     } else {
         human_output(&data);
+        eprint_stage_profile(&summary.stage_seconds, &summary.stage_peak_rss_bytes);
         if !summary.annotation_unmatched_evidence_contigs.is_empty() {
             eprintln!(
                 "collection find-events: omitted {} splice candidates and {} terminal routes ({} declared events) on annotation-unmatched contigs: {}",
@@ -3800,6 +3935,22 @@ pub(super) fn run(args: Args) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn stage_clock_attributes_each_lap_and_records_a_peak() {
+        let mut clock = StageClock::new(std::time::Instant::now());
+        clock.lap(|s| &mut s.load_catalogue, |r| &mut r.load_catalogue);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        clock.lap(|s| &mut s.exact_counting, |r| &mut r.exact_counting);
+        assert!(clock.seconds.exact_counting >= 0.02);
+        assert!(clock.seconds.load_catalogue < clock.seconds.exact_counting);
+        assert_eq!(clock.seconds.output, 0.0);
+        // Linux publishes VmHWM; elsewhere the profile degrades to zero rather than failing.
+        if std::path::Path::new("/proc/self/status").exists() {
+            assert!(clock.peak_rss.load_catalogue > 0);
+            assert!(clock.peak_rss.exact_counting >= clock.peak_rss.load_catalogue);
+        }
+    }
     use super::*;
 
     fn archive(id: &str) -> ArchiveEntry {
