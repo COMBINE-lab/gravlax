@@ -13,6 +13,8 @@ from typing import Any
 
 from build_demo_capsule import (
     ABSOLUTE_PATH,
+    ARCHIVE_ROOT,
+    COLLECTION_ROOT,
     CapsuleError,
     HEX64,
     PRIVATE_TEXT,
@@ -24,10 +26,12 @@ from build_demo_capsule import (
     _sha256,
     _validate_story_references,
     _verified_archive_inspection,
+    _verified_collection_inspection,
 )
 from finalize_demo_capsule import (
     MANIFEST_SCHEMA,
     FINALIZATION_SCHEMA,
+    _validate_location_manifest,
     _binary_identity,
     _documentation,
     _github_release_tag,
@@ -176,7 +180,12 @@ def _validate_asset(name: str, asset: Any, *, archive: bool = False) -> dict[str
 def _validate_manifest(manifest: Any) -> dict[str, Any]:
     if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA:
         raise CapsuleError(f"manifest schema must be {MANIFEST_SCHEMA}")
-    if set(manifest) != {"schema", "software", "resources", "stories"}:
+    if set(manifest).difference({"collection"}) != {
+        "schema",
+        "software",
+        "resources",
+        "stories",
+    }:
         raise CapsuleError("manifest has missing or unknown top-level fields")
     software = manifest["software"]
     if not isinstance(software, dict) or set(software) != {"version", "aie", "python_wheel"}:
@@ -202,6 +211,8 @@ def _validate_manifest(manifest: Any) -> dict[str, Any]:
         if asset["filename"] in filenames:
             raise CapsuleError(f"resources repeat filename {asset['filename']}")
         filenames.add(asset["filename"])
+    if "collection" in manifest:
+        _validate_manifest_collection(manifest["collection"], resources, manifest["stories"])
     stories = manifest["stories"]
     required_stories = {"annotation_reinterpretation", "event_discovery", "junction_drilldown"}
     if not isinstance(stories, dict) or set(stories) != required_stories:
@@ -209,6 +220,69 @@ def _validate_manifest(manifest: Any) -> dict[str, Any]:
     _validate_story_references(stories, set(resources))
     _assert_public_strings(manifest, "manifest")
     return manifest
+
+
+def _validate_manifest_collection(
+    collection: Any, resources: dict[str, Any], stories: Any
+) -> dict[str, Any]:
+    """Validate an optional published collection and its relocation manifest.
+
+    A v1 capsule declares no collection; consumers then rebuild one from the published
+    rooted archives. When the section is present it must commit exactly the archives both
+    collection stories use, with the same build options.
+    """
+    if not isinstance(collection, dict):
+        raise CapsuleError("manifest collection must be an object")
+    expected_fields = {
+        "archives",
+        "shape_routes",
+        "allow_unstamped",
+        "collection_root",
+        "asset",
+        "locations",
+    }
+    if set(collection) != expected_fields:
+        raise CapsuleError("manifest collection has missing or unknown fields")
+    if not COLLECTION_ROOT.fullmatch(str(collection["collection_root"])):
+        raise CapsuleError("manifest collection lacks a rooted content identity")
+    if type(collection["shape_routes"]) is not bool or type(
+        collection["allow_unstamped"]
+    ) is not bool:
+        raise CapsuleError("manifest collection options must be booleans")
+    archives = collection["archives"]
+    if not isinstance(archives, dict) or not archives:
+        raise CapsuleError("manifest collection archives must be a nonempty object")
+    resource_filenames = {asset["filename"] for asset in resources.values()}
+    for sample, resource in archives.items():
+        _safe_identifier(sample, "collection archive sample")
+        _safe_identifier(resource, "collection archive resource")
+        asset = resources.get(resource)
+        if not isinstance(asset, dict) or not ARCHIVE_ROOT.fullmatch(
+            str(asset.get("archive_root"))
+        ):
+            raise CapsuleError(f"collection source {sample} is not a published rooted archive")
+    for label, suffix in (("asset", ".aicollection"), ("locations", ".json")):
+        _validate_asset(f"collection.{label}", collection[label])
+        filename = collection[label]["filename"]
+        if not filename.endswith(suffix):
+            raise CapsuleError(f"collection.{label} filename must end in {suffix}")
+        if filename in resource_filenames:
+            raise CapsuleError(f"collection.{label} filename duplicates a published resource")
+    if collection["asset"]["filename"] == collection["locations"]["filename"]:
+        raise CapsuleError("collection and its location manifest must be distinct files")
+    if not isinstance(stories, dict):
+        raise CapsuleError("manifest stories must be an object")
+    for name in ("event_discovery", "junction_drilldown"):
+        story = stories.get(name)
+        if not isinstance(story, dict):
+            raise CapsuleError(f"manifest story {name} must be an object")
+        if story.get("archives") != archives:
+            raise CapsuleError(f"{name}.archives differs from the published collection")
+        if story.get("shape_routes", True) is not collection["shape_routes"] or story.get(
+            "allow_unstamped", False
+        ) is not collection["allow_unstamped"]:
+            raise CapsuleError(f"{name} collection options differ from the published collection")
+    return collection
 
 
 def _verify_checksums(directory: Path) -> None:
@@ -317,6 +391,32 @@ def _verify_capsule_records(directory: Path, manifest: dict[str, Any]) -> dict[s
         if built.get("bytes") != (directory / asset["filename"]).stat().st_size:
             raise CapsuleError(f"build-record resource {name} differs in byte size")
 
+    built_collection = build_record.get("collection")
+    published_collection = manifest.get("collection")
+    if (built_collection is None) != (published_collection is None):
+        raise CapsuleError("build record and manifest disagree about a published collection")
+    if published_collection is not None:
+        if not isinstance(built_collection, dict):
+            raise CapsuleError("build-record collection is malformed")
+        for field in ("collection_root", "archives", "shape_routes", "allow_unstamped"):
+            if built_collection.get(field) != published_collection[field]:
+                raise CapsuleError(f"build-record collection differs in {field}")
+        for label, built, asset in (
+            ("collection", built_collection, published_collection["asset"]),
+            (
+                "collection.locations",
+                built_collection.get("locations"),
+                published_collection["locations"],
+            ),
+        ):
+            if not isinstance(built, dict):
+                raise CapsuleError(f"build-record {label} is malformed")
+            for field in ("filename", "sha256"):
+                if built.get(field) != asset[field]:
+                    raise CapsuleError(f"build-record {label} differs in {field}")
+            if built.get("bytes") != (directory / asset["filename"]).stat().st_size:
+                raise CapsuleError(f"build-record {label} differs in byte size")
+
     expected_final_fields = {
         "schema",
         "capsule_id",
@@ -342,11 +442,15 @@ def _verify_capsule_records(directory: Path, manifest: dict[str, Any]) -> dict[s
     data_base_url = _immutable_url(final_record.get("data_base_url"), "data_base_url").rstrip(
         "/"
     )
-    for name, asset in manifest["resources"].items():
+    published = [(f"resource {name}", asset) for name, asset in manifest["resources"].items()]
+    if published_collection is not None:
+        published.extend(
+            (f"collection {label}", published_collection[label])
+            for label in ("asset", "locations")
+        )
+    for name, asset in published:
         if asset["url"] != f"{data_base_url}/{asset['filename']}":
-            raise CapsuleError(
-                f"resource {name} URL is outside the finalized capsule data release"
-            )
+            raise CapsuleError(f"{name} URL is outside the finalized capsule data release")
     expected_manifest = {
         "filename": "demo-manifest.json",
         "sha256": _sha256(directory / "demo-manifest.json"),
@@ -390,6 +494,76 @@ def _verify_archives(
     ):
         raise CapsuleError("capsule archives contain no terminal-tail events")
     return inspected
+
+
+def _collection_paths(
+    directory: Path, manifest: dict[str, Any]
+) -> tuple[Path | None, Path | None]:
+    declared = manifest.get("collection")
+    if declared is None:
+        return None, None
+    paths = []
+    for label in ("asset", "locations"):
+        asset = declared[label]
+        path = directory / asset["filename"]
+        if not path.is_file() or path.is_symlink() or _sha256(path) != asset["sha256"]:
+            raise CapsuleError(f"local collection {label} is missing or changed")
+        paths.append(path)
+    return paths[0], paths[1]
+
+
+def _verify_collection(
+    aie: Path, manifest: dict[str, Any], collection: Path, locations: Path
+) -> str:
+    """Authenticate the published collection through its own location manifest.
+
+    Nothing is rebuilt: the committed source identities are authoritative and the location
+    manifest only says where those exact contents now live.
+    """
+    declared = manifest["collection"]
+    resources = manifest["resources"]
+    expected_archives = {
+        sample: resources[resource]["archive_root"]
+        for sample, resource in declared["archives"].items()
+    }
+    expected_locations: dict[str, str] = {}
+    for resource in declared["archives"].values():
+        asset = resources[resource]
+        if (
+            expected_locations.setdefault(asset["archive_root"], asset["filename"])
+            != asset["filename"]
+        ):
+            raise CapsuleError("two published collection sources share one archive root")
+    try:
+        document = json.loads(locations.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise CapsuleError("published location manifest is not valid JSON") from error
+    _validate_location_manifest(document, expected_locations)
+    for entry in document["locations"]:
+        resolved = locations.parent / entry["path"]
+        if not resolved.is_file() or resolved.is_symlink():
+            raise CapsuleError(
+                f"location manifest entry {entry['path']} does not resolve inside the capsule"
+            )
+    inspected = _run_json(
+        [
+            str(aie),
+            "collection",
+            "inspect",
+            str(collection),
+            f"--locations={locations}",
+            "--verify-routes",
+        ]
+    )
+    root = _verified_collection_inspection(
+        inspected,
+        expected_archives,
+        shape_routes=declared["shape_routes"],
+        label="the published collection",
+    )
+    if root != declared["collection_root"]:
+        raise CapsuleError("published collection root differs from the manifest")
+    return root
 
 
 def _build_collection(
@@ -479,9 +653,14 @@ def _verify_event_story(
     story: dict[str, Any],
     resources: dict[str, Path],
     temporary: Path,
+    published: Path | None = None,
+    locations: Path | None = None,
 ) -> dict[str, Any]:
-    collection = temporary / "event-discovery.aicollection"
-    _build_collection(aie, collection, story["archives"], resources, story)
+    if published is None:
+        collection = temporary / "event-discovery.aicollection"
+        _build_collection(aie, collection, story["archives"], resources, story)
+    else:
+        collection = published
 
     def run_events(
         annotation_resource: str,
@@ -491,6 +670,8 @@ def _verify_event_story(
         annotation_digest: str | None = None,
     ) -> dict[str, Any]:
         command = [str(aie), "collection", "find-events", str(collection)]
+        if locations is not None:
+            command.append(f"--locations={locations}")
         for kind in story.get("kinds", []):
             command.extend(["--kind", kind])
         command.extend(
@@ -613,9 +794,14 @@ def _verify_drilldown_story(
     story: dict[str, Any],
     resources: dict[str, Path],
     temporary: Path,
+    published: Path | None = None,
+    locations: Path | None = None,
 ) -> dict[str, Any]:
-    collection = temporary / "junction-drilldown.aicollection"
-    _build_collection(aie, collection, story["archives"], resources, story)
+    if published is None:
+        collection = temporary / "junction-drilldown.aicollection"
+        _build_collection(aie, collection, story["archives"], resources, story)
+    else:
+        collection = published
     federated = _run_json(
         [
             str(aie),
@@ -625,6 +811,7 @@ def _verify_drilldown_story(
             story["junction"],
             "--top=0",
             "--format=json",
+            *([f"--locations={locations}"] if locations is not None else []),
         ]
     )
     federated_tables = _uniform_tables(federated)
@@ -732,12 +919,20 @@ def verify(
     execute_stories: bool = True,
 ) -> dict[str, Any]:
     directory = directory.resolve(strict=True)
-    if any(path.suffix == ".aicollection" for path in directory.iterdir()):
-        raise CapsuleError("final capsule contains a path-bound .aicollection")
     _verify_checksums(directory)
     _verify_public_bytes(directory)
     manifest = _validate_manifest(json.loads((directory / "demo-manifest.json").read_text()))
+    declared_collection = manifest.get("collection")
+    published_collection_filename = (
+        declared_collection["asset"]["filename"] if declared_collection is not None else None
+    )
+    if any(
+        path.suffix == ".aicollection" and path.name != published_collection_filename
+        for path in directory.iterdir()
+    ):
+        raise CapsuleError("final capsule contains an undeclared .aicollection")
     resources = _resource_paths(directory, manifest)
+    collection_path, locations_path = _collection_paths(directory, manifest)
     build_record = _verify_capsule_records(directory, manifest)
     aie = aie.resolve(strict=True)
     aie_asset = aie_asset.resolve(strict=True)
@@ -771,6 +966,11 @@ def verify(
         "archives_verified": len(archive_inspections),
         "stories_executed": execute_stories,
     }
+    if collection_path is not None:
+        results["collection_root"] = _verify_collection(
+            aie, manifest, collection_path, locations_path
+        )
+        results["collection_resolution"] = "relocated through the published location manifest"
     if execute_stories:
         with tempfile.TemporaryDirectory(prefix="gravlax-demo-verify-") as temporary_name:
             temporary = Path(temporary_name)
@@ -779,10 +979,20 @@ def verify(
                 aie, stories["annotation_reinterpretation"], resources
             )
             results["event_discovery"] = _verify_event_story(
-                aie, stories["event_discovery"], resources, temporary
+                aie,
+                stories["event_discovery"],
+                resources,
+                temporary,
+                collection_path,
+                locations_path,
             )
             results["junction_drilldown"] = _verify_drilldown_story(
-                aie, stories["junction_drilldown"], resources, temporary
+                aie,
+                stories["junction_drilldown"],
+                resources,
+                temporary,
+                collection_path,
+                locations_path,
             )
     return results
 

@@ -4,6 +4,25 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+### Demonstration capsules
+
+- A demo capsule may now publish a prebuilt, rooted `.aicollection` with shape
+  routes plus a `--locations` manifest keyed by the committed source identities.
+  `packaging/build_demo_capsule.py` builds it from a public-neutral staging root
+  (`--collection-staging-root`, defaulting to the system temporary directory) and
+  records its `aicollection-directory-root-v1` root; `finalize_demo_capsule.py`
+  binds both files to the immutable data-release URLs; `verify_demo_capsule.py`
+  verifies that root through the published location manifest and runs both
+  collection stories against the relocated bytes without rebuilding.
+- `demo-manifest.schema.json` gains an optional top-level `collection` object.
+  Existing `demo-data-v1` manifests, which declare none, remain valid.
+- Notebooks 02 and 03 use a published collection when the manifest declares one
+  and otherwise rebuild it locally as before. The published path is fail-closed:
+  hash-pinned bytes, no fallback address, the declared collection must commit
+  exactly that story's archives and build options, and the location manifest must
+  resolve exactly the archives already verified by archive root. Notebook 01 is
+  unchanged.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics
