@@ -28,6 +28,17 @@ This file records user-visible changes in each Gravlax release.
   The `--json` output is unchanged; `--format json` gains the same rows as an
   `alignment_provenance` table. No archive-format change.
 
+### Documentation
+
+- Add "When to use geometry fidelity" guidance to the `ingest-archive` and
+  format pages, with measured PBMC 5k archive-size and deviation numbers for
+  the default and `--geometry-fidelity` encodings.
+- Lead the README and installation page with `conda install -c bioconda
+  gravlax`, and describe the GitHub release binaries and installers alongside
+  the from-source build.
+- Document `Client.replay(..., gene_full=True, solo_strand=...)` and mention
+  `gq_run` where the Python client is introduced.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics
