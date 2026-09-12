@@ -51,6 +51,15 @@ Compact archives can leave extent-sensitive questions unknown. GQ uses sound sta
 and splice-geometry proofs; it never assumes that the two retained ends bound every
 omitted end. `where` keeps true and reports dropped unknowns; `tally` retains them.
 
+Every predicate is tagged. A *chain-invariant* predicate (a junction literal, `near`,
+`>>`, `~>`, `tx_strand`, `terminal`, `nonempty`) depends only on coordinates the chain
+quotient preserves, so either retained representative decides it exactly for every read
+in the chain. An *extent-sensitive* predicate (`overlaps`, `start_in`, `end_in`) depends
+on the first block's start or the last block's end, which the quotient does not retain
+for omitted reads. `gq explain` lists the tags under `predicate_effect_tags`, one entry
+per predicate occurrence with its stage, output column, byte offset and tag; the same
+list is carried in a run's summary.
+
 ## Counts and summaries
 
 `reads.unique`, `reads.multimapping`, and `reads.total` count accepted observations,
@@ -77,15 +86,23 @@ Literal coordinates are 0-based, half-open; literal strand is alignment strand.
 Annotation strand uses that same conversion. There are no implicit contig aliases.
 
 `gene(@anno,"PTPRC")` has `.span`, union `.exons`, and `.junctions`.
-`transcript(@anno,"ENST...")` also has `.junction_path`. Bind annotations through
-a project with explicit assembly and annotation label; ambiguous names fail.
-Use `--project PATH` to reuse project resources.
+`transcript(@anno,"ENST...")` also has `.junction_path`, the transcript's consecutive
+junctions, so transcript order is available without inventing it from a gene union;
+a gene has no `.junction_path`. Bind annotations through a project with explicit
+assembly and annotation label; ambiguous names fail. Use `--project PATH` to reuse
+project resources.
 
 ```text
 fn exon_support(exon, minimum) = overlaps(exon, min: minimum)
 export fn supported(exon: Region<GRCh38,alignment>, minimum: Bases)
   -> Predicate<Alignment,GRCh38,alignment> = overlaps(exon, min: minimum)
 ```
+
+Every `export fn` declares explicit parameter and return types, with assembly and
+strand frame on coordinate types and the unit level on predicates. Type inference is
+available to file-local `fn` only: an exported signature is a contract for callers who
+cannot see the body. A missing or bare annotation is reported with the function name
+and the byte offset of the parameter or return arrow it belongs to.
 
 Functions are bounded and nonrecursive. `>>` matches consecutive junctions; `~>`
 matches ordered subsequences. Unstranded paths require `path(order: genomic)`;
@@ -153,6 +170,29 @@ table = result.table("results")
 `gq_explain` inspects the plan; `gq_run_to_file` avoids materializing rows in Python.
 GQ uses `gravlax.gq.result.v1` under the shared typed result envelope. The specialized
 `aie query` commands remain available and can be faster for their fixed workflows.
+
+## Result schema and recoverable denominators
+
+The `results` table uses `gravlax.gq.table.v1`: grouping fields, one `<name>_state`
+column per `tally` expression holding `"true"`, `"false"` or `"unknown"` as a string,
+and a `UInt64` `count`. Only observed combinations are emitted, and unknown is never a
+bare JSON null. Because zero-count combinations are absent, the denominator lives in
+the bundle summary rather than in the rows:
+
+| Summary field | Meaning |
+| --- | --- |
+| `unit` | the evidence unit the counts are over (`record`, `class` or `cell`) |
+| `state_fields` | the `<name>_state` columns in declared `tally` order |
+| `population_units` | evidence units in the witnessed population, all groups |
+| `source_scope_units`, `source_scope_cells` | source-scope totals before `within` |
+| `population_by_group` | per group: the group key, its `population_units` and its `source_scope_units` |
+| `where_dropped_unknown` | units a `where` dropped because the filter was unknown |
+| `unknown_evaluations_by_cause` | unknown results counted by cause |
+
+So a fraction is reconstructed without reading the archive again: sum the rows you
+care about and divide by that group's `population_units`, or by its
+`source_scope_units` for a pre-`within` denominator. These fields are additions to
+`gravlax.gq.result.v1`; existing readers are unaffected.
 
 ## Execution planning and profiling
 

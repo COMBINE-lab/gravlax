@@ -39,6 +39,27 @@ This file records user-visible changes in each Gravlax release.
 - Document `Client.replay(..., gene_full=True, solo_strand=...)` and mention
   `gq_run` where the Python client is introduced.
 
+### GQ
+
+**Result metadata.** `gq run` summaries document the denominators that the result
+table cannot carry, because `tally` emits observed combinations only: the evidence
+`unit`, `state_fields` (the `<name>_state` columns in declared order), and per-group
+`population_units` and `source_scope_units` alongside the existing totals. These are
+additive within `gravlax.gq.result.v1`; existing readers, including the Python client,
+are unaffected.
+
+**Exported function signatures.** Missing annotations on an `export fn` are now
+reported with the function name and the byte offset of the parameter or return arrow
+they belong to, rather than one message for the whole declaration. Bare scientific
+types on an exported signature are reported the same way. Explicit types were already
+required on `export fn`; inference remains available to file-local `fn`.
+
+**Explain: per-predicate effect tags.** `gq explain` adds `predicate_effect_tags`,
+one entry per predicate occurrence giving its stage, output column, byte offset, and
+whether it is chain-invariant (decided exactly by either retained representative) or
+extent-sensitive (dependent on geometry the chain quotient does not retain). The
+existing `semantics.predicate_effects` rule summary is unchanged.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics
