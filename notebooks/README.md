@@ -12,10 +12,22 @@ The checked-in notebooks are one-click launchers pinned to the published `demo-d
 whose SHA-256 is
 `82c34aad442d478f1cb1243a6ccfe8ad9f937b81d9e1f946a8eb2cfc498214fd`. They contain no saved
 scientific output or fallback data address. Every downloaded byte (including the CLI and Python
-wheel) is checked against SHA-256 before execution. Source archives are downloaded individually
-and each notebook builds its path-bound `.aicollection` locally; a downloaded collection could not
-retain valid source paths in Colab. Missing locators, non-HTTPS URLs, malformed digests, and
-identity mismatches stop the notebook.
+wheel) is checked against SHA-256 before execution. Missing locators, non-HTTPS URLs, malformed
+digests, and identity mismatches stop the notebook.
+
+A collection commits source *content identities*, not pathnames, so since 0.2.1 a capsule may ship
+a prebuilt, rooted `.aicollection` with shape routes alongside a `--locations` manifest keyed by
+those identities. The `demo-data-v1` manifest declares no collection, so notebooks 02 and 03 still
+download every rooted source archive and build the collection locally. When a manifest declares
+the optional `collection` section, they instead download the hash-pinned collection and location
+manifest and resolve every committed source through `--locations`, whose relative paths are read
+beside that downloaded file. Nothing is rebuilt, rescanned, or rewritten. The loader fails closed
+before any scientific command: the declared collection must commit exactly that story's archives
+with the same build options, the location manifest must resolve exactly the archives the notebook
+already verified by root, and `collection inspect --locations ... --verify-routes` must report the
+manifest's `aicollection-directory-root-v1` root, every verified archive root, and one shape route
+per archive. There is no fallback address and no silent local rebuild after a declared collection
+fails.
 The installed `aie` executable and Python package must both report the exact version declared by
 the manifest before any scientific command runs.
 
@@ -215,7 +227,20 @@ The finalizer and standalone verifier are the authoritative v1 URL-policy checks
 and notebook loader separately enforce HTTPS transport and hash-pinned bytes. Finalization copies
 data rather than hard-linking it, writes `demo-manifest.json`, `README.md`,
 `RELEASE-NOTES.md`, and `FINALIZATION-RECORD.json`, and writes a `SHA256SUMS` covering every other
-file in the flat capsule. It never publishes a path-bound `.aicollection`.
+file in the flat capsule.
+
+To publish a prebuilt collection, add an optional top-level `collection` object to the build
+specification with a `filename` ending in `.aicollection`, a `locations_filename` ending in
+`.json`, and optional `shape_routes` (default `true`) and `allow_unstamped` (default `false`)
+booleans matching both collection stories. The builder then builds one collection over every
+staged archive from a public-neutral staging directory, so the embedded path hints are never
+private build locators; pass `--collection-staging-root` (or set `TMPDIR`) to a public-neutral
+directory, or the build fails closed. It writes the identity-keyed location manifest whose
+relative paths are the capsule's own archive filenames, records the collection's
+`aicollection-directory-root-v1` root in `BUILD-RECORD.json`, and refuses to publish a collection
+whose committed roots, layers or shape routes differ from the staged archives. The finalizer binds
+both files to the same immutable data-release URLs and the verifier opens the published collection
+only through the published location manifest.
 
 Verify the finalized directory before upload:
 
@@ -227,8 +252,11 @@ python packaging/verify_demo_capsule.py /path/to/gravlax-demo-data-v1 \
 ```
 
 This re-hashes the flat capsule, verifies every archive root and root-bound provenance manifest,
-checks both software identities, rebuilds collections locally, and asserts the manifest's frozen
-scientific invariants for all three stories.
+and checks both software identities. When the manifest declares no collection it rebuilds one
+locally, exactly as `demo-data-v1` requires; when the manifest declares one it verifies the
+published collection root through the published location manifest and runs both collection stories
+against those relocated bytes. Either way it asserts the manifest's frozen scientific invariants
+for all three stories.
 
 ## Deploy the capsule
 
@@ -323,3 +351,25 @@ and digest in the first cell of each notebook, and run all three notebooks from 
 runtimes. The checked-in `demo-data-v1` defaults above were activated through this procedure. A
 DOI-backed repository snapshot can mirror the same byte-identical flat capsule later; changing any
 byte requires a new capsule version and new manifest digest.
+
+## Cutting `demo-data-v2` with a prebuilt collection
+
+`demo-data-v1` stays valid and the notebooks keep working against it unchanged. A capsule that
+ships a prebuilt collection is a new capsule version, because its manifest and every asset digest
+change. To cut it:
+
+1. Add the `collection` object described above to the hash-pinned build specification, keeping
+   `shape_routes` and `allow_unstamped` equal to the values both collection stories use.
+2. Rebuild the data with the released `aie` executable, passing `--collection-staging-root` a
+   public-neutral directory (the build fails closed on a private staging root, and the finalized
+   capsule is rejected if any byte embeds a private filesystem locator).
+3. Finalize with `--data-base-url .../download/demo-data-v2` and verify the finalized directory;
+   the verifier reports `collection_root` and resolves the collection only through
+   `demo-locations.json`.
+4. Tag and publish `demo-data-v2` exactly as above, substituting the new tag, then download it
+   into a fresh directory and re-run the verifier against those bytes.
+5. Record the SHA-256 of the published `demo-manifest.json` and replace `MANIFEST_URL` and
+   `MANIFEST_SHA256` in the first cell of all three notebooks, in this README, and in
+   `docs/src/content/docs/demos.md`. Run all three notebooks from clean Colab runtimes: notebook
+   01 is unaffected, and notebooks 02 and 03 must print the resolved collection root instead of
+   building one.

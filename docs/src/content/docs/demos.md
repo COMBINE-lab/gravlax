@@ -10,11 +10,20 @@ checked-in defaults pin the published `demo-data-v1`
 and its SHA-256,
 `82c34aad442d478f1cb1243a6ccfe8ad9f937b81d9e1f946a8eb2cfc498214fd`. Each notebook verifies the
 CLI, Python wheel, archives, annotations, and design files before executing
-them. Both installed programs must report the exact version declared by the manifest. A collection
-embeds canonical source paths,
-so the multi-archive notebooks download each rooted source archive and build a
-fresh collection inside Colab; they do not treat a detached `.aicollection` as
-a portable data bundle.
+them. Both installed programs must report the exact version declared by the manifest.
+
+A collection commits source content identities rather than pathnames, so since 0.2.1 a capsule may
+publish a prebuilt, rooted `.aicollection` with shape routes plus a `--locations` manifest keyed by
+those identities. The `demo-data-v1` manifest declares no collection, so the multi-archive
+notebooks download each rooted source archive and build a fresh collection inside Colab. When a
+manifest declares the optional `collection` section, they download that hash-pinned collection and
+its location manifest instead and resolve every committed source through `--locations`, whose
+relative paths are read beside the downloaded manifest. Nothing is rebuilt or rescanned. The
+declared collection must commit exactly the story's archives with the same build options, its
+location manifest must resolve exactly the archives already verified by root, and
+`collection inspect --locations ... --verify-routes` must report the declared collection root and
+one shape route per archive; otherwise the notebook stops without falling back to a local
+rebuild.
 
 - [Annotation reinterpretation](https://colab.research.google.com/github/COMBINE-lab/gravlax/blob/main/notebooks/01_annotation_reinterpretation.ipynb)
   compares two annotations against one rooted evidence archive and displays
@@ -42,7 +51,9 @@ data. A publishable manifest must validate against
 [`demo-manifest.schema.json`](https://github.com/COMBINE-lab/gravlax/blob/main/notebooks/demo-manifest.schema.json),
 use immutable release or repository-record URLs, and contain lowercase SHA-256
 digests for every transport object. Archive assets should additionally declare
-their rooted `aie-directory-root-v2` identities.
+their rooted `aie-directory-root-v2` identities, and a published collection
+declares its `aicollection-directory-root-v1` content root alongside the
+location manifest that resolves its committed sources.
 
 The notebooks are now one-click demonstrations pinned to the immutable
 `demo-data-v1` capsule and the v0.1.5 software it declares. Clearing a locator,

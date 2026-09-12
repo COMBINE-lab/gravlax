@@ -28,6 +28,8 @@ import verify_demo_capsule as verifier  # noqa: E402
 
 VERSION = "9.9.9"
 ARCHIVE_ROOT = f"aie-directory-root-v2:{'a' * 64}"
+ARCHIVE_ROOT_B = f"aie-directory-root-v2:{'b' * 64}"
+COLLECTION_ROOT = f"aicollection-directory-root-v1:{'c' * 64}"
 GITHUB_RELEASES = "https://github.com/COMBINE-lab/gravlax/releases/download"
 DATA_BASE_URL = f"{GITHUB_RELEASES}/demo-data-v1"
 GROUP_MAP_SCOPE = {
@@ -67,7 +69,7 @@ elif args and args[0] == "inspect-archive":
         "verification": {"directory_and_root": True, "all_payloads": True},
         "native_identity": {
             "scheme": "aie-directory-root-v2",
-            "blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "blake3": Path(args[1]).stem[-1] * 64,
         },
         "molecular_evidence": {
             "schema": "gravlax.molecular-evidence.v2",
@@ -96,8 +98,55 @@ elif args and args[0] == "inspect-archive":
     }))
 elif args[:2] == ["collection", "build"]:
     output = next(value.split("=", 1)[1] for value in args if value.startswith("--out="))
-    Path(output).write_text("local path-bound collection\n", encoding="utf-8")
-    print(json.dumps({"data": {"tables": [], "summary": {"samples": 2}}}))
+    samples = [
+        value.split("=", 1)[1].split("=", 1)[0]
+        for value in args
+        if value.startswith("--sample=")
+    ]
+    Path(output).write_text(
+        json.dumps({"samples": samples, "shape_routes": "--shape-routes" in args}),
+        encoding="utf-8",
+    )
+    print(json.dumps({"data": {"tables": [], "summary": {"samples": len(samples)}}}))
+elif args[:2] == ["collection", "inspect"]:
+    payload = json.loads(Path(args[2]).read_text(encoding="utf-8"))
+    locations = next(
+        (value.split("=", 1)[1] for value in args if value.startswith("--locations=")), None
+    )
+    if locations is None:
+        raise SystemExit("the demo collection must be opened through --locations")
+    document = json.loads(Path(locations).read_text(encoding="utf-8"))
+    if document.get("schema_version") != 1:
+        raise SystemExit("unsupported location manifest")
+    resolved = {
+        entry["identity"]: Path(locations).parent / entry["path"]
+        for entry in document["locations"]
+    }
+    if not resolved or not all(path.is_file() for path in resolved.values()):
+        raise SystemExit("location manifest does not resolve every committed source")
+    samples = payload["samples"]
+    routed = payload.get("shape_routes", True)
+    print(json.dumps({
+        "layers": [{"root_digest": "c" * 64}],
+        "archives": [
+            {
+                "id": sample,
+                "native_identity": {
+                    "scheme": "aie-directory-root-v2",
+                    "blake3": sample[-1] * 64,
+                },
+            }
+            for sample in sorted(samples)
+        ],
+        "index": {"shape_route_archives": len(samples) if routed else 0},
+        "guard": {
+            "content_identity_verified": True,
+            "shape_route_payloads_verified": True,
+            "shape_route_reconstruction_verified": (
+                "--verify-routes" in args or "--verify-content" in args
+            ),
+        },
+    }))
 elif args and args[0] == "compare-annotations":
     print(json.dumps({"data": {
         "count_deltas": {
@@ -196,7 +245,7 @@ elif args and args[0] == "inspect-archive":
         "verification": {"directory_and_root": True, "all_payloads": True},
         "native_identity": {
             "scheme": "aie-directory-root-v2",
-            "blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "blake3": Path(args[1]).stem[-1] * 64,
         },
         "molecular_evidence": {
             "schema": "gravlax.molecular-evidence.v2",
@@ -221,6 +270,62 @@ elif args and args[0] == "inspect-archive":
             "genome_reference_binding": {"bound_by": "ingest-archive"},
             "terminal_tail_status": "available",
             "terminal_tail": {"events": 1},
+        },
+    }))
+elif args[:2] == ["collection", "build"]:
+    samples = [
+        value.split("=", 1)[1].split("=", 1)[0]
+        for value in args
+        if value.startswith("--sample=")
+    ]
+    paths = [value.split("=", 1)[1].split("=", 1)[1] for value in args if value.startswith("--sample=")]
+    output = next(value.split("=", 1)[1] for value in args if value.startswith("--out="))
+    if Path(output).is_absolute() or any(Path(value).is_absolute() for value in paths):
+        raise SystemExit("collection build must use public relative basenames")
+    if not all(Path(value).is_file() for value in paths):
+        raise SystemExit("collection build sources must exist")
+    Path(output).write_text(
+        json.dumps({"samples": samples, "shape_routes": "--shape-routes" in args}),
+        encoding="utf-8",
+    )
+    print(json.dumps({"data": {"tables": [], "summary": {"samples": len(samples)}}}))
+elif args[:2] == ["collection", "inspect"]:
+    payload = json.loads(Path(args[2]).read_text(encoding="utf-8"))
+    locations = next(
+        (value.split("=", 1)[1] for value in args if value.startswith("--locations=")), None
+    )
+    if locations is None:
+        raise SystemExit("the demo collection must be opened through --locations")
+    document = json.loads(Path(locations).read_text(encoding="utf-8"))
+    if document.get("schema_version") != 1:
+        raise SystemExit("unsupported location manifest")
+    resolved = {
+        entry["identity"]: Path(locations).parent / entry["path"]
+        for entry in document["locations"]
+    }
+    if not resolved or not all(path.is_file() for path in resolved.values()):
+        raise SystemExit("location manifest does not resolve every committed source")
+    samples = payload["samples"]
+    routed = payload.get("shape_routes", True)
+    print(json.dumps({
+        "layers": [{"root_digest": "c" * 64}],
+        "archives": [
+            {
+                "id": sample,
+                "native_identity": {
+                    "scheme": "aie-directory-root-v2",
+                    "blake3": sample[-1] * 64,
+                },
+            }
+            for sample in sorted(samples)
+        ],
+        "index": {"shape_route_archives": len(samples) if routed else 0},
+        "guard": {
+            "content_identity_verified": True,
+            "shape_route_payloads_verified": True,
+            "shape_route_reconstruction_verified": (
+                "--verify-routes" in args or "--verify-content" in args
+            ),
         },
     }))
 elif args and args[0] == "compile-annotation":
@@ -632,6 +737,94 @@ class BuilderUnitTests(unittest.TestCase):
             with self.assertRaisesRegex(builder.CapsuleError, "repeats barcode"):
                 builder._read_group_map(groups, "groups")
 
+    def _collection_output(self, root: Path) -> tuple[Path, Path, dict[str, dict[str, object]]]:
+        aie = root / "aie"
+        aie.write_text(FAKE_BUILDER_AIE, encoding="utf-8")
+        aie.chmod(aie.stat().st_mode | stat.S_IXUSR)
+        output = root / "capsule"
+        output.mkdir()
+        resources: dict[str, dict[str, object]] = {}
+        for letter in ("a", "b"):
+            path = output / f"archive-{letter}.aie"
+            path.write_bytes(f"archive {letter}\n".encode())
+            resources[f"archive_{letter}"] = builder._asset(
+                path, f"aie-directory-root-v2:{letter * 64}"
+            )
+        return aie, output, resources
+
+    def test_staged_collection_publishes_an_identity_keyed_location_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            aie, output, resources = self._collection_output(root)
+            staging_root = root / "public-staging"
+            staging_root.mkdir()
+            with patch.object(builder, "PRIVATE_TEXT", ("/definitely-not-a-real-root",)):
+                record = builder._stage_collection(
+                    aie=aie,
+                    output=output,
+                    declaration={
+                        "filename": "demo.aicollection",
+                        "locations_filename": "demo-locations.json",
+                    },
+                    resources=resources,
+                    archive_map={"donor-a": "archive_a", "donor-b": "archive_b"},
+                    output_filenames={"BUILD-RECORD.json"},
+                    staging_root=staging_root,
+                )
+            self.assertEqual(record["collection_root"], COLLECTION_ROOT)
+            self.assertTrue(record["shape_routes"])
+            self.assertFalse(record["allow_unstamped"])
+            self.assertEqual(
+                record["archives"], {"donor-a": "archive_a", "donor-b": "archive_b"}
+            )
+            collection = output / "demo.aicollection"
+            locations = output / "demo-locations.json"
+            self.assertTrue(collection.is_file() and locations.is_file())
+            self.assertEqual(record["sha256"], builder._sha256(collection))
+            self.assertEqual(record["locations"]["sha256"], builder._sha256(locations))
+            document = json.loads(locations.read_text(encoding="utf-8"))
+            self.assertEqual(
+                document,
+                {
+                    "schema_version": 1,
+                    "locations": [
+                        {
+                            "identity": f"aie-directory-root-v2:{'a' * 64}",
+                            "path": "archive-a.aie",
+                        },
+                        {
+                            "identity": f"aie-directory-root-v2:{'b' * 64}",
+                            "path": "archive-b.aie",
+                        },
+                    ],
+                },
+            )
+            self.assertFalse(list(staging_root.iterdir()))
+
+    def test_staged_collection_refuses_a_private_staging_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            aie, output, resources = self._collection_output(root)
+            staging_root = root / "private-staging"
+            staging_root.mkdir()
+            with patch.object(builder, "PRIVATE_TEXT", ("/private-staging",)):
+                with self.assertRaisesRegex(
+                    builder.CapsuleError, "public-neutral directory"
+                ):
+                    builder._stage_collection(
+                        aie=aie,
+                        output=output,
+                        declaration={
+                            "filename": "demo.aicollection",
+                            "locations_filename": "demo-locations.json",
+                        },
+                        resources=resources,
+                        archive_map={"donor-a": "archive_a"},
+                        output_filenames=set(),
+                        staging_root=staging_root,
+                    )
+            self.assertFalse((output / "demo.aicollection").exists())
+
     def test_collection_junction_rejects_a_strand_suffix(self) -> None:
         self.assertEqual(
             builder._collection_junction("chr12:18715181-18853140", "junction"),
@@ -662,6 +855,20 @@ class FinalizerVerifierTests(unittest.TestCase):
         self.assertNotIn("drilldown_groups", definitions["event_story"]["properties"])
         self.assertIn("drilldown_groups", definitions["drilldown_story"]["properties"])
         self.assertNotIn("collection_groups", definitions["drilldown_story"]["properties"])
+        self.assertEqual(schema["properties"]["collection"]["$ref"], "#/$defs/collection")
+        self.assertEqual(
+            set(definitions["collection"]["properties"]),
+            {
+                "archives",
+                "shape_routes",
+                "allow_unstamped",
+                "collection_root",
+                "asset",
+                "locations",
+            },
+        )
+        self.assertFalse(definitions["collection"]["additionalProperties"])
+        self.assertNotIn("collection", schema["required"])
 
     def _write_fake_aie(self, path: Path) -> bytes:
         payload = FAKE_AIE.encode()
@@ -685,7 +892,7 @@ class FinalizerVerifierTests(unittest.TestCase):
                 "Metadata-Version: 2.1\nName: gravlax-client\nVersion: 9.9.9\n",
             )
 
-    def _write_build_directory(self, directory: Path) -> None:
+    def _write_build_directory(self, directory: Path, *, collection: bool = False) -> None:
         directory.mkdir()
         resource_payloads = {
             "archive-a.aie": b"archive a\n",
@@ -704,7 +911,7 @@ class FinalizerVerifierTests(unittest.TestCase):
             (directory / filename).write_bytes(payload)
         resources = {
             "archive_a": builder._asset(directory / "archive-a.aie", ARCHIVE_ROOT),
-            "archive_b": builder._asset(directory / "archive-b.aie", ARCHIVE_ROOT),
+            "archive_b": builder._asset(directory / "archive-b.aie", ARCHIVE_ROOT_B),
             "annotation_before": builder._asset(directory / "annotation-before.aic"),
             "annotation_after": builder._asset(directory / "annotation-after.aic"),
             "collection_groups": builder._asset(directory / "collection-groups.tsv"),
@@ -760,6 +967,29 @@ class FinalizerVerifierTests(unittest.TestCase):
                 "story_note": "A technical positive control for the query mechanics.",
             },
         }
+        collection_record = None
+        if collection:
+            collection_payload = json.dumps(
+                {"samples": sorted(archive_map), "shape_routes": True}
+            ).encode()
+            (directory / "demo.aicollection").write_bytes(collection_payload)
+            locations = builder._locations_document(
+                {
+                    ARCHIVE_ROOT: resources["archive_a"]["filename"],
+                    ARCHIVE_ROOT_B: resources["archive_b"]["filename"],
+                }
+            )
+            (directory / "demo-locations.json").write_bytes(
+                (json.dumps(locations, indent=2, sort_keys=True, ensure_ascii=True) + "\n").encode()
+            )
+            collection_record = {
+                **builder._asset(directory / "demo.aicollection"),
+                "collection_root": COLLECTION_ROOT,
+                "archives": archive_map,
+                "shape_routes": True,
+                "allow_unstamped": False,
+                "locations": builder._asset(directory / "demo-locations.json"),
+            }
         record = {
             "schema": builder.RECORD_SCHEMA,
             "capsule_id": "test-capsule",
@@ -792,6 +1022,7 @@ class FinalizerVerifierTests(unittest.TestCase):
                 ]
             },
             "resources": resources,
+            **({"collection": collection_record} if collection_record else {}),
             "stories": stories,
             "third_party_notices": [
                 {
@@ -848,10 +1079,12 @@ class FinalizerVerifierTests(unittest.TestCase):
         )
         return repository
 
-    def _finalize_fixture(self, root: Path) -> tuple[Path, Path, Path, Path, Path]:
+    def _finalize_fixture(
+        self, root: Path, *, collection: bool = False
+    ) -> tuple[Path, Path, Path, Path, Path]:
         build_dir = root / "build"
         output_dir = root / "final"
-        self._write_build_directory(build_dir)
+        self._write_build_directory(build_dir, collection=collection)
         source_repository = self._source_repository(root, build_dir)
         aie = root / "aie"
         payload = self._write_fake_aie(aie)
@@ -987,6 +1220,120 @@ class FinalizerVerifierTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(builder.CapsuleError, "software revision"):
                 verifier._verify_capsule_records(output, manifest)
+
+    def test_published_collection_is_resolved_through_its_location_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output, aie, release, wheel, _ = self._finalize_fixture(root, collection=True)
+            manifest = json.loads((output / "demo-manifest.json").read_text(encoding="utf-8"))
+            collection = manifest["collection"]
+            self.assertEqual(collection["collection_root"], COLLECTION_ROOT)
+            self.assertEqual(collection["archives"], {"donor-a": "archive_a", "donor-b": "archive_b"})
+            self.assertTrue(collection["shape_routes"])
+            self.assertEqual(
+                collection["asset"]["url"], f"{DATA_BASE_URL}/demo.aicollection"
+            )
+            self.assertEqual(
+                collection["locations"]["url"], f"{DATA_BASE_URL}/demo-locations.json"
+            )
+            self.assertNotIn("demo.aicollection", {
+                asset["filename"] for asset in manifest["resources"].values()
+            })
+            readme = (output / "README.md").read_text(encoding="utf-8")
+            self.assertIn("demo-locations.json", readme)
+            self.assertNotIn("rebuild each `.aicollection`", readme)
+            covered = {
+                line.split("  ", 1)[1]
+                for line in (output / "SHA256SUMS").read_text(encoding="ascii").splitlines()
+            }
+            self.assertIn("demo.aicollection", covered)
+            self.assertIn("demo-locations.json", covered)
+
+            result = verifier.verify(output, aie, release, wheel)
+            self.assertEqual(result["collection_root"], COLLECTION_ROOT)
+            self.assertEqual(result["archives_verified"], 2)
+            self.assertTrue(result["stories_executed"])
+
+            document = json.loads(
+                (output / "demo-locations.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(document["schema_version"], 1)
+            self.assertEqual(
+                {entry["path"] for entry in document["locations"]},
+                {"archive-a.aie", "archive-b.aie"},
+            )
+
+    def test_published_collection_fails_closed_on_manifest_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output, aie, release, wheel, _ = self._finalize_fixture(root, collection=True)
+            manifest = json.loads((output / "demo-manifest.json").read_text(encoding="utf-8"))
+            verifier._validate_manifest(copy.deepcopy(manifest))
+
+            wrong_root = copy.deepcopy(manifest)
+            wrong_root["collection"]["collection_root"] = f"aicollection-directory-root-v1:{'d' * 64}"
+            with self.assertRaisesRegex(builder.CapsuleError, "root differs from the manifest"):
+                verifier._verify_collection(
+                    aie,
+                    wrong_root,
+                    output / "demo.aicollection",
+                    output / "demo-locations.json",
+                )
+
+            other_archives = copy.deepcopy(manifest)
+            other_archives["collection"]["archives"] = {"donor-a": "archive_a"}
+            with self.assertRaisesRegex(builder.CapsuleError, "differs from the published collection"):
+                verifier._validate_manifest(other_archives)
+
+            other_options = copy.deepcopy(manifest)
+            other_options["collection"]["shape_routes"] = False
+            with self.assertRaisesRegex(builder.CapsuleError, "options differ"):
+                verifier._validate_manifest(other_options)
+
+            scattered = copy.deepcopy(manifest)
+            scattered["collection"]["asset"]["url"] = (
+                f"{GITHUB_RELEASES}/demo-data-v3/demo.aicollection"
+            )
+            with self.assertRaisesRegex(builder.CapsuleError, "outside the finalized"):
+                verifier._verify_capsule_records(output, scattered)
+
+            undeclared = copy.deepcopy(manifest)
+            del undeclared["collection"]
+            with self.assertRaisesRegex(builder.CapsuleError, "disagree about a published"):
+                verifier._verify_capsule_records(output, undeclared)
+
+            (output / "demo-locations.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "locations": [
+                            {"identity": ARCHIVE_ROOT, "path": "archive-a.aie"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(builder.CapsuleError, "does not resolve exactly"):
+                verifier._verify_collection(
+                    aie,
+                    manifest,
+                    output / "demo.aicollection",
+                    output / "demo-locations.json",
+                )
+
+    def test_v1_capsules_without_a_collection_stay_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output, aie, release, wheel, _ = self._finalize_fixture(Path(temporary))
+            manifest = json.loads((output / "demo-manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("collection", manifest)
+            self.assertNotIn(
+                "demo.aicollection", {path.name for path in output.iterdir()}
+            )
+            readme = (output / "README.md").read_text(encoding="utf-8")
+            self.assertIn("rebuild each `.aicollection`", readme)
+            result = verifier.verify(output, aie, release, wheel)
+            self.assertNotIn("collection_root", result)
+            self.assertTrue(result["stories_executed"])
 
     def test_drilldown_verifier_requires_membership_witness_table(self) -> None:
         def table(name: str, fields: list[str], rows: list[list[object]]) -> dict[str, object]:
