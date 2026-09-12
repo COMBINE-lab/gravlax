@@ -68,7 +68,9 @@ aie ingest-archive align/Aligned.sortedByCoord.out.bam \
   scans the BAM and whitelist before this longer build.
 - `per-library-two-pass` means the embedded catalogue came from pass 1 of this
   library. `frozen-catalogue` means an already fixed external catalogue was
-  reused. Gravlax verifies the supplied file's current bytes but relies on the
+  reused, for example a junction seed written by `aie ingest junctions` and
+  aligned with `aie ingest recipe --junction-seed ... --one-pass`; the recipe
+  prints the matching declaration. Gravlax verifies the supplied file's current bytes but relies on the
   caller for that relationship; it does not infer either mode from the BAM
   header.
 - Barcode correction runs here, against the whitelist, using an

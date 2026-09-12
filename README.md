@@ -63,6 +63,9 @@ Build an archive once from annotation-free alignments, then replay and query it 
 ```sh
 # 1. Align without a GTF (STAR two-pass, secondaries kept). Print the recipe:
 aie ingest recipe --chemistry 10x-3p-v3
+#    Optional: seed known junctions (recorded in provenance) and/or skip two-pass discovery:
+#    aie ingest junctions --gtf gencode.v32.annotation.gtf --out v32.junctions.tab
+#    aie ingest recipe --chemistry 10x-3p-v3 --junction-seed v32.junctions.tab --sjdb-overhang 90 [--one-pass]
 
 # 2. Build the archive:
 aie ingest check align.bam --whitelist 3M-february-2018.txt --chemistry 10x-3p-v3
