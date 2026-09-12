@@ -38,6 +38,18 @@ Because the molecules are retained rather than the counts, Gravlax supports anal
 ## Install
 
 ```sh
+conda install -c bioconda gravlax
+```
+
+The Bioconda package is named `gravlax`; the command it installs is `aie`.
+Prebuilt binaries for Linux, macOS, and Windows are attached to every
+[GitHub release](https://github.com/COMBINE-lab/gravlax/releases), together with
+`gravlax-installer.sh` and `gravlax-installer.ps1`. The Python client is
+`pip install gravlax-client`.
+
+To build from source instead:
+
+```sh
 cargo build --release
 # binary: target/release/aie
 ```
@@ -51,6 +63,9 @@ Build an archive once from annotation-free alignments, then replay and query it 
 ```sh
 # 1. Align without a GTF (STAR two-pass, secondaries kept). Print the recipe:
 aie ingest recipe --chemistry 10x-3p-v3
+#    Optional: seed known junctions (recorded in provenance) and/or skip two-pass discovery:
+#    aie ingest junctions --gtf gencode.v32.annotation.gtf --out v32.junctions.tab
+#    aie ingest recipe --chemistry 10x-3p-v3 --junction-seed v32.junctions.tab --sjdb-overhang 90 [--one-pass]
 
 # 2. Build the archive:
 aie ingest check align.bam --whitelist 3M-february-2018.txt --chemistry 10x-3p-v3
@@ -92,13 +107,13 @@ Run `aie <command> --help` for the full option set of any subcommand.
 
 - **Run the live demonstrations.** Three one-click Google Colab notebooks reproduce annotation reinterpretation, coordinate-free multi-donor event discovery, and same-molecule evidence queries from the immutable [`demo-data-v1`](https://github.com/COMBINE-lab/gravlax/releases/tag/demo-data-v1) capsule. Start from the [demonstrations page](docs/src/content/docs/demos.md).
 - **Projects and plans.** `aie project init` creates a workspace that registers inputs by stable name; versioned YAML or JSON plans are validated with `aie plan check`, resolved to a content-addressed snapshot, and resumed exactly. `aie explore` is a local, read-only plan builder that resolves gene and transcript identifiers and exports the plan as YAML, a command line, or Python. See the [workflow guide](docs/src/content/docs/workflow.md) and the small [demo project](examples/demo-project/README.md), which needs no dataset download.
-- **Python and AnnData.** Query and cohort commands emit a shared JSON result contract that the Python client reads directly into AnnData. See [Python and AnnData](docs/src/content/docs/python.md).
+- **Python and AnnData.** `pip install gravlax-client` provides a dependency-light `Client` over the same commands: `Client.gq_run` executes a `.gq` query program, and `Client.replay(..., gene_full=True, solo_strand=...)` writes a GeneFull matrix and returns its report. Query and cohort commands emit a shared JSON result contract that the client reads directly into AnnData. See [Python and AnnData](docs/src/content/docs/python.md).
 - **Interchange.** `aie export-molecule-bam` writes the post-correction molecule abstraction as a tagged BAM for tools that cannot read `.aie`; the tag contract is documented in [`docs-notes/molecule-bam.md`](docs-notes/molecule-bam.md).
 - **Formats.** The archive format is specified in [`docs-notes/format-spec.md`](docs-notes/format-spec.md) and the collection format in [`docs-notes/collection-index-spec.md`](docs-notes/collection-index-spec.md). Full command references live in [`docs/`](docs/src/content/docs/).
 
 ## Scope and limits
 
-Gravlax makes the annotation-dependent part of quantification revisable; it does not make everything revisable. Genome alignment and barcode correction are performed once at ingest and are fixed thereafter. Read sequence and base qualities are not retained, so allele-specific, editing, and sequence-search questions are out of scope. Within a UMI class, reads that share a junction chain are stored as a count plus two coordinate-extreme representatives; this is exact for gene counting in our evaluations and measurably lossy for saturation-sensitive quantities such as the ambiguous component of RNA velocity. Cohort queries are fast, but they are not statistics: a design with biological replicates must be supplied, and Gravlax will not treat cells or molecules as replicates on your behalf.
+Gravlax makes the annotation-dependent part of quantification revisable; it does not make everything revisable. Genome alignment and barcode correction are performed once at ingest and are fixed thereafter. Read sequence and base qualities are not retained, so allele-specific, editing, and sequence-search questions are out of scope. Within a UMI class, reads that share a junction chain are stored as a count plus two coordinate-extreme representatives; this is exact for gene counting in our evaluations and measurably lossy for saturation-sensitive quantities such as the ambiguous component of RNA velocity. Ingesting with `--geometry-fidelity` retains every distinct unique-read geometry instead, at about 27% more archive bytes; see [when to use it](docs/src/content/docs/cli/ingest-archive.md). Cohort queries are fast, but they are not statistics: a design with biological replicates must be supplied, and Gravlax will not treat cells or molecules as replicates on your behalf.
 
 ## Repository layout
 

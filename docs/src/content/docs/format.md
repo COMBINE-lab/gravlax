@@ -137,6 +137,10 @@ so unchanged encoding does not imply identical whole-file bytes or content roots
   absent alignments, or biological absence. Older readers reject the unfamiliar
   provenance rule. The direct-BAM replay reference accepts the same switch with
   `replay-rows --from-bam`.
+  On 10x PBMC 5k it costs 27% more archive bytes (544.0 MB to 692.7 MB, 11.3 to
+  14.4 bits per read) and moves the ambiguous RNA-velocity component from 6.13%
+  to 4.67% deviation while leaving Gene counts near-unchanged; see
+  [When to use geometry fidelity](/gravlax/cli/ingest-archive/#when-to-use-geometry-fidelity).
 - `--compression-tuning` compares final zstd frames, including repeated section
   name overhead, instead of choosing cell-map encodings by intermediate length.
   Candidates are delta, rANS and `(cell, run length)` coding (cell codec tag 2).

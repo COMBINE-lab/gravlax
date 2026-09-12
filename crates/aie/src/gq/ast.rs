@@ -43,6 +43,7 @@ pub enum Kind {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Function {
+    pub at: usize,
     pub name: String,
     pub parameters: Vec<(String, Option<String>)>,
     pub returns: Option<String>,

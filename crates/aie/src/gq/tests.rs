@@ -524,3 +524,226 @@ fn count_literals_ratios_and_null_sorting() {
     let table=query("from @x.records |> within all |> summarize {n=count()} |> select {ratio=fraction(n,denominator:0u64)}",&archive);
     assert_eq!(table.rows[0]["ratio"], Value::Null);
 }
+
+#[test]
+fn exported_functions_require_annotated_signatures_with_spans() {
+    let header = "header {gq=1,assembly=\"test\"}";
+    let tail =
+        "from @x.records |> within all |> derive {a=any unique{f(g[1:10..30])}} |> tally {a}";
+    // Inference stays available to file-local definitions.
+    let local = format!("{header} fn f(exon) = overlaps(exon, min: 12bp) {tail}");
+    assert!(parser::parse(&local).is_ok());
+    for (source, expected) in [
+        (
+            format!("{header} export fn f(exon) -> Predicate<Alignment,test,alignment> = overlaps(exon,min:12bp) {tail}"),
+            "requires an explicit type for parameter exon",
+        ),
+        (
+            format!("{header} export fn f(exon: Region<test,alignment>) = overlaps(exon,min:12bp) {tail}"),
+            "requires an explicit -> return type",
+        ),
+    ] {
+        let message = parser::parse(&source).unwrap_err().to_string();
+        assert!(message.contains(expected), "{message}");
+        assert!(message.contains("exported fn f"), "{message}");
+        let at: usize = message
+            .strip_prefix("byte ")
+            .and_then(|m| m.split(':').next())
+            .and_then(|m| m.parse().ok())
+            .unwrap_or_else(|| panic!("no span in {message}"));
+        assert!(at < source.len() && source.is_char_boundary(at), "{message}");
+    }
+    // A bare scientific type on an exported signature names the function and its span.
+    let bare =
+        format!("{header} export fn f(exon: Region) -> Truth = overlaps(exon,min:12bp) {tail}");
+    let doc = parser::parse(&bare).unwrap();
+    let message = match check::Compiler::new(&doc, BTreeMap::new()) {
+        Ok(_) => panic!("bare exported scientific type accepted"),
+        Err(e) => e.to_string(),
+    };
+    assert!(
+        message.starts_with("byte ") && message.contains("exported fn f"),
+        "{message}"
+    );
+}
+
+#[test]
+fn explain_tags_every_predicate_as_chain_invariant_or_extent_sensitive() {
+    let scratch = Scratch::new();
+    let archive = scratch.0.join("archive.aie");
+    fixture(&archive, 100);
+    let table = query(
+        "from @x.records |> within all |> derive {a=any unique{j[1:160..180] & overlaps(g[1:100..120])},b=any unique{start_in(g[1:105..115])}} |> where a | b |> tally {a,b}",
+        &archive,
+    );
+    let tags = table.summary["explain"]["predicate_effect_tags"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let seen: Vec<_> = tags
+        .iter()
+        .map(|t| {
+            (
+                t["stage"].as_str().unwrap(),
+                t["output"].as_str().unwrap(),
+                t["predicate"].as_str().unwrap(),
+                t["effect"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        vec![
+            ("derive", "a", "junction", "chain-invariant"),
+            ("derive", "a", "overlaps", "extent-sensitive"),
+            ("derive", "b", "start_in", "extent-sensitive"),
+        ]
+    );
+    // Every tag carries a usable source span.
+    assert!(tags.iter().all(|t| t["at"].as_u64().is_some()));
+    // `where` over derived Truth columns has no geometry of its own.
+    assert!(!seen.iter().any(|t| t.0 == "where"));
+}
+
+#[test]
+fn result_metadata_recovers_denominators_for_omitted_combinations() {
+    let scratch = Scratch::new();
+    let archive = scratch.0.join("archive.aie");
+    fixture(&archive, 100);
+    let table = query(
+        "from @x.records |> within all |> derive {a=any unique{j[1:510..530]},b=any unique{overlaps(g[1:100..120])}} |> tally {a,b} by {sample}",
+        &archive,
+    );
+    // Observed combinations only: the table cannot supply its own denominator.
+    let counted: u64 = table
+        .rows
+        .iter()
+        .map(|r| match r["count"] {
+            Value::Count(n) => n,
+            _ => unreachable!(),
+        })
+        .sum();
+    assert!(table.rows.len() < 9);
+    assert_eq!(table.summary["language_version"], 1);
+    assert_eq!(table.summary["unit"], "record");
+    assert_eq!(
+        table.summary["state_fields"],
+        serde_json::json!(["a_state", "b_state"])
+    );
+    assert_eq!(table.summary["population_units"], counted);
+    let groups = table.summary["population_by_group"].as_array().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0]["group"], serde_json::json!({"sample": "x"}));
+    assert_eq!(groups[0]["population_units"], counted);
+    assert_eq!(
+        groups[0]["source_scope_units"],
+        table.summary["source_scope_units"]
+    );
+    // No bare JSON null stands in for unknown.
+    assert!(table
+        .rows
+        .iter()
+        .all(|r| r["a_state"] != Value::Null && r["b_state"] != Value::Null));
+}
+
+#[test]
+fn transcript_features_expose_a_junction_path_in_matching_order() {
+    let scratch = Scratch::new();
+    let archive = scratch.0.join("archive.aie");
+    fixture(&archive, 100);
+    let annotation = scratch.0.join("anno.gtf");
+    // `plus` reproduces the fixture record at 150 exactly: blocks [150,160) and [180,190).
+    // `minus` is a three-exon transcript on the opposite strand.
+    std::fs::write(
+        &annotation,
+        "1\tx\texon\t151\t160\t.\t+\t.\tgene_id \"gp\"; gene_name \"GP\"; transcript_id \"plus\";\n\
+         1\tx\texon\t181\t190\t.\t+\t.\tgene_id \"gp\"; gene_name \"GP\"; transcript_id \"plus\";\n\
+         1\tx\texon\t101\t110\t.\t-\t.\tgene_id \"gm\"; gene_name \"GM\"; transcript_id \"minus\";\n\
+         1\tx\texon\t131\t140\t.\t-\t.\tgene_id \"gm\"; gene_name \"GM\"; transcript_id \"minus\";\n\
+         1\tx\texon\t161\t170\t.\t-\t.\tgene_id \"gm\"; gene_name \"GM\"; transcript_id \"minus\";\n",
+    )
+    .unwrap();
+    let project = scratch.0.join("aie-project.yaml");
+    std::fs::write(&project,"schema_version: 1\nname: test\nresources:\n  anno:\n    kind: annotation\n    path: anno.gtf\n    annotation_identity:\n      assembly: test\n      annotation: release1\n").unwrap();
+    let resources = Resources::open(
+        &[format!("x={}", archive.display())],
+        None,
+        Some(&project),
+        "test",
+    )
+    .unwrap();
+
+    let Value::Feature(minus) = resources
+        .feature("anno", "minus", true, Some("same"))
+        .unwrap()
+    else {
+        panic!("transcript feature")
+    };
+    assert_eq!(minus.span.intervals, vec![(100, 170)]);
+    assert_eq!(
+        minus.exons.intervals,
+        vec![(100, 110), (130, 140), (160, 170)]
+    );
+    assert_eq!(minus.junctions.len(), 2);
+    let path = minus.junction_path.clone().expect("spliced transcript");
+    // Patterns match against genomically ascending observed junctions, so the stored
+    // path is ascending regardless of transcriptional direction.
+    assert_eq!(path.junctions, vec![(110, 130), (140, 160)]);
+    assert_eq!(path.reverse, Some(true));
+    assert!(!path.subsequence);
+    // The opposite library rule converts the annotation's transcript frame.
+    let Value::Feature(flipped) = resources
+        .feature("anno", "minus", true, Some("opposite"))
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(flipped.junction_path.unwrap().reverse, Some(false));
+    // A gene union has no transcript order to offer.
+    let Value::Feature(gene) = resources
+        .feature("anno", "GM", false, Some("same"))
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert!(gene.junction_path.is_none());
+
+    let run = |text: &str| {
+        let source = format!("header {{gq=1,assembly=\"test\",library=\"same\"}} {text}");
+        let doc = parser::parse(&source).unwrap();
+        let plan = check::Compiler::new(&doc, resources.fields().unwrap())
+            .unwrap()
+            .with_resources(&resources)
+            .compile()
+            .unwrap();
+        let input = Input {
+            engine: Engine::Auto,
+            parallel_decode: false,
+            profile: false,
+            query: PathBuf::new(),
+            bind: vec![format!("x={}", archive.display())],
+            project: Some(project.clone()),
+            metadata: None,
+            allow_full_scan: true,
+            max_chunks: 100,
+            max_records: 100,
+            max_steps: 1_000_000,
+            max_rows: 100,
+            max_terminal_events: 100,
+            output: None,
+        };
+        execute::execute(&plan, &resources, &input).unwrap()
+    };
+    let table = run("let T = transcript(@anno,\"plus\") from @x.records |> within T.span |> derive {a=any unique{T.junction_path},b=any unique{T.junctions}} |> tally {a,b}");
+    assert_eq!(table.rows.len(), 1);
+    assert_eq!(table.rows[0]["a_state"], Value::Truth(Truth::True));
+    assert_eq!(table.rows[0]["b_state"], Value::Truth(Truth::True));
+    // Gene features carry no junction_path projection.
+    let source = "header {gq=1,assembly=\"test\",library=\"same\"} let G = gene(@anno,\"GM\") from @x.records |> within G.span |> derive {a=any unique{G.junction_path}} |> tally {a}";
+    let doc = parser::parse(source).unwrap();
+    assert!(check::Compiler::new(&doc, resources.fields().unwrap())
+        .unwrap()
+        .with_resources(&resources)
+        .compile()
+        .is_err());
+}
