@@ -2,7 +2,16 @@
 
 This file records user-visible changes in each Gravlax release.
 
-## Unreleased
+## [0.2.3] - 2026-09-11
+
+Existing `.aie` archives, `.aic` annotations, and `.aicollection` indexes remain
+usable without migration; no format changes. This release adds optional
+junction-seeded and one-pass ingest alignment with recorded provenance, cuts
+the memory and time of cohort-wide `collection find-events` by roughly 4x and
+10x on an eight-archive benchmark, adds GQ result metadata and explain tags,
+lets demo capsules ship a prebuilt collection, and expands the documentation.
+
+### Ingest and provenance
 
 - Add optional junction-seeded and one-pass ingest alignment. `aie ingest
   junctions` writes a STAR `--sjdbFileChrStartEnd` seed file from a GTF or
