@@ -173,7 +173,7 @@ fn inspect_and_seal_reports_are_typed_atomic_and_legacy_exact() {
 native identity: aie-directory-root-v2:{root}\n\
 encoded sections: aie-encoded-sections-v1:{encoded}\n\
 molecular evidence schema: unavailable (legacy archive)\n\
-alignment provenance: unavailable; junction discovery is unknown\n\
+alignment provenance: none recorded; junction discovery, catalogue, annotation and aligner identity are unknown\n\
 terminal tails: unavailable (extraction rule was not recorded as evaluated)\n\
 genome reference binding: legacy/unattributed\n\
 verified directory/root; payloads will be verified when selected\n",
@@ -197,10 +197,24 @@ verified directory/root; payloads will be verified when selected\n",
         value["data"]["summary"]["archive"]["native_identity"]["blake3"],
         root
     );
-    assert_eq!(
-        value["data"]["tables"][0]["rows"].as_array().unwrap().len(),
-        3
-    );
+    let table = |name: &str| {
+        value["data"]["tables"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|table| table["name"] == name)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(table("sections")["rows"].as_array().unwrap().len(), 3);
+    // A legacy archive records no provenance at all: exactly one row says so.
+    let provenance_rows = table("alignment_provenance")["rows"].clone();
+    assert_eq!(provenance_rows.as_array().unwrap().len(), 1);
+    assert_eq!(provenance_rows[0][0], "status");
+    assert!(provenance_rows[0][1]
+        .as_str()
+        .unwrap()
+        .starts_with("none recorded;"));
 
     let failed = run_failing(
         Command::new(bin)
@@ -320,7 +334,10 @@ fn artifact_report_preflight_rejects_normalized_destination_aliases() {
         );
         assert!(String::from_utf8_lossy(&symlinked.stderr)
             .contains("operation report path must differ from the primary artifact path"));
-        assert!(!primary.exists(), "symlink alias rejection must precede ingest");
+        assert!(
+            !primary.exists(),
+            "symlink alias rejection must precede ingest"
+        );
     }
 }
 

@@ -7,7 +7,10 @@ The `gravlax-client` package is a dependency-light companion to the `aie`
 binary. It executes explicit argument arrays without a shell, so paths and
 identifiers remain single literal arguments. Archive interpretation stays in
 the Rust executable; Python consumes the same versioned JSON plans and result
-schemas as the command line and Explorer.
+schemas as the command line and Explorer. `Client` covers the same surface as
+the CLI: `replay()` writes count matrices, `gq_run()` (with `gq_explain()` and
+`gq_run_to_file()`) executes a `.gq` query program, and the query, cohort, and
+collection methods return typed result envelopes.
 
 Collection event-search methods `collection_find_events` and
 `collection_find_events_to_file` accept `locations="locations.json"` to resolve
@@ -67,6 +70,25 @@ identities. External project resources must be registered intentionally with
 Failed doctor checks are data, so `doctor()` returns the report with
 `report.ok == False` and the command's exit code. Unexpected command failures
 raise `CommandError` and retain their exact argument vector and diagnostics.
+
+## Replay a count matrix
+
+```python
+report = aie.replay(
+    "sample.aie", "gencode.v49.aic", "barcodes.tsv", "counts/",
+)
+
+# GeneFull: intron-inclusive, strand-aware gene-span assignment (0.2.2)
+genefull = aie.replay(
+    "nuclei.aie", "gencode.v49.aic", "called-nuclei.tsv", "genefull/",
+    gene_full=True, solo_strand="forward",
+)
+```
+
+`gene_full=True` counts overlaps with exon-derived gene spans, including
+introns, and is mutually exclusive with `velocity=True`. `solo_strand` is
+`"forward"`, `"reverse"`, or `"unstranded"`. The barcode file orders the output
+columns and must cover every counted barcode; replay does not call cells.
 
 ## Existing JSON and large output
 

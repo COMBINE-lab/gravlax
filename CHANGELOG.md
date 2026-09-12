@@ -4,6 +4,41 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+- Add optional junction-seeded and one-pass ingest alignment. `aie ingest
+  junctions` writes a STAR `--sjdbFileChrStartEnd` seed file from a GTF or
+  compiled annotation, and `aie ingest recipe` accepts `--junction-seed`,
+  `--sjdb-overhang`, and `--one-pass`. Both options are off by default; the
+  default recipe is unchanged. The printed `ingest-archive` command carries the
+  matching `--junction-discovery`, `--junction-catalogue`, and
+  `--alignment-annotation` declarations, so the seed and discovery mode are
+  recorded in archive provenance. No archive-format change.
+
+- `aie ingest recipe` now derives the default `--sjdbOverhang` from
+  `--chemistry` instead of using a fixed 100: 90 for 10x 3' v3/v3.1 (91 bp cDNA
+  reads) and 97 for 10x 3' v2 (98 bp cDNA reads), following STAR's read length
+  minus one rule. `--sjdb-overhang <N>` still overrides it, and the flag is
+  still emitted only with `--junction-seed`.
+
+- `aie inspect-archive` now shows alignment provenance in its human-readable
+  output. The legacy text summary and the `--format text`/`--format tsv`
+  reports list the provenance status, junction discovery mode, junction
+  catalogue role, digest and data-row count, alignment annotation digest and
+  locator, alignment chemistry, index identity, and aligner program versions.
+  Archives without a manifest report a single line saying none is recorded.
+  The `--json` output is unchanged; `--format json` gains the same rows as an
+  `alignment_provenance` table. No archive-format change.
+
+### Documentation
+
+- Add "When to use geometry fidelity" guidance to the `ingest-archive` and
+  format pages, with measured PBMC 5k archive-size and deviation numbers for
+  the default and `--geometry-fidelity` encodings.
+- Lead the README and installation page with `conda install -c bioconda
+  gravlax`, and describe the GitHub release binaries and installers alongside
+  the from-source build.
+- Document `Client.replay(..., gene_full=True, solo_strand=...)` and mention
+  `gq_run` where the Python client is introduced.
+
 ### GQ
 
 **Result metadata.** `gq run` summaries document the denominators that the result
