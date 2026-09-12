@@ -31,7 +31,7 @@ def bundle_path_aliases(*roots):
 def normalized_result(value, aliases):
     if isinstance(value, dict):
         return {k: normalized_result(v, aliases) for k, v in value.items()
-                if not k.endswith('_seconds') and k not in ('timings_ms', 'locations_manifest')}
+                if not k.endswith('_seconds') and k not in ('timings_ms', 'locations_manifest', 'stage_peak_rss_bytes')}
     if isinstance(value, list):
         return [normalized_result(v, aliases) for v in value]
     if isinstance(value, str):
