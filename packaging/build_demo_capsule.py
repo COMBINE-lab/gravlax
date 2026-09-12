@@ -24,6 +24,9 @@ BARCODE = re.compile(r"^[ACGT]{16}$")
 COLLECTION_JUNCTION = re.compile(
     r"^([A-Za-z0-9][A-Za-z0-9_.-]*):([0-9]+)-([0-9]+)$"
 )
+ARCHIVE_ROOT = re.compile(r"^aie-directory-root-v2:[0-9a-f]{64}$")
+COLLECTION_ROOT = re.compile(r"^aicollection-directory-root-v1:[0-9a-f]{64}$")
+LOCATIONS_SCHEMA_VERSION = 1
 PRIVATE_TEXT = ("/scratch", "/nfshomes", "/home/", "/Users/")
 ABSOLUTE_PATH = re.compile(
     r"(?:^|[\s=:(])/(?!/)[A-Za-z0-9._~-]+(?:/[^\s]*)?|(?:^|[\s=:(])[A-Za-z]:[\\/]"
@@ -395,6 +398,104 @@ def _asset(path: Path, archive_root: str | None = None) -> dict[str, Any]:
     return result
 
 
+def _assert_public_file_bytes(path: Path, label: str) -> None:
+    """Fail closed when a generated binary artifact embeds a private build locator."""
+    markers = tuple(marker.lower().encode() for marker in PRIVATE_TEXT)
+    overlap = max(map(len, markers)) - 1
+    carry = b""
+    with path.open("rb") as handle:
+        while block := handle.read(8 << 20):
+            contents = (carry + block).lower()
+            if any(marker in contents for marker in markers):
+                raise CapsuleError(
+                    f"{label} embeds a private filesystem locator; build the capsule from a "
+                    "public-neutral staging root (for example by setting TMPDIR)"
+                )
+            carry = contents[-overlap:]
+
+
+def _locations_document(entries: dict[str, str]) -> dict[str, Any]:
+    """Return the identity-keyed relocation manifest for a flat capsule directory."""
+    if not entries:
+        raise CapsuleError("a location manifest must describe at least one source")
+    locations = []
+    for identity, filename in sorted(entries.items(), key=lambda item: item[1]):
+        if not ARCHIVE_ROOT.fullmatch(identity):
+            raise CapsuleError(f"location identity is not a rooted archive: {identity}")
+        locations.append({"identity": identity, "path": _safe_filename(filename)})
+    if len({entry["path"] for entry in locations}) != len(locations):
+        raise CapsuleError("a location manifest must not repeat a relative path")
+    return {"schema_version": LOCATIONS_SCHEMA_VERSION, "locations": locations}
+
+
+def _verified_collection_inspection(
+    inspected: Any,
+    expected_archives: dict[str, str],
+    *,
+    shape_routes: bool,
+    label: str,
+) -> str:
+    """Check a `collection inspect` response and return its rooted content identity."""
+    try:
+        layers = inspected["layers"]
+        archives = inspected["archives"]
+        index = inspected["index"]
+        guard = inspected["guard"]
+    except (KeyError, TypeError) as error:
+        raise CapsuleError(f"{label} has an incomplete collection inspection") from error
+    if not isinstance(layers, list) or len(layers) != 1:
+        raise CapsuleError(f"{label} must be a single rooted collection layer")
+    root = f"aicollection-directory-root-v1:{layers[0].get('root_digest')}"
+    if not COLLECTION_ROOT.fullmatch(root):
+        raise CapsuleError(f"{label} does not report a v1 collection directory root")
+    if guard.get("content_identity_verified") is not True or guard.get(
+        "shape_route_payloads_verified"
+    ) is not True:
+        raise CapsuleError(f"{label} did not authenticate its committed source identities")
+    if shape_routes and guard.get("shape_route_reconstruction_verified") is not True:
+        raise CapsuleError(f"{label} did not reconstruct its stored shape routes")
+    observed: dict[str, str] = {}
+    for archive in archives:
+        try:
+            identity = archive["native_identity"]
+            observed[archive["id"]] = f"{identity['scheme']}:{identity['blake3']}"
+        except (KeyError, TypeError) as error:
+            raise CapsuleError(f"{label} has an incomplete source identity") from error
+    if observed != expected_archives:
+        raise CapsuleError(f"{label} does not commit exactly the capsule archive roots")
+    if shape_routes and index.get("shape_route_archives") != len(expected_archives):
+        raise CapsuleError(f"{label} lacks a shape route for every committed archive")
+    return root
+
+
+def _inspect_collection(
+    aie: Path,
+    collection: Path,
+    locations: Path,
+    expected_archives: dict[str, str],
+    *,
+    shape_routes: bool,
+    label: str,
+) -> str:
+    result = _run(
+        [
+            str(aie),
+            "collection",
+            "inspect",
+            str(collection),
+            f"--locations={locations}",
+            "--verify-routes",
+        ]
+    )
+    try:
+        inspected = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise CapsuleError("aie emitted an invalid collection inspection") from error
+    return _verified_collection_inspection(
+        inspected, expected_archives, shape_routes=shape_routes, label=label
+    )
+
+
 def _verified_archive_inspection(
     inspected: Any, label: str
 ) -> tuple[str, dict[str, Any], int]:
@@ -614,6 +715,124 @@ def _stage_donor(
         "alignment_log_validation": alignment_validation,
     }
     return resource, _asset(archive, root), group_rows, tail_events, provenance
+
+
+COLLECTION_SPEC_FIELDS = {
+    "filename",
+    "locations_filename",
+    "shape_routes",
+    "allow_unstamped",
+}
+
+
+def _stage_collection(
+    *,
+    aie: Path,
+    output: Path,
+    declaration: dict[str, Any],
+    resources: dict[str, dict[str, Any]],
+    archive_map: dict[str, str],
+    output_filenames: set[str],
+    staging_root: Path | None = None,
+) -> dict[str, Any]:
+    """Build one relocatable, rooted collection over the staged capsule archives.
+
+    The collection is built from a public-neutral staging directory so that its embedded
+    path hints are never private build locators. Consumers resolve every committed source
+    identity through the generated location manifest, so those hints are never used.
+    """
+    declaration = _expect_mapping(declaration, "collection")
+    unknown = sorted(set(declaration).difference(COLLECTION_SPEC_FIELDS))
+    if unknown:
+        raise CapsuleError(f"collection has unknown fields {unknown}")
+    filename = _safe_filename(declaration.get("filename"))
+    locations_filename = _safe_filename(declaration.get("locations_filename"))
+    if not filename.endswith(".aicollection") or not locations_filename.endswith(".json"):
+        raise CapsuleError(
+            "collection.filename must end in .aicollection and collection.locations_filename "
+            "must end in .json"
+        )
+    if {filename, locations_filename}.intersection(output_filenames) or (
+        filename == locations_filename
+    ):
+        raise CapsuleError("collection uses a duplicate capsule filename")
+    shape_routes = declaration.get("shape_routes", True)
+    allow_unstamped = declaration.get("allow_unstamped", False)
+    if type(shape_routes) is not bool or type(allow_unstamped) is not bool:
+        raise CapsuleError("collection.shape_routes and collection.allow_unstamped must be booleans")
+    if not archive_map:
+        raise CapsuleError("collection requires at least one staged archive")
+    archive_files: dict[str, str] = {}
+    expected_archives: dict[str, str] = {}
+    entries: dict[str, str] = {}
+    for sample, resource in sorted(archive_map.items()):
+        asset = resources.get(resource)
+        if not isinstance(asset, dict):
+            raise CapsuleError(f"collection references unknown resource {resource}")
+        root = asset.get("archive_root")
+        if not isinstance(root, str) or not ARCHIVE_ROOT.fullmatch(root):
+            raise CapsuleError(f"collection source {sample} lacks a rooted archive identity")
+        archive_files[sample] = asset["filename"]
+        expected_archives[sample] = root
+        if entries.setdefault(root, asset["filename"]) != asset["filename"]:
+            raise CapsuleError("two collection sources share one archive root")
+    locations = _locations_document(entries)
+    locations_bytes = (
+        json.dumps(locations, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+    ).encode()
+    staging = Path(
+        tempfile.mkdtemp(
+            prefix="gravlax-demo-collection-",
+            dir=str(staging_root.resolve(strict=True)) if staging_root is not None else None,
+        )
+    ).resolve()
+    try:
+        if any(marker.lower() in str(staging).lower() for marker in PRIVATE_TEXT):
+            raise CapsuleError(
+                "collection staging root is a private filesystem location; set TMPDIR to a "
+                "public-neutral directory before building a capsule collection"
+            )
+        for sample, archive_filename in archive_files.items():
+            _stage_working_link(
+                output / archive_filename,
+                staging / archive_filename,
+                resources[archive_map[sample]]["sha256"],
+            )
+        _write_bytes_exclusive(staging / locations_filename, locations_bytes)
+        command = [str(aie), "collection", "build"]
+        for sample, archive_filename in sorted(archive_files.items()):
+            command.append(f"--sample={sample}={archive_filename}")
+        if shape_routes:
+            command.append("--shape-routes")
+        if allow_unstamped:
+            command.append("--allow-unstamped")
+        command.extend([f"--out={filename}", "--json"])
+        _run(command, cwd=staging)
+        staged = staging / filename
+        if not staged.is_file() or staged.stat().st_size == 0:
+            raise CapsuleError("collection build did not create a collection")
+        _assert_public_file_bytes(staged, "the generated collection")
+        root = _inspect_collection(
+            aie,
+            staged,
+            staging / locations_filename,
+            expected_archives,
+            shape_routes=shape_routes,
+            label="the generated collection",
+        )
+        _stage_input(staged, output / filename, _sha256(staged))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    _write_bytes_exclusive(output / locations_filename, locations_bytes)
+    output_filenames.update((filename, locations_filename))
+    return {
+        **_asset(output / filename),
+        "collection_root": root,
+        "archives": dict(sorted(archive_map.items())),
+        "shape_routes": shape_routes,
+        "allow_unstamped": allow_unstamped,
+        "locations": _asset(output / locations_filename),
+    }
 
 
 ANNOTATION_STORY_FIELDS = {
@@ -1085,7 +1304,14 @@ def _preflight_story_resources(spec: dict[str, Any]) -> None:
         )
 
 
-def build(spec_path: Path, source_root: Path, aie: Path, samtools: Path, output_dir: Path) -> None:
+def build(
+    spec_path: Path,
+    source_root: Path,
+    aie: Path,
+    samtools: Path,
+    output_dir: Path,
+    collection_staging_root: Path | None = None,
+) -> None:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     spec = _expect_mapping(spec, "build specification")
     if spec.get("schema") != BUILD_SCHEMA:
@@ -1340,6 +1566,31 @@ def build(spec_path: Path, source_root: Path, aie: Path, samtools: Path, output_
             )
         _validate_story_references(stories, set(resources))
         _assert_public_strings(stories, "stories")
+        collection_record: dict[str, Any] | None = None
+        if "collection" in spec:
+            collection_record = _stage_collection(
+                aie=staged_aie,
+                output=output,
+                declaration=spec["collection"],
+                resources=resources,
+                archive_map=archive_resources_by_sample,
+                output_filenames=output_filenames,
+                staging_root=collection_staging_root,
+            )
+            for story_name in ("event_discovery", "junction_drilldown"):
+                story = _expect_mapping(stories[story_name], story_name)
+                if story.get("archives") != collection_record["archives"]:
+                    raise CapsuleError(
+                        f"{story_name}.archives differs from the published collection"
+                    )
+                if story.get("shape_routes", True) is not collection_record[
+                    "shape_routes"
+                ] or story.get("allow_unstamped", False) is not collection_record[
+                    "allow_unstamped"
+                ]:
+                    raise CapsuleError(
+                        f"{story_name} collection options differ from the published collection"
+                    )
         if _sha256(staged_aie) != aie_sha256 or _sha256(samtools) != samtools_sha256:
             raise CapsuleError("a build executable changed during capsule construction")
         record = {
@@ -1389,6 +1640,7 @@ def build(spec_path: Path, source_root: Path, aie: Path, samtools: Path, output_
             "group_map_scope": group_map_scope,
             "inputs": public_inputs,
             "resources": dict(sorted(resources.items())),
+            **({"collection": collection_record} if collection_record else {}),
             "stories": stories,
             "terminal_tail_events": terminal_tail_events,
             "third_party_notices": notices,
@@ -1407,8 +1659,23 @@ def main() -> int:
     parser.add_argument("--aie", required=True, type=Path)
     parser.add_argument("--samtools", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument(
+        "--collection-staging-root",
+        type=Path,
+        help=(
+            "existing public-neutral directory used to build a declared capsule collection; "
+            "defaults to the system temporary directory"
+        ),
+    )
     args = parser.parse_args()
-    build(args.spec, args.source_root, args.aie, args.samtools, args.output_dir)
+    build(
+        args.spec,
+        args.source_root,
+        args.aie,
+        args.samtools,
+        args.output_dir,
+        args.collection_staging_root,
+    )
     return 0
 
 

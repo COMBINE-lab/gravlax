@@ -26,12 +26,18 @@ the recommended version for new installations.
 
 ## Install the `aie` command
 
-After the release is available on crates.io, install the Rust package named
-`gravlax`:
+The simplest installation is the Bioconda package, built for `linux-64`,
+`linux-aarch64`, `osx-64`, and `osx-arm64`:
+
+```sh
+conda install -c bioconda gravlax
+aie --version
+```
+
+The same version is published to crates.io as the Rust package `gravlax`:
 
 ```sh
 cargo install gravlax
-aie --version
 ```
 
 The package name is `gravlax`; the installed command remains `aie`.

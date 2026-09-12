@@ -20,6 +20,23 @@
     "drilldown_groups": {"url": null, "sha256": null, "filename": null},
     "design": {"url": null, "sha256": null, "filename": null}
   },
+  "collection": {
+    "archives": {
+      "donor-a": "archive_a",
+      "donor-b": "archive_b",
+      "donor-c": "archive_c",
+      "donor-d": "archive_d",
+      "donor-e": "archive_e",
+      "donor-f": "archive_f",
+      "donor-g": "archive_g",
+      "donor-h": "archive_h"
+    },
+    "shape_routes": true,
+    "allow_unstamped": false,
+    "collection_root": null,
+    "asset": {"url": null, "sha256": null, "filename": null},
+    "locations": {"url": null, "sha256": null, "filename": null}
+  },
   "stories": {
     "annotation_reinterpretation": {
       "archive": "archive_c",

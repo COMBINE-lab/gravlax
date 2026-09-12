@@ -4,6 +4,81 @@ This file records user-visible changes in each Gravlax release.
 
 ## Unreleased
 
+- Add optional junction-seeded and one-pass ingest alignment. `aie ingest
+  junctions` writes a STAR `--sjdbFileChrStartEnd` seed file from a GTF or
+  compiled annotation, and `aie ingest recipe` accepts `--junction-seed`,
+  `--sjdb-overhang`, and `--one-pass`. Both options are off by default; the
+  default recipe is unchanged. The printed `ingest-archive` command carries the
+  matching `--junction-discovery`, `--junction-catalogue`, and
+  `--alignment-annotation` declarations, so the seed and discovery mode are
+  recorded in archive provenance. No archive-format change.
+
+- `aie ingest recipe` now derives the default `--sjdbOverhang` from
+  `--chemistry` instead of using a fixed 100: 90 for 10x 3' v3/v3.1 (91 bp cDNA
+  reads) and 97 for 10x 3' v2 (98 bp cDNA reads), following STAR's read length
+  minus one rule. `--sjdb-overhang <N>` still overrides it, and the flag is
+  still emitted only with `--junction-seed`.
+
+- `aie inspect-archive` now shows alignment provenance in its human-readable
+  output. The legacy text summary and the `--format text`/`--format tsv`
+  reports list the provenance status, junction discovery mode, junction
+  catalogue role, digest and data-row count, alignment annotation digest and
+  locator, alignment chemistry, index identity, and aligner program versions.
+  Archives without a manifest report a single line saying none is recorded.
+  The `--json` output is unchanged; `--format json` gains the same rows as an
+  `alignment_provenance` table. No archive-format change.
+
+### Documentation
+
+- Add "When to use geometry fidelity" guidance to the `ingest-archive` and
+  format pages, with measured PBMC 5k archive-size and deviation numbers for
+  the default and `--geometry-fidelity` encodings.
+- Lead the README and installation page with `conda install -c bioconda
+  gravlax`, and describe the GitHub release binaries and installers alongside
+  the from-source build.
+- Document `Client.replay(..., gene_full=True, solo_strand=...)` and mention
+  `gq_run` where the Python client is introduced.
+
+### GQ
+
+**Result metadata.** `gq run` summaries document the denominators that the result
+table cannot carry, because `tally` emits observed combinations only: the evidence
+`unit`, `state_fields` (the `<name>_state` columns in declared order), and per-group
+`population_units` and `source_scope_units` alongside the existing totals. These are
+additive within `gravlax.gq.result.v1`; existing readers, including the Python client,
+are unaffected.
+
+**Exported function signatures.** Missing annotations on an `export fn` are now
+reported with the function name and the byte offset of the parameter or return arrow
+they belong to, rather than one message for the whole declaration. Bare scientific
+types on an exported signature are reported the same way. Explicit types were already
+required on `export fn`; inference remains available to file-local `fn`.
+
+**Explain: per-predicate effect tags.** `gq explain` adds `predicate_effect_tags`,
+one entry per predicate occurrence giving its stage, output column, byte offset, and
+whether it is chain-invariant (decided exactly by either retained representative) or
+extent-sensitive (dependent on geometry the chain quotient does not retain). The
+existing `semantics.predicate_effects` rule summary is unchanged.
+
+### Demonstration capsules
+
+- A demo capsule may now publish a prebuilt, rooted `.aicollection` with shape
+  routes plus a `--locations` manifest keyed by the committed source identities.
+  `packaging/build_demo_capsule.py` builds it from a public-neutral staging root
+  (`--collection-staging-root`, defaulting to the system temporary directory) and
+  records its `aicollection-directory-root-v1` root; `finalize_demo_capsule.py`
+  binds both files to the immutable data-release URLs; `verify_demo_capsule.py`
+  verifies that root through the published location manifest and runs both
+  collection stories against the relocated bytes without rebuilding.
+- `demo-manifest.schema.json` gains an optional top-level `collection` object.
+  Existing `demo-data-v1` manifests, which declare none, remain valid.
+- Notebooks 02 and 03 use a published collection when the manifest declares one
+  and otherwise rebuild it locally as before. The published path is fail-closed:
+  hash-pinned bytes, no fallback address, the declared collection must commit
+  exactly that story's archives and build options, and the location manifest must
+  resolve exactly the archives already verified by archive root. Notebook 01 is
+  unchanged.
+
 ### `collection find-events` exact reduction
 
 Cohort-wide `collection find-events` reduces exact molecule evidence through a

@@ -388,33 +388,40 @@ pub fn parse(source: &str) -> Result<Document> {
             p.need("=")?;
             bindings.push((name, p.expr(0)?));
         } else {
+            let at = p.at();
             let exported = p.eat("export");
             p.need("fn")?;
             let name = p.name()?;
             p.need("(")?;
             let mut parameters = Vec::new();
             while !p.eat(")") {
+                let parameter_at = p.at();
                 let n = p.name()?;
                 let ty = if p.eat(":") {
                     Some(p.type_name()?)
                 } else {
                     None
                 };
+                if exported && ty.is_none() {
+                    bail!("byte {parameter_at}: exported fn {name} requires an explicit type for parameter {n}; inference is available to file-local fn only");
+                }
                 parameters.push((n, ty));
                 if p.peek() != ")" {
                     p.need(",")?;
                 }
             }
+            let returns_at = p.at();
             let returns = if p.eat("->") {
                 Some(p.type_name()?)
             } else {
                 None
             };
-            if exported && (returns.is_none() || parameters.iter().any(|(_, t)| t.is_none())) {
-                bail!("export fn requires parameter and return types");
+            if exported && returns.is_none() {
+                bail!("byte {returns_at}: exported fn {name} requires an explicit -> return type; inference is available to file-local fn only");
             }
             p.need("=")?;
             functions.push(Function {
+                at,
                 name,
                 parameters,
                 returns,

@@ -22,6 +22,7 @@
       "minProperties": 1,
       "additionalProperties": {"$ref": "#/$defs/asset"}
     },
+    "collection": {"$ref": "#/$defs/collection"},
     "stories": {
       "type": "object",
       "additionalProperties": false,
@@ -60,6 +61,28 @@
         },
         "member": {"type": "string", "minLength": 1},
         "archive_root": {"type": "string", "pattern": "^aie-directory-root-v2:[0-9a-f]{64}$"}
+      }
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archives", "collection_root", "asset", "locations"],
+      "properties": {
+        "archives": {"$ref": "#/$defs/archive_map"},
+        "shape_routes": {"type": "boolean"},
+        "allow_unstamped": {"type": "boolean"},
+        "collection_root": {
+          "type": "string",
+          "pattern": "^aicollection-directory-root-v1:[0-9a-f]{64}$"
+        },
+        "asset": {
+          "allOf": [{"$ref": "#/$defs/asset"}],
+          "properties": {"filename": {"pattern": "\\.aicollection$"}}
+        },
+        "locations": {
+          "allOf": [{"$ref": "#/$defs/asset"}],
+          "properties": {"filename": {"pattern": "\\.json$"}}
+        }
       }
     },
     "archive_map": {

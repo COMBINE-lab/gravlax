@@ -18,9 +18,12 @@ from urllib.parse import urlsplit
 import zipfile
 
 from build_demo_capsule import (
+    ARCHIVE_ROOT,
+    COLLECTION_ROOT,
     CapsuleError,
     HEX64,
     IDENTIFIER,
+    LOCATIONS_SCHEMA_VERSION,
     RECORD_SCHEMA,
     _assert_public_strings,
     _expect_mapping,
@@ -244,6 +247,136 @@ def _validate_local_resources(build_dir: Path, record: dict[str, Any]) -> dict[s
     return validated
 
 
+def _validate_local_collection(
+    build_dir: Path, record: dict[str, Any], resources: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Validate an optional prebuilt, relocatable collection recorded by the builder.
+
+    Capsules without this section stay valid: consumers then rebuild the collection from
+    the published rooted archives exactly as before.
+    """
+    declared = record.get("collection")
+    if declared is None:
+        return None
+    declared = _expect_mapping(declared, "build record collection")
+    expected_fields = {
+        "filename",
+        "sha256",
+        "bytes",
+        "collection_root",
+        "archives",
+        "shape_routes",
+        "allow_unstamped",
+        "locations",
+    }
+    if set(declared) != expected_fields:
+        raise CapsuleError("build-record collection has missing or unknown fields")
+    root = declared["collection_root"]
+    if not isinstance(root, str) or not COLLECTION_ROOT.fullmatch(root):
+        raise CapsuleError("build-record collection lacks a rooted content identity")
+    if type(declared["shape_routes"]) is not bool or type(declared["allow_unstamped"]) is not bool:
+        raise CapsuleError("build-record collection options must be booleans")
+    archives = _expect_mapping(declared["archives"], "build-record collection archives")
+    if not archives:
+        raise CapsuleError("build-record collection must commit at least one archive")
+    resource_filenames = {resource["filename"] for resource in resources.values()}
+    expected_locations: dict[str, str] = {}
+    for sample, resource in archives.items():
+        _safe_identifier(sample, "collection archive sample")
+        _safe_identifier(resource, "collection archive resource")
+        asset = resources.get(resource)
+        if asset is None:
+            raise CapsuleError(f"collection references unpublished resource {resource}")
+        archive_root = asset.get("archive_root")
+        if not isinstance(archive_root, str) or not ARCHIVE_ROOT.fullmatch(archive_root):
+            raise CapsuleError(f"collection source {sample} lacks a rooted archive identity")
+        if expected_locations.setdefault(archive_root, asset["filename"]) != asset["filename"]:
+            raise CapsuleError("two collection sources share one archive root")
+    files: dict[str, dict[str, Any]] = {
+        "collection": declared,
+        "collection.locations": _expect_mapping(
+            declared["locations"], "build-record collection locations"
+        ),
+    }
+    if set(files["collection.locations"]) != {"filename", "sha256", "bytes"}:
+        raise CapsuleError("build-record collection locations has missing or unknown fields")
+    for label, asset in files.items():
+        filename = _safe_filename(asset.get("filename"))
+        suffix = ".aicollection" if label == "collection" else ".json"
+        if not filename.endswith(suffix):
+            raise CapsuleError(f"{label} filename must end in {suffix}")
+        if filename in resource_filenames:
+            raise CapsuleError(f"{label} filename duplicates a published resource")
+        digest = asset.get("sha256")
+        if not isinstance(digest, str) or not HEX64.fullmatch(digest):
+            raise CapsuleError(f"{label} has an invalid SHA-256")
+        path = build_dir / filename
+        if not path.is_file() or path.is_symlink():
+            raise CapsuleError(f"{label} is missing or not a regular file")
+        if path.stat().st_size != asset.get("bytes") or _sha256(path) != digest:
+            raise CapsuleError(f"{label} changed after staging")
+    if declared["filename"] == files["collection.locations"]["filename"]:
+        raise CapsuleError("collection and its location manifest must be distinct files")
+    locations_path = build_dir / files["collection.locations"]["filename"]
+    try:
+        locations = json.loads(locations_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise CapsuleError("collection location manifest is not valid JSON") from error
+    _validate_location_manifest(locations, expected_locations)
+    return declared
+
+
+def _validate_location_manifest(
+    locations: Any, expected: dict[str, str]
+) -> None:
+    """Require identity-keyed entries that resolve to the flat capsule's own archives."""
+    if not isinstance(locations, dict) or set(locations) != {"schema_version", "locations"}:
+        raise CapsuleError("location manifest has missing or unknown fields")
+    if locations["schema_version"] != LOCATIONS_SCHEMA_VERSION:
+        raise CapsuleError(
+            f"location manifest schema_version must be {LOCATIONS_SCHEMA_VERSION}"
+        )
+    entries = locations["locations"]
+    if not isinstance(entries, list) or not entries:
+        raise CapsuleError("location manifest must list at least one source")
+    observed: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"identity", "path"}:
+            raise CapsuleError("location entry has missing or unknown fields")
+        identity, relative = entry["identity"], entry["path"]
+        if not isinstance(identity, str) or not ARCHIVE_ROOT.fullmatch(identity):
+            raise CapsuleError("location entry identity is not a rooted archive")
+        if identity in observed:
+            raise CapsuleError("location manifest repeats an identity")
+        observed[identity] = _safe_filename(relative)
+    if observed != expected:
+        raise CapsuleError(
+            "location manifest does not resolve exactly the published collection sources"
+        )
+
+
+def _manifest_collection(
+    collection: dict[str, Any], data_base_url: str
+) -> dict[str, Any]:
+    base = data_base_url.rstrip("/")
+    return {
+        "archives": dict(sorted(collection["archives"].items())),
+        "shape_routes": collection["shape_routes"],
+        "allow_unstamped": collection["allow_unstamped"],
+        "collection_root": collection["collection_root"],
+        "asset": {
+            "url": f"{base}/{collection['filename']}",
+            "sha256": collection["sha256"],
+            "filename": collection["filename"],
+        },
+        "locations": {
+            "url": f"{base}/{collection['locations']['filename']}",
+            "sha256": collection["locations"]["sha256"],
+            "filename": collection["locations"]["filename"],
+        },
+    }
+
+
 def _manifest_resources(
     resources: dict[str, dict[str, Any]], data_base_url: str
 ) -> dict[str, dict[str, Any]]:
@@ -297,6 +430,24 @@ def _documentation(record: dict[str, Any], manifest: dict[str, Any]) -> tuple[st
         except (KeyError, TypeError) as error:
             raise CapsuleError("build record contains incomplete donor provenance") from error
 
+    collection = manifest.get("collection")
+    if collection is None:
+        collection_lines = [
+            "This capsule publishes no prebuilt collection. ",
+            "The notebooks and verifier rebuild each `.aicollection` after download.",
+        ]
+    else:
+        collection_lines = [
+            f"This capsule publishes the prebuilt routing sidecar `{collection['asset']['filename']}` "
+            f"with content root `{collection['collection_root']}`, plus the location manifest ",
+            f"`{collection['locations']['filename']}`. A collection commits source content "
+            "identities, not pathnames: ",
+            "download the flat capsule into any directory and resolve every committed source "
+            "through ",
+            f"`--locations {collection['locations']['filename']}`, whose relative paths are read "
+            "against that file's own directory. ",
+            "Nothing is rebuilt, rescanned, or rewritten.",
+        ]
     version = manifest["software"]["version"]
     aie_filename = manifest["software"]["aie"]["filename"]
     wheel_filename = manifest["software"]["python_wheel"]["filename"]
@@ -365,9 +516,7 @@ def _documentation(record: dict[str, Any], manifest: dict[str, Any]) -> tuple[st
             "",
             f"**Drilldown interpretation:** {drilldown_note}",
             "",
-            "Collections are intentionally not distributed because they contain local source "
-            "paths. ",
-            "The notebooks and verifier rebuild each `.aicollection` after download.",
+            *collection_lines,
             "",
             "## Verify a download",
             "",
@@ -383,7 +532,8 @@ def _documentation(record: dict[str, Any], manifest: dict[str, Any]) -> tuple[st
             "```",
             "",
             "The verifier checks every SHA-256, each archive content root and provenance ",
-            "manifest, both software identities, and live outputs from all three stories.",
+            "manifest, any published collection root and its location manifest, both software ",
+            "identities, and live outputs from all three stories.",
             "`SHA256SUMS` covers every file in this flat capsule except `SHA256SUMS` itself. ",
             "`BUILD-RECORD.json` records source identities and selection details; ",
             "`THIRD-PARTY-NOTICES.md` records source terms and citations.",
@@ -434,6 +584,7 @@ def finalize(
     if not notices_path.is_file() or notices_path.read_text(encoding="utf-8") != expected_notices:
         raise CapsuleError("THIRD-PARTY-NOTICES.md differs from the build record")
     resources = _validate_local_resources(build_dir, record)
+    collection = _validate_local_collection(build_dir, record, resources)
     stories = _expect_mapping(record.get("stories"), "build record stories")
     _validate_story_references(stories, set(resources))
     build_software = _expect_mapping(record.get("software"), "build record software")
@@ -473,9 +624,15 @@ def finalize(
         copied = sorted(
             path for path in build_dir.iterdir() if path.is_file() and not path.is_symlink()
         )
+        collection_filenames = (
+            {collection["filename"], collection["locations"]["filename"]}
+            if collection is not None
+            else set()
+        )
         if {path.name for path in copied} != {
             "BUILD-RECORD.json",
             "THIRD-PARTY-NOTICES.md",
+            *collection_filenames,
             *(resource["filename"] for resource in resources.values()),
         }:
             raise CapsuleError("build directory contains missing or unexpected top-level files")
@@ -499,6 +656,11 @@ def finalize(
                 },
             },
             "resources": _manifest_resources(resources, data_base_url),
+            **(
+                {"collection": _manifest_collection(collection, data_base_url)}
+                if collection is not None
+                else {}
+            ),
             "stories": stories,
         }
         _assert_public_strings(manifest, "demo manifest")

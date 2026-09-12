@@ -7,16 +7,34 @@ Gravlax is implemented in Rust and ships as a single binary, `aie`.
 
 ## Install a release
 
-After the package is available on crates.io, install it with Cargo:
+The recommended installation is the Bioconda package:
 
 ```sh
-cargo install gravlax
+conda install -c bioconda gravlax
 aie --version
 ```
 
-The crates.io package is named `gravlax`; the command it installs is `aie`.
-Prebuilt Linux, macOS, and Windows installers are described on the
-[releases and distribution page](/gravlax/distribution/).
+The package is named `gravlax`; the command it installs is `aie`. Builds are
+available for `linux-64`, `linux-aarch64`, `osx-64`, and `osx-arm64`.
+
+Prebuilt Linux, macOS, and Windows archives and installers are attached to
+every [GitHub release](https://github.com/COMBINE-lab/gravlax/releases) and are
+described on the [releases and distribution page](/gravlax/distribution/):
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/COMBINE-lab/gravlax/releases/latest/download/gravlax-installer.sh | sh
+```
+
+The same version is published to crates.io, so Cargo can also install it:
+
+```sh
+cargo install gravlax
+```
+
+The Python client is a separate distribution, `gravlax-client` on PyPI; it
+drives an `aie` executable rather than embedding one. See
+[Python and AnnData](/gravlax/python/).
 
 ## Source-build requirements
 

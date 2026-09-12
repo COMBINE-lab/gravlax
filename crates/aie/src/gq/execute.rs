@@ -140,8 +140,75 @@ pub fn explain(plan: &Plan, resources: &Resources, input: &Input) -> Result<serd
         sources.push(json!({"sample":member.sample,"archive":member.path,"content_root":root,"initial_chunks":initial.len(),"initial_routing":path,"closure":closure,"denominators":denominator,"total_chunks":chunks.len()}));
     }
     Ok(
-        json!({"schema":"gravlax.gq.explain.v1","logical_plan":plan,"physical_strategy":physical::description(plan, input.engine == Engine::Reference, input.parallel_decode),"sources":sources,"execution_policy":{"allow_full_scan":input.allow_full_scan,"max_chunks":input.max_chunks,"max_records":input.max_records,"max_steps":input.max_steps,"max_rows":input.max_rows},"semantics":{"universe":"positive retained witness across unique representatives and grouped multimapper alternatives; children are not cropped","all":"classical; true on empty domains","unknown":"Kleene logic; omitted ends are not bounded by retained ends","predicate_effects":{"junctions_and_paths":"chain-invariant","start_in":"extent-sensitive; sound start-interval proof","overlaps_and_end_in":"extent-sensitive; conservative when omitted geometry is unresolved"},"stored":"diagnostic literal representatives","support_reads":"accepted-observation bounds; unique weights plus each multimapping signature once","sum_reads_after_where":"sum selected units' total accepted observations, not reads satisfying the filter"}}),
+        json!({"schema":"gravlax.gq.explain.v1","logical_plan":plan,"predicate_effect_tags":effect_tags(plan),"physical_strategy":physical::description(plan, input.engine == Engine::Reference, input.parallel_decode),"sources":sources,"execution_policy":{"allow_full_scan":input.allow_full_scan,"max_chunks":input.max_chunks,"max_records":input.max_records,"max_steps":input.max_steps,"max_rows":input.max_rows},"semantics":{"universe":"positive retained witness across unique representatives and grouped multimapper alternatives; children are not cropped","all":"classical; true on empty domains","unknown":"Kleene logic; omitted ends are not bounded by retained ends","predicate_effects":{"junctions_and_paths":"chain-invariant","start_in":"extent-sensitive; sound start-interval proof","overlaps_and_end_in":"extent-sensitive; conservative when omitted geometry is unresolved"},"stored":"diagnostic literal representatives","support_reads":"accepted-observation bounds; unique weights plus each multimapping signature once","sum_reads_after_where":"sum selected units' total accepted observations, not reads satisfying the filter"}}),
     )
+}
+/// Per-predicate effect tags. A chain-invariant predicate is decided exactly by
+/// either retained representative; an extent-sensitive one depends on the first
+/// block's start or the last block's end, which the chain quotient does not retain.
+fn effect_tags(plan: &Plan) -> Vec<serde_json::Value> {
+    fn leaves(n: &Node, stage: &str, output: &str, out: &mut Vec<serde_json::Value>) {
+        let mut tag = |kind: String, effect: &str| {
+            out.push(
+                json!({"stage":stage,"output":output,"at":n.at,"predicate":kind,"effect":effect}),
+            );
+        };
+        match &n.op {
+            Op::Match(p) => tag(
+                if p.junctions.len() == 1 {
+                    "junction".into()
+                } else {
+                    "junction_path".into()
+                },
+                "chain-invariant",
+            ),
+            Op::TxStrand(_) => tag("tx_strand".into(), "chain-invariant"),
+            Op::Terminal(_) => tag("terminal".into(), "chain-invariant"),
+            Op::Nonempty(domain) => tag(format!("nonempty({domain})"), "chain-invariant"),
+            Op::Geometry { kind, .. } => tag(kind.clone(), "extent-sensitive"),
+            Op::Unary(_, a) | Op::Quant { body: a, .. } | Op::Support(a) => {
+                leaves(a, stage, output, out)
+            }
+            Op::Binary(_, a, b) => {
+                leaves(a, stage, output, out);
+                leaves(b, stage, output, out);
+            }
+            Op::Call(_, args) => {
+                for a in args {
+                    leaves(a, stage, output, out);
+                }
+            }
+            Op::Constant(_) | Op::Field(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for stage in &plan.stages {
+        match stage {
+            Stage::Where(n) => leaves(n, "where", "", &mut out),
+            Stage::Derive(fields) => {
+                for (name, n) in fields {
+                    leaves(n, "derive", name, &mut out);
+                }
+            }
+            Stage::Tally(fields, _) => {
+                for (name, n) in fields {
+                    leaves(n, "tally", name, &mut out);
+                }
+            }
+            Stage::Summarize(fields, _) => {
+                for (name, n) in fields {
+                    leaves(n, "summarize", name, &mut out);
+                }
+            }
+            Stage::Select(fields) => {
+                for (name, n) in fields {
+                    leaves(n, "select", name, &mut out);
+                }
+            }
+            Stage::Sort(_) | Stage::Take(_) => {}
+        }
+    }
+    out
 }
 fn needs_denominator_scan(plan: &Plan) -> bool {
     !plan.enumeration
