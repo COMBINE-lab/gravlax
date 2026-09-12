@@ -9,6 +9,7 @@ use super::*;
 use crate::archivecmd::TerminalTailRecord;
 use crate::rows::MolRec;
 use clap::ValueEnum;
+use smallvec::SmallVec;
 use std::collections::BTreeSet;
 
 const RESULT_SCHEMA: &str = "gravlax.collection.find-events.result.v1";
@@ -226,7 +227,10 @@ struct EntityKey {
     strand_rev: Option<bool>,
     /// Transcript/evidence strand after applying STARsolo semantics; `None` is reported as `.`.
     reported_strand_rev: Option<bool>,
-    components: Vec<Component>,
+    /// At most three: a junction has one, an alternative site two, a cassette three. Keeping them
+    /// inline avoids one heap allocation per attempted definition, of which a cohort-wide search
+    /// makes millions.
+    components: SmallVec<[Component; 3]>,
 }
 
 impl EntityKey {
@@ -263,14 +267,45 @@ struct Candidate {
     catalogue_donors: usize,
 }
 
+/// One candidate component's exact-routing target. Targets live in a single shared arena, so a
+/// coordinate's target list is never cloned per archive or per chunk.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Target {
+    entity: u32,
+    component_bit: u8,
+    side: u8,
+    /// Requested alignment strand: 0 accepts either orientation, 1 requires forward, 2 requires
+    /// reverse. The encoding keeps the sort order of the `Option<bool>` it replaces.
+    strand: u8,
+}
+
+impl Target {
+    fn strand_code(strand_rev: Option<bool>) -> u8 {
+        match strand_rev {
+            None => 0,
+            Some(false) => 1,
+            Some(true) => 2,
+        }
+    }
+
+    fn accepts(self, strand_rev: bool) -> bool {
+        self.strand == 0 || (self.strand == 2) == strand_rev
+    }
+}
+
+/// Half-open range of one coordinate's targets inside the routing arena.
+type TargetRange = (u32, u32);
+
 #[derive(Clone, Debug)]
 struct RoutedTarget {
     coordinate: Coordinate,
-    targets: EntityTargets,
-    posts: Vec<u32>,
+    targets: TargetRange,
+    posts: SmallVec<[u32; 4]>,
 }
 
 struct RoutedPlan {
+    /// Shared target arena; every `RoutedTarget::targets` names a range of it.
+    targets: Vec<Target>,
     per_archive: Vec<Vec<RoutedTarget>>,
     target_associations: usize,
     chunk_postings: usize,
@@ -328,25 +363,60 @@ fn mask_is_informative(kind: SearchKind, mask: u8) -> bool {
     kind.is_junction() || matches!(mask & 3, 1 | 2)
 }
 
-#[derive(Clone, Debug)]
+/// One archive's exact counts for a candidate entity in one cell group. The archive and its donor
+/// come from the owning `ArchiveExact`, and distinct cells are already reduced to a count, so a
+/// cohort run holds tens of millions of these in tens of bytes each.
+#[derive(Clone, Copy, Debug)]
 struct SampleCount {
-    entity: usize,
-    sample: usize,
-    donor: usize,
-    group: usize,
-    counts: MaskCounts,
-    cells: FxHashSet<u32>,
+    entity: u32,
+    group: u32,
+    counts: SampleMaskCounts,
+    cells: u32,
 }
 
-#[derive(Clone, Debug, Default)]
+/// `MaskCounts` narrowed for storage. Each field counts distinct archive UMI classes within one
+/// archive, which is itself bounded by a `u32` class dictionary, so nothing can overflow.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SampleMaskCounts {
+    support: u32,
+    include_only: u32,
+    exclude_only: u32,
+    both: u32,
+}
+
+impl SampleMaskCounts {
+    fn narrow(counts: MaskCounts) -> Result<Self> {
+        Ok(Self {
+            support: u32::try_from(counts.support).context("exact class count exceeds u32")?,
+            include_only: u32::try_from(counts.include_only)
+                .context("exact class count exceeds u32")?,
+            exclude_only: u32::try_from(counts.exclude_only)
+                .context("exact class count exceeds u32")?,
+            both: u32::try_from(counts.both).context("exact class count exceeds u32")?,
+        })
+    }
+
+    fn metric(self, kind: SearchKind) -> u32 {
+        if kind.is_junction() {
+            self.support
+        } else {
+            self.include_only + self.exclude_only
+        }
+    }
+}
+
+/// Cohort-wide exact evidence for one candidate entity. Recurrence is counted rather than
+/// collected: archives contribute once each, and reducing them in donor order makes the distinct
+/// donor count a counter plus the previous donor. Per-group counts live in `ExactAggregate`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct EntityExact {
     counts: MaskCounts,
-    samples: FxHashSet<usize>,
-    donors: FxHashSet<usize>,
-    cells: usize,
-    group_counts: FxHashMap<usize, MaskCounts>,
-    strand_umis: [usize; 2],
-    component_umi_classes: [usize; 3],
+    component_umi_classes: [u32; 3],
+    strand_umis: [u32; 2],
+    cells: u32,
+    samples: u32,
+    donors: u32,
+    last_donor_plus_one: u32,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -615,54 +685,79 @@ fn scan_chain_junctions(chain: &CollectionChain) -> Result<Vec<GlobalJunction>> 
     Ok(rows)
 }
 
-fn route_samples(row: &GlobalJunction) -> BTreeSet<usize> {
-    row.routes
-        .iter()
-        .map(|route| route.archive as usize)
-        .collect()
+fn coordinate_of_row(row: &GlobalJunction) -> Coordinate {
+    Coordinate {
+        chrom: row.chrom,
+        donor: row.donor,
+        acceptor: row.acceptor,
+    }
 }
 
+/// The catalogue merges collection layers through a coordinate-keyed map, so its rows are unique
+/// and ascending. Planning relies on that to look a coordinate up by binary search and to keep
+/// each archive's routes an append-only sorted vector, so the invariant is checked once.
+fn require_sorted_catalogue(rows: &[GlobalJunction]) -> Result<()> {
+    if rows
+        .windows(2)
+        .any(|pair| coordinate_of_row(&pair[1]) <= coordinate_of_row(&pair[0]))
+    {
+        bail!("junction catalogue rows must be unique and ascending by coordinate");
+    }
+    Ok(())
+}
+
+fn catalogue_row(rows: &[GlobalJunction], coordinate: Coordinate) -> Option<&GlobalJunction> {
+    rows.binary_search_by(|row| coordinate_of_row(row).cmp(&coordinate))
+        .ok()
+        .map(|index| &rows[index])
+}
+
+/// Catalogue support bound and route recurrence for one candidate definition. `samples` and
+/// `donors` are caller-owned scratch buffers: a cohort-wide search evaluates millions of
+/// definitions, and a fresh set per definition dominated both time and memory.
 fn candidate_catalogue_stats(
     components: &[Component],
-    row_of: &BTreeMap<Coordinate, usize>,
     rows: &[GlobalJunction],
     design: &Design,
+    samples: &mut Vec<u32>,
+    donors: &mut Vec<u32>,
 ) -> Result<(u64, usize, usize)> {
-    let first = components.first().context("candidate has no components")?;
-    let first_row = &rows[*row_of
-        .get(&first.coordinate)
-        .context("candidate component is absent from the junction catalogue")?];
-    let mut minimum_support = first_row.support_upper_bound;
-    let mut possible = BTreeSet::new();
+    if components.is_empty() {
+        bail!("candidate has no components");
+    }
+    samples.clear();
+    donors.clear();
+    let mut minimum_support = u64::MAX;
     for component in components {
-        let row = &rows[*row_of
-            .get(&component.coordinate)
-            .context("candidate component is absent from the junction catalogue")?];
+        let row = catalogue_row(rows, component.coordinate)
+            .context("candidate component is absent from the junction catalogue")?;
         minimum_support = minimum_support.min(row.support_upper_bound);
-        possible.extend(route_samples(row));
+        samples.extend(row.routes.iter().map(|route| route.archive));
     }
     // Exact informative support is an OR over a candidate's component junctions (the molecule
     // mask later determines its side). Their route union is therefore the safe recurrence upper
     // bound, including when alternative evidence is distributed across samples or donors.
-    let donors: FxHashSet<usize> = possible
-        .iter()
-        .map(|&sample| design.donor_of_sample[sample])
-        .collect();
-    Ok((minimum_support, possible.len(), donors.len()))
+    samples.sort_unstable();
+    samples.dedup();
+    for &sample in samples.iter() {
+        let donor = design
+            .donor_of_sample
+            .get(sample as usize)
+            .context("junction route references missing collection archive")?;
+        donors.push(u32::try_from(*donor).context("biological donor index exceeds u32")?);
+    }
+    donors.sort_unstable();
+    donors.dedup();
+    Ok((minimum_support, samples.len(), donors.len()))
 }
 
-struct CandidateBuilder<'a> {
-    rows: &'a [GlobalJunction],
-    row_of: &'a BTreeMap<Coordinate, usize>,
-    design: &'a Design,
-    min_support: u64,
-    min_samples: usize,
-    min_donors: usize,
-    max_candidates: usize,
+/// Collects every attempted splice-event definition. Deduplication is a sort over the collected
+/// keys rather than an ordered set of heap-allocated keys, which halved the stage's peak memory:
+/// a cohort-wide cassette search attempts millions of definitions.
+struct CandidateBuilder {
     max_candidates_considered: usize,
     attempted: usize,
-    seen: BTreeSet<EntityKey>,
-    out: Vec<Candidate>,
+    keys: Vec<EntityKey>,
 }
 
 #[derive(Clone, Copy)]
@@ -680,7 +775,7 @@ struct CandidateDiscovery {
     distinct: usize,
 }
 
-impl CandidateBuilder<'_> {
+impl CandidateBuilder {
     fn push(&mut self, key: EntityKey) -> Result<()> {
         if self.attempted == self.max_candidates_considered {
             bail!(
@@ -689,26 +784,7 @@ impl CandidateBuilder<'_> {
             );
         }
         self.attempted += 1;
-        if !self.seen.insert(key.clone()) {
-            return Ok(());
-        }
-        let (support, samples, donors) =
-            candidate_catalogue_stats(&key.components, self.row_of, self.rows, self.design)?;
-        if support < self.min_support || samples < self.min_samples || donors < self.min_donors {
-            return Ok(());
-        }
-        if self.out.len() == self.max_candidates {
-            bail!(
-                "reverse-search catalogue exceeds --max-candidates {}; increase --min-support/--min-samples/--min-donors or raise the explicit limit",
-                self.max_candidates
-            );
-        }
-        self.out.push(Candidate {
-            key,
-            catalogue_support_upper_bound: support,
-            catalogue_samples: samples,
-            catalogue_donors: donors,
-        });
+        self.keys.push(key);
         Ok(())
     }
 }
@@ -755,41 +831,16 @@ fn discover_candidates(
     if thresholds.max_candidates_considered == 0 {
         bail!("--max-candidates-considered must be at least 1");
     }
-    let row_of: BTreeMap<Coordinate, usize> = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            (
-                Coordinate {
-                    chrom: row.chrom,
-                    donor: row.donor,
-                    acceptor: row.acceptor,
-                },
-                index,
-            )
-        })
-        .collect();
+    require_sorted_catalogue(rows)?;
     let eligible: Vec<Coordinate> = rows
         .iter()
         .filter(|row| row.support_upper_bound >= thresholds.min_support)
-        .map(|row| Coordinate {
-            chrom: row.chrom,
-            donor: row.donor,
-            acceptor: row.acceptor,
-        })
+        .map(coordinate_of_row)
         .collect();
     let mut builder = CandidateBuilder {
-        rows,
-        row_of: &row_of,
-        design,
-        min_support: thresholds.min_support,
-        min_samples: thresholds.min_samples,
-        min_donors: thresholds.min_donors,
-        max_candidates: thresholds.max_candidates,
         max_candidates_considered: thresholds.max_candidates_considered,
         attempted: 0,
-        seen: BTreeSet::new(),
-        out: Vec::new(),
+        keys: Vec::new(),
     };
 
     if kinds.contains(&SearchKind::Junction) {
@@ -800,7 +851,7 @@ fn discover_candidates(
                     chrom: coordinate.chrom,
                     strand_rev,
                     reported_strand_rev,
-                    components: vec![component(*coordinate, ComponentSide::Support)],
+                    components: smallvec::smallvec![component(*coordinate, ComponentSide::Support)],
                 })?;
             }
         }
@@ -831,7 +882,7 @@ fn discover_candidates(
         for (&(chrom, donor), acceptors) in &by_donor {
             for left in 0..acceptors.len() {
                 for right in left + 1..acceptors.len() {
-                    let components = vec![
+                    let components: SmallVec<[Component; 3]> = smallvec::smallvec![
                         component(
                             Coordinate {
                                 chrom,
@@ -875,7 +926,7 @@ fn discover_candidates(
         for (&(chrom, acceptor), donors) in &by_acceptor {
             for left in 0..donors.len() {
                 for right in left + 1..donors.len() {
-                    let components = vec![
+                    let components: SmallVec<[Component; 3]> = smallvec::smallvec![
                         component(
                             Coordinate {
                                 chrom,
@@ -948,7 +999,7 @@ fn discover_candidates(
                             chrom: skip.chrom,
                             strand_rev,
                             reported_strand_rev,
-                            components: vec![
+                            components: smallvec::smallvec![
                                 component(left, ComponentSide::Include),
                                 component(right, ComponentSide::Include),
                                 component(*skip, ComponentSide::Exclude),
@@ -960,13 +1011,42 @@ fn discover_candidates(
         }
     }
 
-    builder
-        .out
-        .sort_unstable_by(|left, right| left.key.cmp(&right.key));
+    // Deduplicate by sorting the attempted keys, then apply the catalogue predicates in key
+    // order. The retained list is therefore already in its reported order, and `--max-candidates`
+    // still fails on exactly the same searches the incremental check failed on.
+    let mut keys = builder.keys;
+    keys.par_sort_unstable();
+    keys.dedup();
+    let distinct = keys.len();
+    let mut candidates = Vec::new();
+    let mut samples = Vec::new();
+    let mut donors = Vec::new();
+    for key in keys {
+        let (support, catalogue_samples, catalogue_donors) =
+            candidate_catalogue_stats(&key.components, rows, design, &mut samples, &mut donors)?;
+        if support < thresholds.min_support
+            || catalogue_samples < thresholds.min_samples
+            || catalogue_donors < thresholds.min_donors
+        {
+            continue;
+        }
+        if candidates.len() == thresholds.max_candidates {
+            bail!(
+                "reverse-search catalogue exceeds --max-candidates {}; increase --min-support/--min-samples/--min-donors or raise the explicit limit",
+                thresholds.max_candidates
+            );
+        }
+        candidates.push(Candidate {
+            key,
+            catalogue_support_upper_bound: support,
+            catalogue_samples,
+            catalogue_donors,
+        });
+    }
     Ok(CandidateDiscovery {
-        candidates: builder.out,
+        candidates,
         attempted: builder.attempted,
-        distinct: builder.seen.len(),
+        distinct,
     })
 }
 
@@ -979,41 +1059,64 @@ fn route_candidates(
     if max_routed_entries == 0 {
         bail!("--max-routed-entries must be at least 1");
     }
-    let mut targets_of: BTreeMap<Coordinate, EntityTargets> = BTreeMap::new();
+    if candidates.len() > MAX_PACKED_ENTITIES {
+        bail!(
+            "reverse search retained {} candidates, beyond the {MAX_PACKED_ENTITIES} the packed exact reducer addresses; strengthen catalogue predicates or lower --max-candidates",
+            candidates.len()
+        );
+    }
+    // Targets are built as one flat `(coordinate, target)` list, sorted and deduplicated once,
+    // then flattened into a shared arena. Every later consumer names a half-open range of that
+    // arena, so no target list is copied per archive, per chunk, or per junction posting.
+    let mut pairs: Vec<(Coordinate, Target)> = Vec::new();
     for (entity, candidate) in candidates.iter().enumerate() {
         for (ordinal, component) in candidate.key.components.iter().enumerate() {
-            let component_bit = 1u8
-                .checked_shl(u32::try_from(ordinal).context("component ordinal exceeds u32")?)
-                .context("event has too many components for exact-support tracking")?;
-            targets_of.entry(component.coordinate).or_default().push((
-                entity,
-                component_bit,
-                component.side.mask(),
-                candidate.key.strand_rev,
+            if ordinal >= EXACT_HIT_COMPONENT_BITS as usize {
+                bail!("event has too many components for exact-support tracking");
+            }
+            pairs.push((
+                component.coordinate,
+                Target {
+                    entity: entity as u32,
+                    component_bit: 1u8 << ordinal,
+                    side: component.side.mask(),
+                    strand: Target::strand_code(candidate.key.strand_rev),
+                },
             ));
         }
     }
-    for targets in targets_of.values_mut() {
-        targets.sort_unstable();
-        targets.dedup();
+    pairs.par_sort_unstable();
+    pairs.dedup();
+    let mut arena: Vec<Target> = Vec::with_capacity(pairs.len());
+    let mut coordinates: Vec<Coordinate> = Vec::new();
+    let mut ranges: Vec<TargetRange> = Vec::new();
+    for (coordinate, target) in pairs {
+        let start = u32::try_from(arena.len()).context("routed target arena exceeds u32")?;
+        if coordinates.last() != Some(&coordinate) {
+            coordinates.push(coordinate);
+            ranges.push((start, start));
+        }
+        arena.push(target);
+        let end = u32::try_from(arena.len()).context("routed target arena exceeds u32")?;
+        ranges
+            .last_mut()
+            .context("routed target arena lost its coordinate range")?
+            .1 = end;
     }
-    let mut per_archive: Vec<BTreeMap<Coordinate, RoutedTarget>> = (0..collection.archives.len())
-        .map(|_| BTreeMap::new())
-        .collect();
+    require_sorted_catalogue(rows)?;
+    let mut per_archive: Vec<Vec<RoutedTarget>> =
+        (0..collection.archives.len()).map(|_| Vec::new()).collect();
     let mut target_associations = 0usize;
     let mut chunk_postings = 0usize;
     for row in rows {
-        let coordinate = Coordinate {
-            chrom: row.chrom,
-            donor: row.donor,
-            acceptor: row.acceptor,
-        };
-        let Some(targets) = targets_of.get(&coordinate) else {
+        let coordinate = coordinate_of_row(row);
+        let Ok(index) = coordinates.binary_search(&coordinate) else {
             continue;
         };
+        let range = ranges[index];
+        let targets = (range.1 - range.0) as usize;
         for route in &row.routes {
             let added = targets
-                .len()
                 .checked_add(route.posts.len())
                 .context("routed-entry count overflow")?;
             let routed_entries = target_associations
@@ -1026,38 +1129,35 @@ fn route_candidates(
                 );
             }
             target_associations = target_associations
-                .checked_add(targets.len())
+                .checked_add(targets)
                 .context("routed target-association count overflow")?;
             chunk_postings = chunk_postings
                 .checked_add(route.posts.len())
                 .context("routed chunk-posting count overflow")?;
-            let archive = route.archive as usize;
-            let entry = per_archive
-                .get_mut(archive)
-                .context("junction route references missing collection archive")?
-                .entry(coordinate)
-                .or_insert_with(|| RoutedTarget {
+            let archive = per_archive
+                .get_mut(route.archive as usize)
+                .context("junction route references missing collection archive")?;
+            match archive.last_mut() {
+                Some(last) if last.coordinate == coordinate => {
+                    last.posts.extend_from_slice(&route.posts);
+                }
+                _ => archive.push(RoutedTarget {
                     coordinate,
-                    targets: targets.clone(),
-                    posts: Vec::new(),
-                });
-            entry.posts.extend_from_slice(&route.posts);
+                    targets: range,
+                    posts: SmallVec::from_slice(&route.posts),
+                }),
+            }
+        }
+    }
+    for archive in &mut per_archive {
+        for target in archive.iter_mut() {
+            target.posts.sort_unstable();
+            target.posts.dedup();
         }
     }
     Ok(RoutedPlan {
-        per_archive: per_archive
-            .into_iter()
-            .map(|targets| {
-                targets
-                    .into_values()
-                    .map(|mut target| {
-                        target.posts.sort_unstable();
-                        target.posts.dedup();
-                        target
-                    })
-                    .collect()
-            })
-            .collect(),
+        targets: arena,
+        per_archive,
         target_associations,
         chunk_postings,
     })
@@ -1067,28 +1167,24 @@ fn route_candidates(
 struct ArchiveExact {
     sample: usize,
     rows: Vec<SampleCount>,
-    entities: FxHashMap<usize, ArchiveEntityExact>,
     unique_chunks: usize,
     independent_chunk_decodes: usize,
     planned_bytes: u64,
     actual_bytes: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct ArchiveEntityExact {
+    entity: u32,
     counts: MaskCounts,
-    component_umi_classes: [usize; 3],
-    cells: FxHashSet<u32>,
-    strands: [usize; 2],
+    component_umi_classes: [u32; 3],
+    cells: u32,
+    strands: [u32; 2],
 }
 
-/// Entity, archive UMI class, side mask, component mask, observed-strand mask.
-type ClassHit = (usize, u32, u8, u8, u8);
-type ReducedClassHits = FxHashMap<(usize, u32), (u8, u8, u8)>;
-/// Entity, component bit, side mask, requested alignment strand.
-type EntityTargets = Vec<(usize, u8, u8, Option<bool>)>;
-type ChunkTargets = FxHashMap<(u32, u32), EntityTargets>;
-type GroupedCounts = FxHashMap<(usize, usize), (MaskCounts, FxHashSet<u32>)>;
+/// Routed `(donor, acceptor)` junctions a chunk must match, each naming a range of the shared
+/// target arena rather than its own copy of the target list.
+type ChunkTargets = FxHashMap<(u32, u32), TargetRange>;
 
 struct ExactMatchBudget {
     limit: u64,
@@ -1176,16 +1272,96 @@ impl AnnotationComparisonBudget {
     }
 }
 
-fn inspect_placement(
+/// Packed exact hit for one `(entity, archive UMI class)` pair. Layout from the low bit: side
+/// mask (2 bits), component mask (3 bits), observed alignment-strand mask (2 bits), UMI class
+/// (32 bits), entity ordinal (25 bits). Sorting the `u64` orders by entity then class, so a run of
+/// equal high bits reduces with one bitwise OR of the seven payload bits. This replaces a hash map
+/// keyed by `(entity, class)`: one cohort archive reduces to tens of millions of hits, and eight
+/// bytes each is an order of magnitude below what the map cost.
+const EXACT_HIT_PAYLOAD_BITS: u32 = 7;
+const EXACT_HIT_PAYLOAD_MASK: u64 = (1 << EXACT_HIT_PAYLOAD_BITS) - 1;
+const EXACT_HIT_COMPONENT_SHIFT: u32 = 2;
+const EXACT_HIT_COMPONENT_BITS: u32 = 3;
+const EXACT_HIT_STRAND_SHIFT: u32 = 5;
+const EXACT_HIT_CLASS_SHIFT: u32 = EXACT_HIT_PAYLOAD_BITS;
+const EXACT_HIT_ENTITY_SHIFT: u32 = EXACT_HIT_CLASS_SHIFT + 32;
+/// Entities addressable by the packed reducer. `--max-candidates` is checked against this before
+/// any molecule chunk is decoded, so an oversized search fails while planning.
+const MAX_PACKED_ENTITIES: usize = 1 << (64 - EXACT_HIT_ENTITY_SHIFT);
+
+fn pack_exact_hit(entity: u32, class: u32, payload: u8) -> u64 {
+    debug_assert!(u64::from(payload) <= EXACT_HIT_PAYLOAD_MASK);
+    debug_assert!((entity as usize) < MAX_PACKED_ENTITIES);
+    (u64::from(entity) << EXACT_HIT_ENTITY_SHIFT)
+        | (u64::from(class) << EXACT_HIT_CLASS_SHIFT)
+        | u64::from(payload)
+}
+
+/// Entity, archive UMI class, side mask, component mask, observed-strand mask.
+fn unpack_exact_hit(hit: u64) -> (u32, u32, u8, u8, u8) {
+    let payload = (hit & EXACT_HIT_PAYLOAD_MASK) as u8;
+    (
+        (hit >> EXACT_HIT_ENTITY_SHIFT) as u32,
+        ((hit >> EXACT_HIT_CLASS_SHIFT) & u64::from(u32::MAX)) as u32,
+        payload & 3,
+        (payload >> EXACT_HIT_COMPONENT_SHIFT) & 7,
+        payload >> EXACT_HIT_STRAND_SHIFT,
+    )
+}
+
+/// OR-reduce runs of equal `(entity, class)` in a sorted packed-hit list, in place.
+fn reduce_sorted_exact_hits(hits: &mut Vec<u64>) {
+    hits.dedup_by(|later, earlier| {
+        if *later >> EXACT_HIT_PAYLOAD_BITS == *earlier >> EXACT_HIT_PAYLOAD_BITS {
+            *earlier |= *later & EXACT_HIT_PAYLOAD_MASK;
+            true
+        } else {
+            false
+        }
+    });
+}
+
+/// Split sorted packed hits into roughly equal parts that never cut an entity's run, so the
+/// per-entity aggregation below can run in parallel and still emit entities in order.
+fn entity_hit_slices(hits: &[u64], parts: usize) -> Vec<&[u64]> {
+    if hits.is_empty() {
+        return Vec::new();
+    }
+    let target = hits.len().div_ceil(parts.max(1));
+    let mut slices = Vec::new();
+    let mut start = 0usize;
+    while start < hits.len() {
+        let mut end = start.saturating_add(target).min(hits.len());
+        while end < hits.len()
+            && hits[end] >> EXACT_HIT_ENTITY_SHIFT == hits[end - 1] >> EXACT_HIT_ENTITY_SHIFT
+        {
+            end += 1;
+        }
+        slices.push(&hits[start..end]);
+        start = end;
+    }
+    slices
+}
+
+/// Everything one decoded chunk's molecules are matched against.
+#[derive(Clone, Copy)]
+struct ChunkMatch<'a> {
+    shapes: &'a [evidence_io::archive::Shape],
+    wanted: &'a ChunkTargets,
+    arena: &'a [Target],
+    budget: &'a ExactMatchBudget,
+}
+
+/// Accumulate one placement's `(entity, side | component)` hits into `scratch`.
+fn collect_placement_targets(
     position: u32,
     shape_id: u32,
     strand_rev: bool,
-    shapes: &[evidence_io::archive::Shape],
-    wanted: &ChunkTargets,
-    entity_masks: &mut FxHashMap<usize, (u8, u8)>,
-    budget: &ExactMatchBudget,
+    chunk: ChunkMatch<'_>,
+    scratch: &mut Vec<(u32, u8)>,
 ) -> Result<()> {
-    let shape = shapes
+    let shape = chunk
+        .shapes
         .get(shape_id as usize)
         .with_context(|| format!("molecule references missing shape {shape_id}"))?;
     for blocks in shape.blocks.windows(2) {
@@ -1196,13 +1372,18 @@ fn inspect_placement(
         let acceptor = position
             .checked_add(blocks[1].0)
             .context("junction acceptor coordinate overflow")?;
-        if let Some(targets) = wanted.get(&(donor, acceptor)) {
-            budget.claim(targets.len())?;
-            for &(entity, component, side, target_strand_rev) in targets {
-                if target_strand_rev.is_none_or(|target| target == strand_rev) {
-                    let masks = entity_masks.entry(entity).or_insert((0, 0));
-                    masks.0 |= side;
-                    masks.1 |= component;
+        if let Some(&(start, end)) = chunk.wanted.get(&(donor, acceptor)) {
+            let targets = chunk
+                .arena
+                .get(start as usize..end as usize)
+                .context("routed target range is outside the shared target arena")?;
+            chunk.budget.claim(targets.len())?;
+            for target in targets {
+                if target.accepts(strand_rev) {
+                    scratch.push((
+                        target.entity,
+                        target.side | (target.component_bit << EXACT_HIT_COMPONENT_SHIFT),
+                    ));
                 }
             }
         }
@@ -1210,24 +1391,17 @@ fn inspect_placement(
     Ok(())
 }
 
-fn molecule_entity_hits(
+/// Append one molecule's packed per-class hits, one per distinct entity it supports.
+fn molecule_packed_hits(
     molecule: &MolRec,
-    shapes: &[evidence_io::archive::Shape],
-    wanted: &ChunkTargets,
-    budget: &ExactMatchBudget,
-) -> Result<Vec<ClassHit>> {
-    let mut entity_masks = FxHashMap::default();
+    chunk: ChunkMatch<'_>,
+    scratch: &mut Vec<(u32, u8)>,
+    hits: &mut Vec<u64>,
+) -> Result<()> {
+    scratch.clear();
     for chain in &molecule.chains {
         for &(position, shape) in &chain.reps {
-            inspect_placement(
-                position,
-                shape,
-                molecule.strand_rev,
-                shapes,
-                wanted,
-                &mut entity_masks,
-                budget,
-            )?;
+            collect_placement_targets(position, shape, molecule.strand_rev, chunk, scratch)?;
         }
     }
     // Coordinate/event search deliberately uses only unique-read chain representatives. An MM
@@ -1235,54 +1409,270 @@ fn molecule_entity_hits(
     // set lives in the pattern dictionary. Counting only that primary would make support depend on
     // an arbitrary representative; expanding every alternative would require a different,
     // explicitly declared ambiguity policy and a complete candidate universe.
-    let strand = if molecule.strand_rev { 2 } else { 1 };
-    Ok(entity_masks
-        .into_iter()
-        .map(|(entity, (side_mask, component_mask))| {
-            (
-                entity,
-                molecule.umi_class,
-                side_mask,
-                component_mask,
-                strand,
-            )
+    if scratch.is_empty() {
+        return Ok(());
+    }
+    scratch.sort_unstable();
+    let mut write = 0usize;
+    for index in 0..scratch.len() {
+        if write > 0 && scratch[write - 1].0 == scratch[index].0 {
+            scratch[write - 1].1 |= scratch[index].1;
+        } else {
+            scratch[write] = scratch[index];
+            write += 1;
+        }
+    }
+    scratch.truncate(write);
+    let strand = if molecule.strand_rev { 2u8 } else { 1u8 } << EXACT_HIT_STRAND_SHIFT;
+    hits.extend(
+        scratch
+            .iter()
+            .map(|&(entity, payload)| pack_exact_hit(entity, molecule.umi_class, payload | strand)),
+    );
+    Ok(())
+}
+
+/// One archive's exact hits, already OR-reduced per `(entity, class)` and sorted.
+/// Entity-range buckets used to merge one archive's chunk hits. Each decoded chunk sorts its own
+/// hits once and records where each bucket starts; the merge then gathers one bucket at a time, so
+/// the transient copy is a fraction of the archive rather than a second copy of all of it.
+const EXACT_MERGE_BUCKETS: usize = 32;
+
+/// One worker's reduced hits for a group of chunks, partitioned into `EXACT_MERGE_BUCKETS`
+/// entity ranges.
+struct ChunkHits {
+    hits: Vec<u64>,
+    /// `EXACT_MERGE_BUCKETS + 1` ascending offsets into `hits`.
+    bucket_offsets: Vec<u32>,
+}
+
+/// Entity bits dropped to name a merge bucket, so that every entity falls in one of the buckets
+/// and buckets stay in entity order.
+fn merge_bucket_shift(entities: usize) -> u32 {
+    let bits = usize::BITS - entities.saturating_sub(1).leading_zeros();
+    bits.saturating_sub(EXACT_MERGE_BUCKETS.trailing_zeros())
+}
+
+fn bucket_offsets(hits: &[u64], shift: u32) -> Result<Vec<u32>> {
+    let mut offsets = Vec::with_capacity(EXACT_MERGE_BUCKETS + 1);
+    offsets.push(0u32);
+    for bucket in 1..EXACT_MERGE_BUCKETS {
+        let limit = (bucket as u64)
+            .checked_shl(shift + EXACT_HIT_ENTITY_SHIFT)
+            .unwrap_or(u64::MAX);
+        let offset = hits.partition_point(|&hit| hit < limit);
+        offsets.push(u32::try_from(offset).context("chunk exact hit count exceeds u32")?);
+    }
+    offsets.push(u32::try_from(hits.len()).context("chunk exact hit count exceeds u32")?);
+    Ok(offsets)
+}
+
+/// Decode every selected chunk in parallel and reduce it to sorted, bucketed packed hits.
+fn archive_packed_hits(
+    archive: &mut LazyArchive,
+    chunks: &[ChunkInfo],
+    selected: &[usize],
+    chunk_wanted: &[ChunkTargets],
+    arena: &[Target],
+    budget: &ExactMatchBudget,
+    shift: u32,
+) -> Result<Vec<ChunkHits>> {
+    let shapes = archive.shapes()?;
+    let (reader, tables) = archive.reader_and_tables();
+    let reader = &*reader;
+    // Chunks are decoded in groups that share one growing hit buffer. An archive's hits live
+    // until it has been merged, so accumulating them in a few dozen buffers instead of one per
+    // chunk keeps the allocator's growth slack to a fraction of the archive.
+    let group = selected
+        .len()
+        .div_ceil(rayon::current_num_threads().saturating_mul(4).max(1))
+        .max(1);
+    selected
+        .par_chunks(group)
+        .map(|group| -> Result<ChunkHits> {
+            let mut hits = Vec::new();
+            let mut scratch = Vec::new();
+            for &chunk_index in group {
+                // The compressed and decompressed chunk buffers are released before the molecules
+                // are matched, so a worker holds one chunk's worth rather than three.
+                let molecules = {
+                    let (compressed, raw_len) =
+                        reader.read_compressed_at(&format!("c{chunk_index}"))?;
+                    let raw = evidence_io::format::decompress(&compressed, raw_len)?;
+                    decode_chunk(&raw, &chunks[chunk_index], None, tables)?
+                };
+                let matcher = ChunkMatch {
+                    shapes: &shapes,
+                    wanted: &chunk_wanted[chunk_index],
+                    arena,
+                    budget,
+                };
+                for molecule in &molecules {
+                    molecule_packed_hits(molecule, matcher, &mut scratch, &mut hits)?;
+                }
+            }
+            hits.sort_unstable();
+            reduce_sorted_exact_hits(&mut hits);
+            // These live until the whole archive is merged, so give back the growth slack.
+            hits.shrink_to_fit();
+            let bucket_offsets = bucket_offsets(&hits, shift)?;
+            Ok(ChunkHits {
+                hits,
+                bucket_offsets,
+            })
         })
-        .collect())
+        .collect()
+}
+
+/// Gather one entity-range bucket from every chunk, then sort and OR-reduce it.
+fn merge_bucket(chunk_hits: &[ChunkHits], bucket: usize) -> Result<Vec<u64>> {
+    let total = chunk_hits
+        .iter()
+        .try_fold(0usize, |total, chunk| {
+            let span = (chunk.bucket_offsets[bucket + 1] - chunk.bucket_offsets[bucket]) as usize;
+            total.checked_add(span)
+        })
+        .context("exact hit count overflow")?;
+    let mut merged = Vec::with_capacity(total);
+    for chunk in chunk_hits {
+        let start = chunk.bucket_offsets[bucket] as usize;
+        let end = chunk.bucket_offsets[bucket + 1] as usize;
+        merged.extend_from_slice(&chunk.hits[start..end]);
+    }
+    merged.par_sort_unstable();
+    reduce_sorted_exact_hits(&mut merged);
+    Ok(merged)
+}
+
+/// One archive's per-entity exact aggregate plus its sparse per-group count rows.
+#[derive(Debug, Default)]
+struct ArchiveAggregate {
+    entities: Vec<ArchiveEntityExact>,
+    rows: Vec<SampleCount>,
+}
+
+/// Reduce one entity-aligned slice of packed hits into per-entity and per-group aggregates.
+/// Distinct cells are counted by sorting `(group, cell)` pairs, which needs no per-entity or
+/// per-group hash set: a cell belongs to exactly one group, so the deduplicated pair count is the
+/// entity's distinct informative cell count and each group's share is its own.
+fn aggregate_exact_slice(
+    hits: &[u64],
+    archive: &LazyArchive,
+    group_of_cell: &[u32],
+    group_count: usize,
+    candidates: &[Candidate],
+) -> Result<ArchiveAggregate> {
+    let mut out = ArchiveAggregate::default();
+    let mut group_counts = vec![MaskCounts::default(); group_count];
+    let mut group_touched = vec![false; group_count];
+    let mut touched: Vec<u32> = Vec::new();
+    let mut cells: Vec<(u32, u32)> = Vec::new();
+    let mut index = 0usize;
+    while index < hits.len() {
+        let entity = (hits[index] >> EXACT_HIT_ENTITY_SHIFT) as u32;
+        let mut end = index + 1;
+        while end < hits.len() && (hits[end] >> EXACT_HIT_ENTITY_SHIFT) as u32 == entity {
+            end += 1;
+        }
+        let kind = candidates
+            .get(entity as usize)
+            .context("packed exact hit references an unknown candidate entity")?
+            .key
+            .kind;
+        let mut exact = ArchiveEntityExact {
+            entity,
+            ..ArchiveEntityExact::default()
+        };
+        let mut supported = false;
+        cells.clear();
+        touched.clear();
+        for &hit in &hits[index..end] {
+            let (_, class, side, components, strands) = unpack_exact_hit(hit);
+            let cell = archive.cell_of_cached(class)?;
+            let group = *group_of_cell
+                .get(cell as usize)
+                .with_context(|| format!("cell id {cell} is outside the archive dictionary"))?;
+            if group == u32::MAX {
+                continue;
+            }
+            supported = true;
+            exact.counts.add_mask(kind, side);
+            for (ordinal, count) in exact.component_umi_classes.iter_mut().enumerate() {
+                if components & (1u8 << ordinal) != 0 {
+                    *count += 1;
+                }
+            }
+            if !group_touched[group as usize] {
+                group_touched[group as usize] = true;
+                touched.push(group);
+            }
+            group_counts[group as usize].add_mask(kind, side);
+            if mask_is_informative(kind, side) {
+                if strands & 1 != 0 {
+                    exact.strands[0] += 1;
+                }
+                if strands & 2 != 0 {
+                    exact.strands[1] += 1;
+                }
+                cells.push((group, cell));
+            }
+        }
+        if supported {
+            cells.sort_unstable();
+            cells.dedup();
+            exact.cells = u32::try_from(cells.len()).context("exact cell count exceeds u32")?;
+            out.entities.push(exact);
+            touched.sort_unstable();
+            for &group in &touched {
+                group_touched[group as usize] = false;
+                let counts = std::mem::take(&mut group_counts[group as usize]);
+                if counts.total(kind) == 0 {
+                    continue;
+                }
+                let group_cells = cells.iter().filter(|(name, _)| *name == group).count();
+                out.rows.push(SampleCount {
+                    entity,
+                    group,
+                    counts: SampleMaskCounts::narrow(counts)?,
+                    cells: u32::try_from(group_cells).context("group cell count exceeds u32")?,
+                });
+            }
+        }
+        index = end;
+    }
+    Ok(out)
 }
 
 fn exact_archive(
     collection: &Collection,
     sample: usize,
-    targets: &[RoutedTarget],
+    routes: &[RoutedTarget],
+    arena: &[Target],
     groups: &Groups,
-    design: &Design,
     candidates: &[Candidate],
     budget: &ExactMatchBudget,
-) -> Result<ArchiveExact> {
+) -> Result<(ArchiveExact, Vec<ArchiveEntityExact>)> {
     let entry = &collection.archives[sample];
     let chunks = chunk_infos(entry);
     let mut chunk_wanted: Vec<ChunkTargets> =
         (0..chunks.len()).map(|_| FxHashMap::default()).collect();
     let mut independent_chunk_decodes = 0usize;
-    for target in targets {
-        for &post in &target.posts {
+    for route in routes {
+        for &post in &route.posts {
             let chunk = chunks
                 .get(post as usize)
                 .with_context(|| format!("reverse-search route references missing chunk {post}"))?;
-            if chunk.chrom != target.coordinate.chrom {
+            if chunk.chrom != route.coordinate.chrom {
                 bail!("reverse-search route references a chunk on the wrong chromosome");
             }
-            chunk_wanted[post as usize]
-                .entry((target.coordinate.donor, target.coordinate.acceptor))
-                .or_default()
-                .extend_from_slice(&target.targets);
+            // One archive chunk covers one chromosome, so a `(donor, acceptor)` pair names exactly
+            // one routed coordinate and can carry that coordinate's arena range directly. Nothing
+            // copies, sorts, or deduplicates a target list per chunk any more.
+            chunk_wanted[post as usize].insert(
+                (route.coordinate.donor, route.coordinate.acceptor),
+                route.targets,
+            );
             independent_chunk_decodes += 1;
-        }
-    }
-    for wanted in &mut chunk_wanted {
-        for targets in wanted.values_mut() {
-            targets.sort_unstable();
-            targets.dedup();
         }
     }
     let selected: Vec<usize> = chunk_wanted
@@ -1298,162 +1688,199 @@ fn exact_archive(
             .collect::<Vec<_>>(),
     )?;
     let mut archive = open_source(collection, sample, None)?;
-    let shapes = archive.shapes()?;
-    let chunk_hits: Vec<ReducedClassHits> = {
-        let (reader, tables) = archive.reader_and_tables();
-        let reader = &*reader;
-        selected
-            .par_iter()
-            .map(|&chunk_index| -> Result<ReducedClassHits> {
-                let (compressed, raw_len) =
-                    reader.read_compressed_at(&format!("c{chunk_index}"))?;
-                let raw = evidence_io::format::decompress(&compressed, raw_len)?;
-                let molecules = decode_chunk(&raw, &chunks[chunk_index], None, tables)?;
-                let mut hits = ReducedClassHits::default();
-                for molecule in &molecules {
-                    for (entity, class, mask, components, strand) in
-                        molecule_entity_hits(molecule, &shapes, &chunk_wanted[chunk_index], budget)?
-                    {
-                        let combined = hits.entry((entity, class)).or_insert((0, 0, 0));
-                        combined.0 |= mask;
-                        combined.1 |= components;
-                        combined.2 |= strand;
-                    }
-                }
-                Ok(hits)
-            })
-            .collect::<Result<_>>()?
-    };
+    let shift = merge_bucket_shift(candidates.len());
+    let chunk_hits = archive_packed_hits(
+        &mut archive,
+        &chunks,
+        &selected,
+        &chunk_wanted,
+        arena,
+        budget,
+        shift,
+    )?;
+    drop(chunk_wanted);
     archive.prefetch_coc(
         chunk_hits
             .iter()
-            .flat_map(|hits| hits.keys().map(|(_, class)| *class)),
+            .flat_map(|chunk| chunk.hits.iter().map(|&hit| unpack_exact_hit(hit).1)),
     )?;
-    let mut reduced = ReducedClassHits::default();
-    for hits in chunk_hits {
-        for ((entity, class), (mask, components, strand)) in hits {
-            let combined = reduced.entry((entity, class)).or_insert((0, 0, 0));
-            combined.0 |= mask;
-            combined.1 |= components;
-            combined.2 |= strand;
-        }
-    }
-    let cell_dictionary = archive.cells()?.to_vec();
-    let mut entities: FxHashMap<usize, ArchiveEntityExact> = FxHashMap::default();
-    let mut grouped: GroupedCounts = FxHashMap::default();
-    for ((entity, class), (mask, components, strands)) in reduced {
-        let cell = archive.cell_of(class)?;
-        let packed = *cell_dictionary
-            .get(cell as usize)
-            .with_context(|| format!("cell id {cell} is outside the archive dictionary"))?;
-        let group = if groups.explicit {
-            let Some(&group) = groups.by_sample[sample].get(&packed) else {
-                continue;
-            };
-            group
-        } else {
-            0
-        };
-        let kind = candidates[entity].key.kind;
-        let entity_exact = entities.entry(entity).or_default();
-        entity_exact.counts.add_mask(kind, mask);
-        for (ordinal, count) in entity_exact.component_umi_classes.iter_mut().enumerate() {
-            if components & (1u8 << ordinal) != 0 {
-                *count += 1;
-            }
-        }
-        let informative = mask_is_informative(kind, mask);
-        if informative {
-            entity_exact.cells.insert(cell);
-            if strands & 1 != 0 {
-                entity_exact.strands[0] += 1;
-            }
-            if strands & 2 != 0 {
-                entity_exact.strands[1] += 1;
-            }
-        }
-        let (counts, cells) = grouped
-            .entry((entity, group))
-            .or_insert_with(|| (MaskCounts::default(), FxHashSet::default()));
-        counts.add_mask(kind, mask);
-        if informative {
-            cells.insert(cell);
-        }
-    }
-    let mut rows: Vec<SampleCount> = grouped
-        .into_iter()
-        .filter_map(|((entity, group), (counts, cells))| {
-            (counts.total(candidates[entity].key.kind) > 0).then_some(SampleCount {
-                entity,
-                sample,
-                donor: design.donor_of_sample[sample],
-                group,
-                counts,
-                cells,
+    // Resolving each cell's group through a dense per-cell table keeps the aggregation free of
+    // barcode hashing and lets out-of-scope cells be skipped with one comparison.
+    let cell_dictionary = archive.cells()?;
+    let group_of_cell: Vec<u32> = if groups.explicit {
+        cell_dictionary
+            .iter()
+            .map(|packed| {
+                groups.by_sample[sample]
+                    .get(packed)
+                    .map_or(u32::MAX, |&group| group as u32)
             })
-        })
-        .collect();
-    rows.sort_unstable_by_key(|row| (row.entity, row.group));
+            .collect()
+    } else {
+        vec![0u32; cell_dictionary.len()]
+    };
+    let group_count = groups.names.len();
+    let mut entities = Vec::new();
+    let mut rows = Vec::new();
+    for bucket in 0..EXACT_MERGE_BUCKETS {
+        let merged = merge_bucket(&chunk_hits, bucket)?;
+        if merged.is_empty() {
+            continue;
+        }
+        let parts = entity_hit_slices(&merged, rayon::current_num_threads().saturating_mul(4));
+        let aggregates: Vec<ArchiveAggregate> = parts
+            .par_iter()
+            .map(|slice| {
+                aggregate_exact_slice(slice, &archive, &group_of_cell, group_count, candidates)
+            })
+            .collect::<Result<_>>()?;
+        for mut part in aggregates {
+            entities.append(&mut part.entities);
+            rows.append(&mut part.rows);
+        }
+    }
+    drop(chunk_hits);
+    release_free_heap();
     let actual_bytes = archive.reader().bytes_read();
-    Ok(ArchiveExact {
-        sample,
-        rows,
+    Ok((
+        ArchiveExact {
+            sample,
+            rows,
+            unique_chunks: selected.len(),
+            independent_chunk_decodes,
+            planned_bytes,
+            actual_bytes,
+        },
         entities,
-        unique_chunks: selected.len(),
-        independent_chunk_decodes,
-        planned_bytes,
-        actual_bytes,
-    })
+    ))
+}
+
+/// Cohort-wide exact aggregates, indexed by candidate entity.
+struct ExactAggregate {
+    entities: Vec<EntityExact>,
+    /// Informative-metric total per `(entity, --require-group ordinal)`, flattened. A dense row of
+    /// small counters replaces a per-entity map from group to counts.
+    required_group_metrics: Vec<u32>,
+    required_groups: usize,
+}
+
+impl ExactAggregate {
+    fn new(entities: usize, required_groups: usize) -> Self {
+        Self {
+            entities: vec![EntityExact::default(); entities],
+            required_group_metrics: vec![0u32; entities * required_groups],
+            required_groups,
+        }
+    }
+
+    fn required_metrics(&self, entity: usize) -> &[u32] {
+        let start = entity * self.required_groups;
+        &self.required_group_metrics[start..start + self.required_groups]
+    }
+}
+
+/// Fold one archive's aggregate for a candidate into its cohort-wide total. Archives contribute
+/// at most once each, so distinct samples is a counter; archives are reduced in donor order, so
+/// distinct donors is a counter plus the donor that last contributed.
+fn merge_archive_entity(
+    slot: &mut EntityExact,
+    archive_exact: &ArchiveEntityExact,
+    kind: SearchKind,
+    donor: u32,
+) -> Result<()> {
+    for (total, count) in slot
+        .component_umi_classes
+        .iter_mut()
+        .zip(archive_exact.component_umi_classes)
+    {
+        *total = total
+            .checked_add(count)
+            .context("exact component UMI-class count overflow")?;
+    }
+    if archive_exact.counts.metric(kind) == 0 {
+        return Ok(());
+    }
+    slot.counts.add(archive_exact.counts);
+    slot.samples += 1;
+    if slot.last_donor_plus_one != donor + 1 {
+        slot.donors += 1;
+        slot.last_donor_plus_one = donor + 1;
+    }
+    slot.cells += archive_exact.cells;
+    slot.strand_umis[0] += archive_exact.strands[0];
+    slot.strand_umis[1] += archive_exact.strands[1];
+    Ok(())
 }
 
 fn reduce_exact(
     collection: &Collection,
-    routes: &[Vec<RoutedTarget>],
+    plan: &RoutedPlan,
     groups: &Groups,
     design: &Design,
     candidates: &[Candidate],
+    required_groups: &[usize],
     budget: &ExactMatchBudget,
-) -> Result<(Vec<ArchiveExact>, Vec<EntityExact>)> {
-    let archives: Vec<ArchiveExact> = routes
-        .par_iter()
-        .enumerate()
-        .filter(|(_, targets)| !targets.is_empty())
-        .map(|(sample, targets)| {
-            exact_archive(
-                collection, sample, targets, groups, design, candidates, budget,
-            )
-        })
-        .collect::<Result<_>>()?;
-    let mut exact = vec![EntityExact::default(); candidates.len()];
-    for archive in &archives {
-        for (&entity, archive_exact) in &archive.entities {
-            let counts = archive_exact.counts;
-            for (total, count) in exact[entity]
-                .component_umi_classes
-                .iter_mut()
-                .zip(archive_exact.component_umi_classes)
-            {
-                *total += count;
-            }
-            if counts.metric(candidates[entity].key.kind) > 0 {
-                exact[entity].counts.add(counts);
-                exact[entity].samples.insert(archive.sample);
-                exact[entity]
-                    .donors
-                    .insert(design.donor_of_sample[archive.sample]);
-                exact[entity].cells += archive_exact.cells.len();
-                exact[entity].strand_umis[0] += archive_exact.strands[0];
-                exact[entity].strand_umis[1] += archive_exact.strands[1];
-            }
-        }
-        for row in &archive.rows {
-            exact[row.entity]
-                .group_counts
-                .entry(row.group)
-                .or_default()
-                .add(row.counts);
-        }
+) -> Result<(Vec<ArchiveExact>, ExactAggregate)> {
+    let mut group_ordinal = vec![usize::MAX; groups.names.len()];
+    for (ordinal, &group) in required_groups.iter().enumerate() {
+        group_ordinal[group] = ordinal;
     }
+    let mut exact = ExactAggregate::new(candidates.len(), required_groups.len());
+    // Archives are reduced one at a time, with their chunks decoded in parallel, so only one
+    // archive's packed hits are ever resident. Samples of one donor stay contiguous, which lets
+    // distinct-donor recurrence be a counter plus the previous donor instead of a per-entity set.
+    // Donor groups then go in decreasing routed-posting order, so the archive with the most exact
+    // evidence is reduced while the fewest per-group count rows have accumulated.
+    let mut donor_cost = vec![0usize; design.donor_names.len()];
+    for (sample, routes) in plan.per_archive.iter().enumerate() {
+        let postings: usize = routes.iter().map(|route| route.posts.len()).sum();
+        donor_cost[design.donor_of_sample[sample]] += postings;
+    }
+    let mut order: Vec<usize> = (0..collection.archives.len())
+        .filter(|&sample| !plan.per_archive[sample].is_empty())
+        .collect();
+    order.sort_unstable_by_key(|&sample| {
+        let donor = design.donor_of_sample[sample];
+        (std::cmp::Reverse(donor_cost[donor]), donor, sample)
+    });
+    let mut archives = Vec::with_capacity(order.len());
+    for sample in order {
+        let (archive, entities) = exact_archive(
+            collection,
+            sample,
+            &plan.per_archive[sample],
+            &plan.targets,
+            groups,
+            candidates,
+            budget,
+        )?;
+        let donor = u32::try_from(design.donor_of_sample[sample])
+            .context("biological donor index exceeds u32")?;
+        for archive_exact in &entities {
+            let entity = archive_exact.entity as usize;
+            let kind = candidates[entity].key.kind;
+            merge_archive_entity(&mut exact.entities[entity], archive_exact, kind, donor)?;
+        }
+        drop(entities);
+        if !required_groups.is_empty() {
+            for row in &archive.rows {
+                let ordinal = group_ordinal[row.group as usize];
+                if ordinal == usize::MAX {
+                    continue;
+                }
+                let kind = candidates[row.entity as usize].key.kind;
+                let metric = row.counts.metric(kind);
+                let slot = &mut exact.required_group_metrics
+                    [row.entity as usize * required_groups.len() + ordinal];
+                *slot = slot
+                    .checked_add(metric)
+                    .context("exact group UMI-class count overflow")?;
+            }
+        }
+        release_free_heap();
+        archives.push(archive);
+    }
+    archives.sort_unstable_by_key(|archive| archive.sample);
     Ok((archives, exact))
 }
 
@@ -2254,7 +2681,7 @@ fn load_annotation(
 
 fn transcript_accepted(
     solo_strand: anno::assign::SoloStrand,
-    observed_strands: [usize; 2],
+    observed_strands: [u32; 2],
     transcript_rev: bool,
 ) -> bool {
     (observed_strands[0] > 0 && solo_strand.accepts(false, transcript_rev))
@@ -2570,11 +2997,13 @@ fn classify_terminal_gap(
     Ok(gap)
 }
 
+/// `required_metrics` holds this entity's informative metric in each `--require-group`, in the
+/// order the groups were requested.
 fn evidence_passes_predicates(
     candidate: &Candidate,
     exact: &EntityExact,
+    required_metrics: &[u32],
     args: &Args,
-    required_groups: &[usize],
 ) -> bool {
     let side_support = candidate.key.kind.is_junction()
         || (exact.counts.include_only >= args.min_side_umis
@@ -2583,31 +3012,108 @@ fn evidence_passes_predicates(
                 .component_umi_classes
                 .iter()
                 .take(candidate.key.components.len())
-                .all(|&count| count >= args.min_side_umis));
+                .all(|&count| count as usize >= args.min_side_umis));
     exact.counts.metric(candidate.key.kind) >= args.min_umis
         && side_support
-        && exact.samples.len() >= args.min_samples
-        && exact.donors.len() >= args.min_donors
-        && required_groups.iter().all(|&group| {
-            exact
-                .group_counts
-                .get(&group)
-                .copied()
-                .unwrap_or_default()
-                .metric(candidate.key.kind)
-                >= args.min_group_umis
-        })
+        && exact.samples as usize >= args.min_samples
+        && exact.donors as usize >= args.min_donors
+        && required_metrics
+            .iter()
+            .all(|&metric| metric as usize >= args.min_group_umis)
 }
 
 fn keep_entity(
     candidate: &Candidate,
     exact: &EntityExact,
+    required_metrics: &[u32],
     gap: &GapClassification,
     args: &Args,
-    required_groups: &[usize],
 ) -> bool {
-    evidence_passes_predicates(candidate, exact, args, required_groups)
+    evidence_passes_predicates(candidate, exact, required_metrics, args)
         && (!args.novel_only || gap.incompatible_with_every_transcript)
+}
+
+/// Per-stage wall clock, recorded in execution order. The window matches `total_seconds`: both
+/// are sampled before the result tables are streamed, so `output` covers assembling the result
+/// summary aggregates rather than serializing the tables.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+struct StageSeconds {
+    load_catalogue: f64,
+    discover_candidates: f64,
+    route_candidates: f64,
+    exact_counting: f64,
+    terminal_tails: f64,
+    annotation_classification: f64,
+    output: f64,
+}
+
+/// Process peak resident set size observed at the end of each stage. The kernel reports a high
+/// water mark, so these values are monotonically non-decreasing and attribute a peak to the last
+/// stage that could have caused it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+struct StagePeakRssBytes {
+    load_catalogue: u64,
+    discover_candidates: u64,
+    route_candidates: u64,
+    exact_counting: u64,
+    terminal_tails: u64,
+    annotation_classification: u64,
+    output: u64,
+}
+
+/// Return freed heap pages to the operating system. Reducing one cohort archive allocates and
+/// frees hundreds of megabytes of packed hits; without this the allocator keeps those pages, and
+/// the next archive's peak is measured on top of them. This is advisory and a no-op elsewhere.
+fn release_free_heap() {
+    #[cfg(target_env = "gnu")]
+    // SAFETY: `malloc_trim` takes no pointers and only releases already-free heap pages.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
+/// Current process peak RSS in bytes, or zero where the platform does not publish one. Reading
+/// `VmHWM` costs one small file read per stage boundary and never fails the search.
+fn peak_rss_bytes() -> u64 {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return 0;
+    };
+    status
+        .lines()
+        .find_map(|line| {
+            let rest = line.strip_prefix("VmHWM:")?;
+            let kib: u64 = rest.split_whitespace().next()?.parse().ok()?;
+            kib.checked_mul(1024)
+        })
+        .unwrap_or(0)
+}
+
+/// Stopwatch that attributes each elapsed interval to one named stage.
+struct StageClock {
+    last: std::time::Instant,
+    seconds: StageSeconds,
+    peak_rss: StagePeakRssBytes,
+}
+
+impl StageClock {
+    fn new(started: std::time::Instant) -> Self {
+        Self {
+            last: started,
+            seconds: StageSeconds::default(),
+            peak_rss: StagePeakRssBytes::default(),
+        }
+    }
+
+    fn lap(
+        &mut self,
+        seconds: fn(&mut StageSeconds) -> &mut f64,
+        rss: fn(&mut StagePeakRssBytes) -> &mut u64,
+    ) {
+        let now = std::time::Instant::now();
+        *seconds(&mut self.seconds) = now.duration_since(self.last).as_secs_f64();
+        *rss(&mut self.peak_rss) = peak_rss_bytes();
+        self.last = now;
+    }
 }
 
 #[derive(Serialize)]
@@ -2672,6 +3178,8 @@ struct SearchSummary<'a> {
     source_archive_identity_bytes_read: u64,
     collection_sidecar_bytes_read: u64,
     total_seconds: f64,
+    stage_seconds: StageSeconds,
+    stage_peak_rss_bytes: StagePeakRssBytes,
     terminal_tail_available_archives: u64,
     terminal_tail_unavailable_archives: u64,
     terminal_tail_available_donors: u64,
@@ -2863,7 +3371,7 @@ fn stream_result<W: Write>(
         .archives
         .iter()
         .flat_map(|archive| &archive.rows)
-        .filter(|row| retained_set.contains(&row.entity))
+        .filter(|row| retained_set.contains(&(row.entity as usize)))
         .count()
         + data
             .tails
@@ -2996,11 +3504,11 @@ fn stream_result<W: Write>(
                     row.uint64(candidate.catalogue_samples as u64)?;
                     row.uint64(candidate.catalogue_donors as u64)?;
                     row.uint64(exact.counts.metric(candidate.key.kind) as u64)?;
-                    row.uint64(exact.cells as u64)?;
-                    row.uint64(exact.samples.len() as u64)?;
-                    row.uint64(exact.donors.len() as u64)?;
-                    row.uint64(exact.strand_umis[0] as u64)?;
-                    row.uint64(exact.strand_umis[1] as u64)?;
+                    row.uint64(u64::from(exact.cells))?;
+                    row.uint64(u64::from(exact.samples))?;
+                    row.uint64(u64::from(exact.donors))?;
+                    row.uint64(u64::from(exact.strand_umis[0]))?;
+                    row.uint64(u64::from(exact.strand_umis[1]))?;
                     if let Some(gap) = gap {
                         row.boolean(gap.incompatible_with_every_transcript)?;
                         row.uint64(gap.compatible_transcripts as u64)?;
@@ -3093,9 +3601,9 @@ fn stream_result<W: Write>(
                         row.null()?;
                         row.uint64(component.coordinate.donor as u64)?;
                         row.uint64(component.coordinate.acceptor as u64)?;
-                        row.uint64(
-                            data.exact[entity].component_umi_classes[component_index] as u64,
-                        )?;
+                        row.uint64(u64::from(
+                            data.exact[entity].component_umi_classes[component_index],
+                        ))?;
                         Ok(())
                     })?;
                     *ordinal += 1;
@@ -3126,38 +3634,39 @@ fn stream_result<W: Write>(
         Some(&SelectionSummary::complete(count_rows as u64)),
         |rows| {
             for archive in data.archives {
+                let donor = data.design.donor_of_sample[archive.sample];
                 for count in &archive.rows {
-                    if !retained_set.contains(&count.entity) {
+                    if !retained_set.contains(&(count.entity as usize)) {
                         continue;
                     }
-                    let candidate = &data.candidates[count.entity];
+                    let candidate = &data.candidates[count.entity as usize];
                     rows.write_row_with(|row| {
                         row.string(&candidate.key.id(&data.collection.chroms))?;
-                        row.string(&data.collection.archives[count.sample].id)?;
-                        row.string(&data.design.donor_names[count.donor])?;
-                        row.string(&data.groups.names[count.group])?;
+                        row.string(&data.collection.archives[archive.sample].id)?;
+                        row.string(&data.design.donor_names[donor])?;
+                        row.string(&data.groups.names[count.group as usize])?;
                         if candidate.key.kind.is_junction() {
-                            row.uint64(count.counts.support as u64)?;
+                            row.uint64(u64::from(count.counts.support))?;
                             for _ in 0..5 {
                                 row.null()?;
                             }
                         } else if candidate.key.kind.is_alternative_site() {
                             row.null()?;
-                            row.uint64(count.counts.include_only as u64)?;
-                            row.uint64(count.counts.exclude_only as u64)?;
+                            row.uint64(u64::from(count.counts.include_only))?;
+                            row.uint64(u64::from(count.counts.exclude_only))?;
                             row.null()?;
                             row.null()?;
-                            row.uint64(count.counts.both as u64)?;
+                            row.uint64(u64::from(count.counts.both))?;
                         } else {
                             row.null()?;
                             row.null()?;
                             row.null()?;
-                            row.uint64(count.counts.include_only as u64)?;
-                            row.uint64(count.counts.exclude_only as u64)?;
-                            row.uint64(count.counts.both as u64)?;
+                            row.uint64(u64::from(count.counts.include_only))?;
+                            row.uint64(u64::from(count.counts.exclude_only))?;
+                            row.uint64(u64::from(count.counts.both))?;
                         }
-                        row.uint64(count.counts.metric(candidate.key.kind) as u64)?;
-                        row.uint64(count.cells.len() as u64)?;
+                        row.uint64(u64::from(count.counts.metric(candidate.key.kind)))?;
+                        row.uint64(u64::from(count.cells))?;
                         Ok(())
                     })?;
                 }
@@ -3283,6 +3792,50 @@ fn validate_group_scope(collection: &Collection, groups: &Groups) -> Result<u64>
         )
 }
 
+/// Report the stage profile on stderr so the human output carries the same accounting the JSON
+/// summary records in `stage_seconds`/`stage_peak_rss_bytes`.
+fn eprint_stage_profile(seconds: &StageSeconds, peak_rss: &StagePeakRssBytes) {
+    let stages: [(&str, f64, u64); 7] = [
+        (
+            "load_catalogue",
+            seconds.load_catalogue,
+            peak_rss.load_catalogue,
+        ),
+        (
+            "discover_candidates",
+            seconds.discover_candidates,
+            peak_rss.discover_candidates,
+        ),
+        (
+            "route_candidates",
+            seconds.route_candidates,
+            peak_rss.route_candidates,
+        ),
+        (
+            "exact_counting",
+            seconds.exact_counting,
+            peak_rss.exact_counting,
+        ),
+        (
+            "terminal_tails",
+            seconds.terminal_tails,
+            peak_rss.terminal_tails,
+        ),
+        (
+            "annotation_classification",
+            seconds.annotation_classification,
+            peak_rss.annotation_classification,
+        ),
+        ("output", seconds.output, peak_rss.output),
+    ];
+    for (name, elapsed, rss) in stages {
+        eprintln!(
+            "collection find-events stage {name}: {elapsed:.3}s, peak rss {:.3} GiB",
+            rss as f64 / (1024.0 * 1024.0 * 1024.0)
+        );
+    }
+}
+
 fn human_output(data: &OutputData<'_>) {
     if data.tail_capability.requested {
         eprintln!(
@@ -3323,8 +3876,8 @@ fn human_output(data: &OutputData<'_>) {
             },
             exact.counts.metric(candidate.key.kind),
             exact.cells,
-            exact.samples.len(),
-            exact.donors.len(),
+            exact.samples,
+            exact.donors,
             primary,
         );
     }
@@ -3350,6 +3903,7 @@ fn human_output(data: &OutputData<'_>) {
 
 pub(super) fn run(args: Args) -> Result<()> {
     let started = std::time::Instant::now();
+    let mut clock = StageClock::new(started);
     let chain = open_collection_chain_with_locations(
         &args.collection,
         args.uniform_output.locations.as_deref(),
@@ -3433,6 +3987,7 @@ pub(super) fn run(args: Args) -> Result<()> {
     let annotation_context = annotation
         .as_ref()
         .zip(annotation_comparison_budget.as_ref());
+    clock.lap(|s| &mut s.load_catalogue, |r| &mut r.load_catalogue);
     let discovery = discover_candidates(
         &catalogue,
         &kinds,
@@ -3456,17 +4011,27 @@ pub(super) fn run(args: Args) -> Result<()> {
     } else {
         AnnotationCandidateExclusions::default()
     };
+    clock.lap(
+        |s| &mut s.discover_candidates,
+        |r| &mut r.discover_candidates,
+    );
     let routes = route_candidates(collection, &catalogue, &candidates, args.max_routed_entries)?;
+    // The catalogue's rows and their route postings are not needed once the exact plan exists.
+    let catalogue_junctions = catalogue.len() as u64;
+    drop(catalogue);
+    release_free_heap();
+    clock.lap(|s| &mut s.route_candidates, |r| &mut r.route_candidates);
     let exact_match_budget = ExactMatchBudget::new(args.max_exact_match_attempts)?;
-    let (mut archives, exact) = reduce_exact(
+    let (archives, exact) = reduce_exact(
         collection,
-        &routes.per_archive,
+        &routes,
         &groups,
         &design,
         &candidates,
+        &required_groups,
         &exact_match_budget,
     )?;
-    archives.sort_unstable_by_key(|archive| archive.sample);
+    clock.lap(|s| &mut s.exact_counting, |r| &mut r.exact_counting);
     let (tails, tail_capability) = if kinds.contains(&SearchKind::TerminalTail) {
         scan_terminal_tails(
             collection,
@@ -3493,38 +4058,47 @@ pub(super) fn run(args: Args) -> Result<()> {
             args.max_candidates,
         );
     }
+    clock.lap(|s| &mut s.terminal_tails, |r| &mut r.terminal_tails);
 
     let solo_strand: anno::assign::SoloStrand = args.solo_strand.into();
     let gap: Vec<Option<GapClassification>> = candidates
         .iter()
-        .zip(&exact)
-        .map(|(candidate, exact)| -> Result<Option<GapClassification>> {
+        .enumerate()
+        .map(|(entity, candidate)| -> Result<Option<GapClassification>> {
             let Some((annotation, budget)) = annotation_context else {
                 return Ok(None);
             };
-            if !evidence_passes_predicates(candidate, exact, &args, &required_groups) {
+            let entity_exact = &exact.entities[entity];
+            if !evidence_passes_predicates(
+                candidate,
+                entity_exact,
+                exact.required_metrics(entity),
+                &args,
+            ) {
                 return Ok(None);
             }
-            classify_gap(annotation, candidate, exact, solo_strand, budget).map(Some)
+            classify_gap(annotation, candidate, entity_exact, solo_strand, budget).map(Some)
         })
         .collect::<Result<_>>()?;
     let retained: Vec<usize> = candidates
         .iter()
-        .zip(&exact)
-        .zip(&gap)
         .enumerate()
-        .filter_map(|(entity, ((candidate, exact), gap))| {
+        .filter_map(|(entity, candidate)| {
             let absent = GapClassification::default();
             keep_entity(
                 candidate,
-                exact,
-                gap.as_ref().unwrap_or(&absent),
+                &exact.entities[entity],
+                exact.required_metrics(entity),
+                gap[entity].as_ref().unwrap_or(&absent),
                 &args,
-                &required_groups,
             )
             .then_some(entity)
         })
         .collect();
+    clock.lap(
+        |s| &mut s.annotation_classification,
+        |r| &mut r.annotation_classification,
+    );
 
     let unique_chunks: usize = archives.iter().map(|archive| archive.unique_chunks).sum();
     let independent_chunks: usize = archives
@@ -3546,6 +4120,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         .into_iter()
         .map(|chrom| collection.chroms[chrom as usize].clone())
         .collect();
+    clock.lap(|s| &mut s.output, |r| &mut r.output);
     let summary = SearchSummary {
         coordinates:
             "0-based junction boundaries and strand-aware terminal cleavage anchors; entity intervals are half-open",
@@ -3575,7 +4150,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         multimapper_placements_included: false,
         multimapper_alternatives_available_to_search: false,
         requested_kinds,
-        catalogue_junctions: catalogue.len() as u64,
+        catalogue_junctions,
         splice_candidate_definitions_attempted: splice_candidates_attempted as u64,
         splice_candidate_definitions_distinct: splice_candidates_distinct as u64,
         candidate_entities: (candidates.len() + tail_capability.candidate_clusters) as u64,
@@ -3636,6 +4211,8 @@ pub(super) fn run(args: Args) -> Result<()> {
         source_archive_identity_bytes_read: identity_bytes,
         collection_sidecar_bytes_read: sidecar_bytes,
         total_seconds: started.elapsed().as_secs_f64(),
+        stage_seconds: clock.seconds,
+        stage_peak_rss_bytes: clock.peak_rss,
         terminal_tail_available_archives: tail_capability.available_archives as u64,
         terminal_tail_unavailable_archives: tail_capability.unavailable_archives as u64,
         terminal_tail_available_donors: tail_capability.available_donors as u64,
@@ -3646,7 +4223,7 @@ pub(super) fn run(args: Args) -> Result<()> {
     let data = OutputData {
         collection,
         candidates: &candidates,
-        exact: &exact,
+        exact: &exact.entities,
         gap: &gap,
         retained: &retained,
         archives: &archives,
@@ -3777,6 +4354,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         })?;
     } else {
         human_output(&data);
+        eprint_stage_profile(&summary.stage_seconds, &summary.stage_peak_rss_bytes);
         if !summary.annotation_unmatched_evidence_contigs.is_empty() {
             eprintln!(
                 "collection find-events: omitted {} splice candidates and {} terminal routes ({} declared events) on annotation-unmatched contigs: {}",
@@ -3800,6 +4378,61 @@ pub(super) fn run(args: Args) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    /// One routed coordinate whose targets occupy the whole arena, as the exact reducer sees it.
+    fn one_chunk_target(
+        donor: u32,
+        acceptor: u32,
+        targets: Vec<Target>,
+    ) -> (ChunkTargets, Vec<Target>) {
+        let range = (0u32, targets.len() as u32);
+        ([((donor, acceptor), range)].into_iter().collect(), targets)
+    }
+
+    fn target(entity: u32, component_bit: u8, side: u8, strand_rev: Option<bool>) -> Target {
+        Target {
+            entity,
+            component_bit,
+            side,
+            strand: Target::strand_code(strand_rev),
+        }
+    }
+
+    /// Every packed hit one molecule contributes, in entity order.
+    fn packed_hits(
+        molecule: &MolRec,
+        shapes: &[evidence_io::archive::Shape],
+        wanted: &ChunkTargets,
+        arena: &[Target],
+        budget: &ExactMatchBudget,
+    ) -> Result<Vec<u64>> {
+        let mut hits = Vec::new();
+        let mut scratch = Vec::new();
+        let matcher = ChunkMatch {
+            shapes,
+            wanted,
+            arena,
+            budget,
+        };
+        molecule_packed_hits(molecule, matcher, &mut scratch, &mut hits)?;
+        Ok(hits)
+    }
+
+    #[test]
+    fn stage_clock_attributes_each_lap_and_records_a_peak() {
+        let mut clock = StageClock::new(std::time::Instant::now());
+        clock.lap(|s| &mut s.load_catalogue, |r| &mut r.load_catalogue);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        clock.lap(|s| &mut s.exact_counting, |r| &mut r.exact_counting);
+        assert!(clock.seconds.exact_counting >= 0.02);
+        assert!(clock.seconds.load_catalogue < clock.seconds.exact_counting);
+        assert_eq!(clock.seconds.output, 0.0);
+        // Linux publishes VmHWM; elsewhere the profile degrades to zero rather than failing.
+        if std::path::Path::new("/proc/self/status").exists() {
+            assert!(clock.peak_rss.load_catalogue > 0);
+            assert!(clock.peak_rss.exact_counting >= clock.peak_rss.load_catalogue);
+        }
+    }
     use super::*;
 
     fn archive(id: &str) -> ArchiveEntry {
@@ -4025,9 +4658,9 @@ mod tests {
         let shapes = vec![evidence_io::archive::Shape {
             blocks: vec![(0, 10), (110, 10)],
         }];
-        let wanted: ChunkTargets = [((100, 200), vec![(0, 1, 1, None)])].into_iter().collect();
+        let (wanted, arena) = one_chunk_target(100, 200, vec![target(0, 1, 1, None)]);
         let mut counts = MaskCounts::default();
-        let mut strand_umis = [0usize; 2];
+        let mut strand_umis = [0u32; 2];
         for class in 0..12u32 {
             let strand_rev = class >= 6;
             let molecule = MolRec {
@@ -4041,9 +4674,9 @@ mod tests {
                 }],
                 mms: smallvec::smallvec![],
             };
-            let hits = molecule_entity_hits(&molecule, &shapes, &wanted, &match_budget()).unwrap();
+            let hits = packed_hits(&molecule, &shapes, &wanted, &arena, &match_budget()).unwrap();
             assert_eq!(hits.len(), 1);
-            counts.add_mask(SearchKind::Junction, hits[0].2);
+            counts.add_mask(SearchKind::Junction, unpack_exact_hit(hits[0]).2);
             strand_umis[usize::from(strand_rev)] += 1;
         }
         assert_eq!(counts.support, 12);
@@ -4051,12 +4684,12 @@ mod tests {
 
         let exact = EntityExact {
             counts,
-            samples: [0].into_iter().collect(),
-            donors: [0].into_iter().collect(),
+            samples: 1,
+            donors: 1,
             cells: 12,
-            group_counts: [(0, counts)].into_iter().collect(),
             component_umi_classes: [12, 0, 0],
             strand_umis,
+            last_donor_plus_one: 1,
         };
         let args = Args {
             collection: PathBuf::from("test.aicollection"),
@@ -4089,9 +4722,9 @@ mod tests {
         assert!(keep_entity(
             &candidates[0],
             &exact,
+            &[],
             &GapClassification::default(),
             &args,
-            &[],
         ));
     }
 
@@ -4113,7 +4746,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
@@ -4165,7 +4798,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor,
@@ -4231,7 +4864,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4294,7 +4927,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
@@ -4340,7 +4973,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4406,7 +5039,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4435,12 +5068,11 @@ mod tests {
                 exclude_only: 0,
                 ..MaskCounts::default()
             },
-            group_counts: [(0, MaskCounts::default())].into_iter().collect(),
             component_umi_classes: [10, 10, 0],
+            samples: 1,
+            donors: 1,
             ..EntityExact::default()
         };
-        exact.samples.insert(0);
-        exact.donors.insert(0);
         let args = Args {
             collection: PathBuf::from("test.aicollection"),
             kinds: Vec::new(),
@@ -4472,17 +5104,17 @@ mod tests {
         assert!(!keep_entity(
             &candidate,
             &exact,
+            &[],
             &GapClassification::default(),
             &args,
-            &[],
         ));
         exact.counts.exclude_only = 1;
         assert!(keep_entity(
             &candidate,
             &exact,
+            &[],
             &GapClassification::default(),
             &args,
-            &[],
         ));
 
         let cassette = Candidate {
@@ -4491,7 +5123,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![
+                components: smallvec::smallvec![
                     component(
                         Coordinate {
                             chrom: 0,
@@ -4528,25 +5160,25 @@ mod tests {
                 exclude_only: 10,
                 ..MaskCounts::default()
             },
-            samples: [0].into_iter().collect(),
-            donors: [0].into_iter().collect(),
+            samples: 1,
+            donors: 1,
             component_umi_classes: [10, 0, 10],
             ..EntityExact::default()
         };
         assert!(!keep_entity(
             &cassette,
             &cassette_exact,
+            &[],
             &GapClassification::default(),
             &args,
-            &[],
         ));
         cassette_exact.component_umi_classes[1] = 1;
         assert!(keep_entity(
             &cassette,
             &cassette_exact,
+            &[],
             &GapClassification::default(),
             &args,
-            &[],
         ));
     }
 
@@ -4648,6 +5280,8 @@ mod tests {
         for donor in [300, 350, 400] {
             cassette_rows.push(junction(donor, 500));
         }
+        // The catalogue is always unique and ascending by coordinate; planning relies on it.
+        cassette_rows.sort_unstable_by_key(|row| (row.chrom, row.donor, row.acceptor));
         let cassette_error = discover_candidates(
             &cassette_rows,
             &[SearchKind::Cassette].into_iter().collect(),
@@ -4673,9 +5307,7 @@ mod tests {
         let shapes = vec![evidence_io::archive::Shape {
             blocks: vec![(0, 10), (110, 10)],
         }];
-        let wanted: ChunkTargets = [((100, 200), vec![(0, 1, 1, Some(false))])]
-            .into_iter()
-            .collect();
+        let (wanted, arena) = one_chunk_target(100, 200, vec![target(0, 1, 1, Some(false))]);
         let multimapper = MolRec {
             cell: 0,
             umi_class: 0,
@@ -4686,7 +5318,7 @@ mod tests {
             mms: smallvec::smallvec![(90, 0, 0, 1)],
         };
         assert!(
-            molecule_entity_hits(&multimapper, &shapes, &wanted, &match_budget())
+            packed_hits(&multimapper, &shapes, &wanted, &arena, &match_budget())
                 .unwrap()
                 .is_empty()
         );
@@ -4700,7 +5332,7 @@ mod tests {
             ..multimapper
         };
         assert_eq!(
-            molecule_entity_hits(&unique, &shapes, &wanted, &match_budget())
+            packed_hits(&unique, &shapes, &wanted, &arena, &match_budget())
                 .unwrap()
                 .len(),
             1
@@ -4712,16 +5344,15 @@ mod tests {
         let shapes = vec![evidence_io::archive::Shape {
             blocks: vec![(0, 10), (110, 10)],
         }];
-        let wanted: ChunkTargets = [(
-            (100, 200),
+        let (wanted, arena) = one_chunk_target(
+            100,
+            200,
             vec![
-                (0, 1, 1, Some(false)),
-                (1, 1, 1, Some(false)),
-                (2, 1, 1, Some(false)),
+                target(0, 1, 1, Some(false)),
+                target(1, 1, 1, Some(false)),
+                target(2, 1, 1, Some(false)),
             ],
-        )]
-        .into_iter()
-        .collect();
+        );
         let molecule = MolRec {
             cell: 0,
             umi_class: 0,
@@ -4734,7 +5365,7 @@ mod tests {
             mms: smallvec::smallvec![],
         };
         let budget = ExactMatchBudget::new(2).unwrap();
-        let error = molecule_entity_hits(&molecule, &shapes, &wanted, &budget).unwrap_err();
+        let error = packed_hits(&molecule, &shapes, &wanted, &arena, &budget).unwrap_err();
         assert!(error.to_string().contains("--max-exact-match-attempts 2"));
         assert_eq!(budget.attempted(), 0);
     }
@@ -4744,9 +5375,7 @@ mod tests {
         let shapes = vec![evidence_io::archive::Shape {
             blocks: vec![(0, 10), (110, 10)],
         }];
-        let wanted: ChunkTargets = [((100, 200), vec![(0, 1, 1, Some(false))])]
-            .into_iter()
-            .collect();
+        let (wanted, arena) = one_chunk_target(100, 200, vec![target(0, 1, 1, Some(false))]);
         let alternative_only = MolRec {
             cell: 0,
             umi_class: 0,
@@ -4758,7 +5387,7 @@ mod tests {
             mms: smallvec::smallvec![(1_000, 0, 1, 1)],
         };
         assert!(
-            molecule_entity_hits(&alternative_only, &shapes, &wanted, &match_budget())
+            packed_hits(&alternative_only, &shapes, &wanted, &arena, &match_budget())
                 .unwrap()
                 .is_empty()
         );
@@ -4877,7 +5506,7 @@ mod tests {
                 chrom,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom,
                         donor: 100,
@@ -4961,7 +5590,7 @@ mod tests {
                 chrom: 0,
                 strand_rev: Some(false),
                 reported_strand_rev: Some(false),
-                components: vec![component(
+                components: smallvec::smallvec![component(
                     Coordinate {
                         chrom: 0,
                         donor: 100,
@@ -4997,24 +5626,136 @@ mod tests {
         assert!(crate::querycmd::pack_cell_barcode_16("AAAAAAAAAAAAAAAN").is_err());
     }
 
+    /// Deterministic xorshift, so the reducer equivalence test covers many shapes without a
+    /// random-number dependency.
+    fn next_random(state: &mut u64) -> u64 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        *state
+    }
+
     #[test]
-    fn exact_group_counts_are_sparse_and_cells_are_informative() {
-        let mut exacts = vec![EntityExact::default(); 100];
-        assert!(exacts.iter().all(|exact| exact.group_counts.is_empty()));
-        exacts[7].group_counts.insert(
-            999_999,
-            MaskCounts {
-                include_only: 1,
+    fn packed_exact_reduction_matches_a_naive_hash_map() {
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut packed = Vec::new();
+        let mut naive: FxHashMap<(u32, u32), u8> = FxHashMap::default();
+        for _ in 0..50_000 {
+            let value = next_random(&mut state);
+            let entity = (value % 97) as u32;
+            let class = ((value >> 17) % 211) as u32;
+            let payload = ((value >> 40) & EXACT_HIT_PAYLOAD_MASK) as u8;
+            packed.push(pack_exact_hit(entity, class, payload));
+            *naive.entry((entity, class)).or_insert(0) |= payload;
+        }
+        packed.sort_unstable();
+        reduce_sorted_exact_hits(&mut packed);
+
+        let observed: Vec<(u32, u32, u8)> = packed
+            .iter()
+            .map(|&hit| {
+                let (entity, class, side, components, strands) = unpack_exact_hit(hit);
+                (
+                    entity,
+                    class,
+                    side | (components << EXACT_HIT_COMPONENT_SHIFT)
+                        | (strands << EXACT_HIT_STRAND_SHIFT),
+                )
+            })
+            .collect();
+        let mut expected: Vec<(u32, u32, u8)> = naive
+            .into_iter()
+            .map(|((entity, class), payload)| (entity, class, payload))
+            .collect();
+        expected.sort_unstable();
+        assert_eq!(observed, expected);
+        assert!(observed.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn packed_hit_round_trips_every_field_at_its_bounds() {
+        let entity = (MAX_PACKED_ENTITIES - 1) as u32;
+        let payload = EXACT_HIT_PAYLOAD_MASK as u8;
+        let hit = pack_exact_hit(entity, u32::MAX, payload);
+        assert_eq!(unpack_exact_hit(hit), (entity, u32::MAX, 3, 7, 3));
+        assert_eq!(unpack_exact_hit(pack_exact_hit(0, 0, 0)), (0, 0, 0, 0, 0));
+    }
+
+    #[test]
+    fn entity_hit_slices_cover_every_hit_without_splitting_an_entity() {
+        let mut hits: Vec<u64> = Vec::new();
+        for entity in 0..40u32 {
+            for class in 0..(entity % 7 + 1) {
+                hits.push(pack_exact_hit(entity, class, 1));
+            }
+        }
+        for parts in [1usize, 2, 3, 8, 64] {
+            let slices = entity_hit_slices(&hits, parts);
+            assert_eq!(
+                slices.iter().map(|slice| slice.len()).sum::<usize>(),
+                hits.len()
+            );
+            let mut previous: Option<u32> = None;
+            for slice in &slices {
+                assert!(!slice.is_empty());
+                let first = unpack_exact_hit(slice[0]).0;
+                assert!(previous.is_none_or(|last| last < first));
+                previous = Some(unpack_exact_hit(slice[slice.len() - 1]).0);
+            }
+        }
+        assert!(entity_hit_slices(&[], 4).is_empty());
+    }
+
+    #[test]
+    fn compact_recurrence_counts_samples_once_and_donors_in_donor_order() {
+        let archive_exact = |metric: usize, cells: u32| ArchiveEntityExact {
+            entity: 0,
+            counts: MaskCounts {
+                support: metric,
                 ..MaskCounts::default()
             },
-        );
+            component_umi_classes: [1, 0, 0],
+            cells,
+            strands: [metric as u32, 0],
+        };
+        let mut exact = EntityExact::default();
+        // Two archives of donor 0, then one of donor 1: three samples, two donors.
+        merge_archive_entity(&mut exact, &archive_exact(3, 2), SearchKind::Junction, 0).unwrap();
+        merge_archive_entity(&mut exact, &archive_exact(4, 5), SearchKind::Junction, 0).unwrap();
+        merge_archive_entity(&mut exact, &archive_exact(1, 1), SearchKind::Junction, 1).unwrap();
+        assert_eq!(exact.samples, 3);
+        assert_eq!(exact.donors, 2);
+        assert_eq!(exact.cells, 8);
+        assert_eq!(exact.counts.support, 8);
+        assert_eq!(exact.strand_umis, [8, 0]);
+        assert_eq!(exact.component_umi_classes, [3, 0, 0]);
+
+        // An archive with component evidence but no informative metric is not recurrence.
+        merge_archive_entity(&mut exact, &archive_exact(0, 0), SearchKind::Junction, 2).unwrap();
+        assert_eq!(exact.samples, 3);
+        assert_eq!(exact.donors, 2);
+        assert_eq!(exact.component_umi_classes, [4, 0, 0]);
+    }
+
+    #[test]
+    fn exact_group_metrics_are_dense_per_required_group_and_cells_are_informative() {
+        // Per-group counts are kept only for the requested groups, as one dense row of counters
+        // per entity, rather than a map from group to counts on every candidate.
+        let mut aggregate = ExactAggregate::new(100, 2);
+        assert!(aggregate
+            .entities
+            .iter()
+            .all(|exact| *exact == EntityExact::default()));
+        assert_eq!(aggregate.required_group_metrics.len(), 200);
+        aggregate.required_group_metrics[7 * 2 + 1] = 5;
+        assert_eq!(aggregate.required_metrics(7), &[0, 5]);
+        assert_eq!(aggregate.required_metrics(8), &[0, 0]);
         assert_eq!(
-            exacts
-                .iter()
-                .map(|exact| exact.group_counts.len())
-                .sum::<usize>(),
-            1
+            aggregate.required_group_metrics.iter().sum::<u32>(),
+            5,
+            "no other entity gained a group counter"
         );
+        assert_eq!(ExactAggregate::new(4, 0).required_metrics(3), &[] as &[u32]);
 
         assert!(mask_is_informative(SearchKind::Cassette, 1));
         assert!(mask_is_informative(SearchKind::Cassette, 2));

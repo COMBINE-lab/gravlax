@@ -79,6 +79,36 @@ existing `semantics.predicate_effects` rule summary is unchanged.
   resolve exactly the archives already verified by archive root. Notebook 01 is
   unchanged.
 
+### `collection find-events` exact reduction
+
+Cohort-wide `collection find-events` reduces exact molecule evidence through a
+packed sorted-hit representation instead of hash maps keyed by
+`(entity, UMI class)`, reduces source archives one at a time with their chunks
+decoded in parallel, and shares one routing-target arena rather than copying a
+target list per archive, chunk and junction posting. On an eight-archive
+1.33 GB SEZ cohort the routed novel-versus-GENCODE-v32 cassette search went from
+93.8 s wall and 12.7 GB peak RSS to 9.2 s and 3.0 GB, with byte-identical
+results.
+
+Candidate discovery also stopped holding an ordered set of heap-allocated
+event keys and a coordinate map of the whole catalogue: components are stored
+inline, definitions are deduplicated by sorting, and the catalogue is looked up
+by binary search and released once the exact plan exists.
+
+A search is now rejected while planning if it retains more than 33,554,432
+candidates, which the packed reducer cannot address; lower `--max-candidates`
+or strengthen the catalogue predicates. Events with more than three components
+are likewise rejected rather than silently dropping component counts.
+
+### `collection find-events` stage profile
+
+`collection find-events` now reports a per-stage wall-clock and peak-RSS
+profile. `data.summary.stage_seconds` and `data.summary.stage_peak_rss_bytes`
+record `load_catalogue`, `discover_candidates`, `route_candidates`,
+`exact_counting`, `terminal_tails`, `annotation_classification` and `output`;
+human output prints the same rows on stderr. Like `total_seconds`, the profile
+is sampled before the result tables are streamed. No scientific field changed.
+
 ## [0.2.2] - 2026-09-10
 
 ### Compatibility and assignment statistics

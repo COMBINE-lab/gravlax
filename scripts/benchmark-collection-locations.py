@@ -68,7 +68,7 @@ def main():
                 raise RuntimeError('collection copy differs')
         def clean(value):
             if isinstance(value, dict):
-                return {k: clean(v) for k, v in value.items() if not k.endswith('_seconds') and k not in ('locations_manifest', 'timings_ms')}
+                return {k: clean(v) for k, v in value.items() if not k.endswith('_seconds') and k not in ('locations_manifest', 'timings_ms', 'stage_peak_rss_bytes')}
             if isinstance(value, list): return [clean(v) for v in value]
             if isinstance(value, str): return value.replace(str(original), '<bundle>').replace(str(relocated), '<bundle>')
             return value
