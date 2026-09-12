@@ -39,7 +39,7 @@ recipe states this because a command cannot prove it from the directory name.
 | `--threads <N>` | `24` | STAR worker threads |
 | `--plain-fastq` | off | Treat inputs as uncompressed FASTQ and omit `zcat` |
 | `--junction-seed <FILE>` | off | Insert a fixed splice-junction list (STAR `--sjdbFileChrStartEnd` format) at mapping time; see below |
-| `--sjdb-overhang <N>` | `100` | STAR `--sjdbOverhang` emitted with `--junction-seed`; set to the cDNA read length minus one |
+| `--sjdb-overhang <N>` | chemistry-derived (`90` for 10x 3' v3/v3.1, `97` for 10x 3' v2) | STAR `--sjdbOverhang` emitted with `--junction-seed`: the cDNA read length minus one. Override only for non-standard read lengths |
 | `--one-pass` | off | Omit `--twopassMode Basic`, so junctions come only from the aligner's own detection and any seed |
 
 ## Optional junction seeding and one-pass alignment
@@ -57,8 +57,13 @@ derived from any GTF or compiled annotation:
 
 ```sh
 aie ingest junctions --gtf gencode.v32.annotation.gtf --out v32.junctions.tab
-aie ingest recipe --chemistry 10x-3p-v3 --junction-seed v32.junctions.tab --sjdb-overhang 90
+aie ingest recipe --chemistry 10x-3p-v3 --junction-seed v32.junctions.tab
 ```
+
+`--sjdbOverhang` follows STAR's rule of the cDNA read length minus one and is
+derived from `--chemistry`: 90 for 10x 3' v3/v3.1 (91 bp cDNA reads) and 97 for
+10x 3' v2 (98 bp cDNA reads). Pass `--sjdb-overhang <N>` to override it when a
+library was sequenced at a non-standard read length.
 
 The seed file has one junction per line: chromosome, 1-based inclusive intron
 start and end, and strand. With `--one-pass`, only the seed and the aligner's

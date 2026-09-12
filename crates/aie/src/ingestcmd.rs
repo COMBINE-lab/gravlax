@@ -56,6 +56,15 @@ impl Chemistry {
         }
     }
 
+    /// STAR's `--sjdbOverhang` rule: the cDNA read length minus one. 10x 3' v2 cDNA reads are
+    /// 98 bp; 10x 3' v3/v3.1 cDNA reads are 91 bp.
+    fn sjdb_overhang(self) -> usize {
+        match self {
+            Self::TenX3pV2 => 97,
+            Self::TenX3pV3 => 90,
+        }
+    }
+
     fn default_whitelist(self) -> &'static str {
         match self {
             Self::TenX3pV2 => "737K-august-2016.txt",
@@ -134,10 +143,11 @@ struct RecipeArgs {
     #[arg(long, value_name = "FILE")]
     junction_seed: Option<PathBuf>,
 
-    /// STAR `--sjdbOverhang` used when a seed is inserted at mapping time (cDNA read length
-    /// minus one; STAR's own default is 100). Only emitted with `--junction-seed`.
-    #[arg(long, default_value_t = 100, value_name = "N")]
-    sjdb_overhang: usize,
+    /// STAR `--sjdbOverhang` used when a seed is inserted at mapping time. Defaults to the
+    /// selected chemistry's cDNA read length minus one (90 for 10x 3' v3/v3.1, 97 for 10x 3' v2).
+    /// Only emitted with `--junction-seed`.
+    #[arg(long, value_name = "N")]
+    sjdb_overhang: Option<usize>,
 
     /// Omit per-library two-pass junction discovery (`--twopassMode Basic`). Off by default.
     #[arg(long)]
@@ -799,7 +809,10 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     let whitelist = args
         .whitelist
         .unwrap_or_else(|| PathBuf::from(args.chemistry.default_whitelist()));
-    if args.junction_seed.is_some() && args.sjdb_overhang == 0 {
+    let sjdb_overhang = args
+        .sjdb_overhang
+        .unwrap_or_else(|| args.chemistry.sjdb_overhang());
+    if args.junction_seed.is_some() && sjdb_overhang == 0 {
         bail!("--sjdb-overhang must be at least 1");
     }
     println!(
@@ -811,8 +824,10 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     );
     if let Some(seed) = &args.junction_seed {
         println!(
-            "# Optional junction seeding: {} is inserted at mapping time. Gene models are still deferred to replay; the seed and its digest are recorded in the archive at ingest.",
-            shell_quote(seed)
+            "# Optional junction seeding: {} is inserted at mapping time with --sjdbOverhang {} ({} cDNA read length minus one). Gene models are still deferred to replay; the seed and its digest are recorded in the archive at ingest.",
+            shell_quote(seed),
+            sjdb_overhang,
+            args.chemistry.label()
         );
     }
     if args.one_pass {
@@ -826,7 +841,7 @@ fn run_recipe(args: RecipeArgs) -> Result<()> {
     println!("  --genomeDir {} \\", shell_quote(&args.genome_dir));
     if let Some(seed) = &args.junction_seed {
         println!("  --sjdbFileChrStartEnd {} \\", shell_quote(seed));
-        println!("  --sjdbOverhang {} \\", args.sjdb_overhang);
+        println!("  --sjdbOverhang {sjdb_overhang} \\");
     }
     println!(
         "  --readFilesIn {} {} \\",

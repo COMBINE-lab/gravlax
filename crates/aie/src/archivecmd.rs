@@ -4272,6 +4272,7 @@ const SEAL_REPORT_SCHEMA: &str = "gravlax.archive.seal-report.v1";
 const INSPECT_REPORT_SCHEMA: &str = "gravlax.archive.inspect-report.v1";
 const STAMP_REPORT_SCHEMA: &str = "gravlax.archive.stamp-genome-report.v1";
 const SECTION_TABLE_SCHEMA: &str = "gravlax.archive.section-accounting.v1";
+const ALIGNMENT_PROVENANCE_TABLE_SCHEMA: &str = "gravlax.archive.alignment-provenance-summary.v1";
 const REPLAY_FILE_TABLE_SCHEMA: &str = "gravlax.archive.replay-artifact-files.v1";
 const REPLAY_MEX_SCHEMA: &str = "gravlax.replay.mex-artifact.v1";
 
@@ -4840,6 +4841,149 @@ fn report_context(
         warnings,
         ..ResultContext::default()
     }
+}
+
+fn provenance_status_label(status: ProvenanceStatus) -> &'static str {
+    match status {
+        ProvenanceStatus::VerifiedFromConsumedBytes => "verified-from-consumed-bytes",
+        ProvenanceStatus::VerifiedBamHeader => "verified-bam-header",
+        ProvenanceStatus::DeclaredByCaller => "declared-by-caller",
+        ProvenanceStatus::Unspecified => "unspecified",
+    }
+}
+
+fn junction_discovery_label(mode: JunctionDiscoveryMode) -> &'static str {
+    match mode {
+        JunctionDiscoveryMode::Unspecified => "unspecified",
+        JunctionDiscoveryMode::OnePass => "one-pass",
+        JunctionDiscoveryMode::PerLibraryTwoPass => "per-library-two-pass",
+        JunctionDiscoveryMode::FrozenCatalogue => "frozen-catalogue",
+    }
+}
+
+fn junction_catalogue_role_label(role: JunctionCatalogueRole) -> &'static str {
+    match role {
+        JunctionCatalogueRole::PerLibraryPass1 => "per-library-pass1",
+        JunctionCatalogueRole::FrozenExternal => "frozen-external",
+    }
+}
+
+/// Single clear line used wherever an archive records no alignment provenance at all.
+const NO_ALIGNMENT_PROVENANCE: &str =
+    "none recorded; junction discovery, catalogue, annotation and aligner identity are unknown";
+
+/// Flatten the alignment-provenance manifest into ordered field/value pairs so that the legacy
+/// text summary and the uniform text/tsv reports describe provenance identically. An archive
+/// without a manifest yields exactly one row stating that none is recorded.
+fn alignment_provenance_rows(
+    provenance: Option<&AlignmentProvenanceManifest>,
+) -> Vec<(&'static str, String)> {
+    let Some(provenance) = provenance else {
+        return vec![("status", NO_ALIGNMENT_PROVENANCE.to_string())];
+    };
+    let alignment = &provenance.alignment;
+    let mut rows = vec![
+        (
+            "status",
+            format!(
+                "{} ({})",
+                provenance_status_label(alignment.status),
+                provenance.schema
+            ),
+        ),
+        (
+            "junction_discovery",
+            junction_discovery_label(alignment.junction_discovery).to_string(),
+        ),
+    ];
+    match &alignment.junction_catalogue {
+        Some(catalogue) => {
+            rows.push((
+                "junction_catalogue_role",
+                format!(
+                    "{} (section {})",
+                    junction_catalogue_role_label(catalogue.role),
+                    catalogue.section
+                ),
+            ));
+            rows.push((
+                "junction_catalogue_blake3",
+                format!(
+                    "{}:{}",
+                    catalogue.identity.scheme, catalogue.identity.blake3
+                ),
+            ));
+            rows.push((
+                "junction_catalogue_data_rows",
+                catalogue.data_rows.to_string(),
+            ));
+        }
+        None => rows.push(("junction_catalogue", "none recorded".to_string())),
+    }
+    match &alignment.alignment_annotation {
+        Some(annotation) => {
+            rows.push((
+                "alignment_annotation_blake3",
+                format!(
+                    "{}:{}",
+                    annotation.identity.scheme, annotation.identity.blake3
+                ),
+            ));
+            rows.push(("alignment_annotation_locator", annotation.locator.clone()));
+        }
+        None => rows.push(("alignment_annotation", "none declared".to_string())),
+    }
+    rows.push((
+        "alignment_chemistry",
+        match &alignment.chemistry {
+            Some(chemistry) => format!(
+                "{chemistry} ({})",
+                provenance_status_label(alignment.chemistry_status)
+            ),
+            None => "unspecified".to_string(),
+        },
+    ));
+    rows.push((
+        "index_identity",
+        match &alignment.index_identity {
+            Some(identity) => format!(
+                "{identity} ({})",
+                provenance_status_label(alignment.index_identity_status)
+            ),
+            None => "unspecified".to_string(),
+        },
+    ));
+    let programs = alignment
+        .programs
+        .iter()
+        .map(|program| {
+            format!(
+                "{} {}",
+                program.name.as_deref().unwrap_or(program.id.as_str()),
+                program.version.as_deref().unwrap_or("version-unspecified")
+            )
+        })
+        .collect::<Vec<_>>();
+    rows.push((
+        "aligner_programs",
+        if programs.is_empty() {
+            "none recorded in the BAM header".to_string()
+        } else {
+            programs.join("; ")
+        },
+    ));
+    rows
+}
+
+fn alignment_provenance_table_schema() -> std::result::Result<TableSchema, OutputError> {
+    TableSchema::new(
+        ALIGNMENT_PROVENANCE_TABLE_SCHEMA,
+        vec![
+            Field::new("field", DataType::String),
+            Field::new("value", DataType::String),
+        ],
+    )?
+    .with_semantics(TableSemantics::new(RowSemantics::Set).with_key(["field"]))
 }
 
 fn section_table_schema() -> std::result::Result<TableSchema, OutputError> {
@@ -5607,6 +5751,8 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
             Vec::new(),
         );
         let schema = section_table_schema()?;
+        let provenance_schema = alignment_provenance_table_schema()?;
+        let provenance_rows = alignment_provenance_rows(alignment_provenance.as_ref());
         let format = args.format.expect("uniform inspect format preflighted");
         write_uniform_output(format, args.output.as_deref(), |writer| {
             let mut bundle = StreamingBundleWriter::new_with_summary(
@@ -5616,6 +5762,17 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
                 &context,
                 &summary,
             )?;
+            // Emitted before the section accounting so that the text and tsv renderings put the
+            // readable provenance next to the summary rather than after a long section table.
+            bundle.write_table("alignment_provenance", &provenance_schema, None, |table| {
+                for (field, value) in &provenance_rows {
+                    table.write_row_with(|row| {
+                        row.string(field)?;
+                        row.string(value)
+                    })?;
+                }
+                Ok(())
+            })?;
             bundle.write_table("sections", &schema, None, |table| {
                 for (name, _, raw, compressed) in reader.entries() {
                     table.write_row_with(|row| {
@@ -5650,16 +5807,14 @@ pub fn run_inspect_archive(args: InspectArchiveArgs) -> Result<()> {
         match (&alignment_provenance, molecular_evidence_schema) {
             (Some(provenance), Some(schema)) => {
                 println!("molecular evidence schema: {schema}");
-                println!(
-                    "alignment provenance: {} ({:?}, {:?})",
-                    ALIGNMENT_PROVENANCE_SCHEMA,
-                    provenance.alignment.junction_discovery,
-                    provenance.alignment.status
-                );
+                println!("alignment provenance: {ALIGNMENT_PROVENANCE_SCHEMA}");
+                for (field, value) in alignment_provenance_rows(Some(provenance)) {
+                    println!("  {field}: {value}");
+                }
             }
             _ => {
                 println!("molecular evidence schema: unavailable (legacy archive)");
-                println!("alignment provenance: unavailable; junction discovery is unknown");
+                println!("alignment provenance: {NO_ALIGNMENT_PROVENANCE}");
             }
         }
         if let Some(tails) = &terminal_tail {
