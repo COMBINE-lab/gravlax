@@ -2,6 +2,19 @@
 
 This file records user-visible changes in each Gravlax release.
 
+## [Unreleased]
+
+### Fixed
+
+- Ingest now fails loudly instead of silently wrapping when an archive would
+  exceed the `.aie` format limit of 2^32-1 UMI classes. The class-id counters
+  are `u32` and the release profile does not enable overflow-checks, so an
+  archive past the limit previously wrapped into valid `u32` range and aliased
+  distinct molecules; because the metadata `classes` value is itself `u32`, the
+  wrapped archive re-opened without error. Construction now bails with a clear
+  message. See `docs-notes/wide-umi-class-ids.md` for the scoping of a future
+  wider-id format.
+
 ## [0.2.3] - 2026-09-11
 
 Existing `.aie` archives, `.aic` annotations, and `.aicollection` indexes remain
