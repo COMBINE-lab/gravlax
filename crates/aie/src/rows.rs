@@ -3661,6 +3661,19 @@ mod strict_whitelist_tests {
     }
 }
 
+/// Advance the UMI-class counter by one, failing loudly at the u32 archive-format limit.
+///
+/// A UMI class id is a `u32` throughout the `.aie` format (`MolRec::umi_class`, `Mol::class`,
+/// the archive `n_classes`, and the metadata `classes` value). The release profile does not
+/// enable overflow-checks, so an unchecked `+= 1` here would wrap silently and alias distinct
+/// molecules. See `docs-notes/wide-umi-class-ids.md` for the scoping of a wider-id format.
+fn next_class_id(current: u32) -> Result<u32> {
+    current.checked_add(1).context(
+        "this archive would contain more than 2^32-1 UMI classes, the current .aie format limit; \
+         see docs-notes/wide-umi-class-ids.md",
+    )
+}
+
 fn extract_rows_inner(
     bam_path: &PathBuf,
     wl: FxHashSet<u32>,
@@ -4005,15 +4018,15 @@ fn extract_rows_inner(
                             global_classes: &mut FxHashMap<(u32, u32), u32>,
                             cell_values: &mut FxHashMap<u32, Vec<u32>>,
                             n_classes: &mut u32|
-         -> u32 {
+         -> Result<u32> {
             match global_classes.get(&(cell, u)) {
-                Some(&id) => id,
+                Some(&id) => Ok(id),
                 None => {
                     let id = *n_classes;
-                    *n_classes += 1;
+                    *n_classes = next_class_id(*n_classes)?;
                     global_classes.insert((cell, u), id);
                     cell_values.entry(cell).or_default().push(u);
-                    id
+                    Ok(id)
                 }
             }
         };
@@ -4111,7 +4124,7 @@ fn extract_rows_inner(
                     &mut global_classes,
                     &mut cell_values,
                     &mut n_classes,
-                );
+                )?;
                 let molecule_ordinal = mols.len();
                 mols.push(MolRec {
                     cell,
@@ -4146,7 +4159,13 @@ fn extract_rows_inner(
         mm_umis.sort_unstable_by_key(|(u, _)| *u);
         for (u, mms) in mm_umis {
             let anchor = mms.iter().map(|m| m.0).min().unwrap_or(0);
-            let cls = class_of(u, anchor, &mut global_classes, &mut cell_values, &mut n_classes);
+            let cls = class_of(
+                u,
+                anchor,
+                &mut global_classes,
+                &mut cell_values,
+                &mut n_classes,
+            )?;
             mols.push(MolRec { cell, umi_class: cls, chrom, strand_rev, chains: SmallVec::new(), mms: SmallVec::from_vec(mms) });
         }
 
@@ -4226,7 +4245,8 @@ fn extract_rows_inner(
     {
         let mut remap: FxHashMap<u32, u32> = FxHashMap::default();
         for m in mols.iter_mut() {
-            let next = remap.len() as u32;
+            let next = u32::try_from(remap.len())
+                .context("UMI class count exceeds the u32 archive-format limit")?;
             m.umi_class = *remap.entry(m.umi_class).or_insert(next);
         }
         for (a, b) in edges.iter_mut() {
@@ -4234,7 +4254,8 @@ fn extract_rows_inner(
             let nb = *remap.get(b).expect("edge references class with no molecule");
             (*a, *b) = (na.min(nb), na.max(nb));
         }
-        n_classes = remap.len() as u32;
+        n_classes = u32::try_from(remap.len())
+            .context("UMI class count exceeds the u32 archive-format limit")?;
     }
     edges.sort_unstable();
     edges.dedup();
@@ -4998,5 +5019,32 @@ mod genefull_replay_tests {
             streaming.add_archive_chunks(&[vec![m.clone()]]);
         }
         assert_eq!(streaming.finish_with_stats(), (full, stats, total));
+    }
+}
+
+#[cfg(test)]
+mod class_overflow_tests {
+    use super::next_class_id;
+
+    #[test]
+    fn next_class_id_increments() {
+        assert_eq!(next_class_id(5).unwrap(), 6);
+        assert_eq!(next_class_id(0).unwrap(), 1);
+    }
+
+    #[test]
+    fn next_class_id_errors_at_u32_max() {
+        let err = next_class_id(u32::MAX).expect_err("u32::MAX + 1 must not wrap silently");
+        assert!(
+            err.to_string().contains("2^32-1 UMI classes"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[test]
+    fn remap_guard_basis_rejects_beyond_u32() {
+        // Documents the basis of the remap guard: a class count one past u32::MAX cannot be
+        // narrowed to the u32 archive field.
+        assert!(u32::try_from(u32::MAX as usize + 1).is_err());
     }
 }
