@@ -620,7 +620,9 @@ fn write_archive_sections(
             if m.umi_class == next_class {
                 class_v.push(0u64);
                 coc_vals.push(m.cell);
-                next_class += 1;
+                next_class = next_class
+                    .checked_add(1)
+                    .context("UMI class count exceeds the u32 archive-format limit")?;
             } else {
                 class_v.push((next_class - m.umi_class) as u64);
             }
