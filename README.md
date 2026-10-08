@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-**Align once and query forever.** Gravlax turns a single-cell RNA-seq experiment into a compact, queryable archive of its molecules, so that quantification under any annotation, cohort-wide splicing queries, and discovery of unannotated features become fast queries rather than new pipelines.
+**Align now, query later.** Gravlax turns a single-cell RNA-seq experiment into a compact, queryable archive of its molecules, so that quantification under any annotation, cohort-wide splicing queries, and discovery of unannotated features become fast queries rather than new pipelines.
 
 ## Why Gravlax
 
